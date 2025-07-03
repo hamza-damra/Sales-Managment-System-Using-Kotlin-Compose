@@ -1,0 +1,50 @@
+# Visual Studio / .NET
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.dll
+*.pdb
+*.exe
+!build/libs/*.jar
+
+# IDE files
+.vs/
+.vscode/
+*.swp
+*.swo
+
+# Build outputs
+build/classes/
+build/generated/
+build/kotlin/
+build/tmp/
+build/resources/
+
+# Gradle
+.gradle/
+gradle-wrapper.jar
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+
+# Database
+*.mdf
+*.ldf
+
+# Package files
+*.nupkg
+*.snupkg
+
+# Backup files
+*.bak
