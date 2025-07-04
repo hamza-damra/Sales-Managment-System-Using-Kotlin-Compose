@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -18,17 +19,10 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.*
 import data.SalesDataManager
+import data.di.AppContainer
+import data.di.AppDependencies
 import ui.components.RTLProvider
-import ui.screens.CustomersScreen
-import ui.screens.DashboardScreen
-import ui.screens.InventoryScreen
-import ui.screens.ProductsScreen
-import ui.screens.PromotionsScreen
-import ui.screens.ReportsScreen
-import ui.screens.ReturnsScreen
-import ui.screens.SalesScreen
-import ui.screens.SettingsScreen
-import ui.screens.SuppliersScreen
+import ui.screens.*
 import ui.theme.AppTheme
 import ui.theme.AppThemeProvider
 import ui.theme.ThemeState
@@ -37,7 +31,11 @@ import java.util.*
 
 fun main() = application {
     Window(
-        onCloseRequest = ::exitApplication,
+        onCloseRequest = {
+            // Clean up resources before closing
+            AppDependencies.container.cleanup()
+            exitApplication()
+        },
         title = "نظام إدارة المبيعات - Sales Management System",
         state = rememberWindowState(width = 1400.dp, height = 900.dp)
     ) {
@@ -104,8 +102,28 @@ data class NavigationItem(
 
 @Composable
 fun App() {
+    val appContainer = remember { AppDependencies.container }
+    val authService = remember { appContainer.authService }
+    val authState by authService.authState.collectAsState()
+
+    // Temporary: Skip authentication for testing
+    // Show login screen if not authenticated
+    // if (!authState.isAuthenticated) {
+    //     LoginScreen(
+    //         authService = authService,
+    //         onLoginSuccess = {
+    //             // Authentication successful, main app will be shown
+    //         }
+    //     )
+    // } else {
+        // Main application content
+        MainAppContent(appContainer)
+    // }
+}
+
+@Composable
+fun MainAppContent(appContainer: AppContainer) {
     var currentScreen by remember { mutableStateOf(Screen.DASHBOARD) }
-    val salesDataManager = remember { SalesDataManager() }
 
     RTLProvider {
         Row(
@@ -118,18 +136,18 @@ fun App() {
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .padding(24.dp)
+                    .padding(28.dp)
             ) {
                 when (currentScreen) {
-                    Screen.DASHBOARD -> DashboardScreen(salesDataManager)
-                    Screen.SALES -> SalesScreen(salesDataManager)
-                    Screen.PRODUCTS -> ProductsScreen(salesDataManager)
-                    Screen.CUSTOMERS -> CustomersScreen(salesDataManager)
-                    Screen.INVENTORY -> InventoryScreen(salesDataManager)
-                    Screen.SUPPLIERS -> SuppliersScreen(salesDataManager)
+                    Screen.DASHBOARD -> DashboardScreen(SalesDataManager()) // Temporary: Use mock data
+                    Screen.SALES -> SalesScreen(SalesDataManager()) // Temporary: Use mock data
+                    Screen.PRODUCTS -> ProductsScreen(SalesDataManager()) // Temporary: Use mock data
+                    Screen.CUSTOMERS -> CustomersScreen(SalesDataManager()) // Temporary: Use mock data
+                    Screen.INVENTORY -> InventoryScreen(SalesDataManager())
+                    Screen.SUPPLIERS -> SuppliersScreen(SalesDataManager())
                     Screen.RETURNS -> ReturnsScreen()
                     Screen.PROMOTIONS -> PromotionsScreen()
-                    Screen.REPORTS -> ReportsScreen()
+                    Screen.REPORTS -> ReportsScreen() // Temporary: Use mock data
                     Screen.SETTINGS -> SettingsScreen()
                 }
             }
@@ -137,7 +155,8 @@ fun App() {
             // Navigation Sidebar - شريط التنقل على اليسار في RTL
             NavigationSidebar(
                 currentScreen = currentScreen,
-                onScreenSelected = { currentScreen = it }
+                onScreenSelected = { currentScreen = it },
+                authService = appContainer.authService
             )
         }
     }
@@ -146,29 +165,34 @@ fun App() {
 @Composable
 fun NavigationSidebar(
     currentScreen: Screen,
-    onScreenSelected: (Screen) -> Unit
+    onScreenSelected: (Screen) -> Unit,
+    authService: data.auth.AuthService
 ) {
+    val coroutineScope = rememberCoroutineScope()
     Column(
         modifier = Modifier
-            .width(280.dp)
+            .width(300.dp)
             .fillMaxHeight()
             .background(MaterialTheme.colorScheme.surface)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         // App Title
         Text(
             text = "نظام إدارة المبيعات",
-            style = MaterialTheme.typography.headlineSmall,
+            style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(vertical = 16.dp),
+            modifier = Modifier.padding(vertical = 20.dp),
             textAlign = TextAlign.Right
         )
 
-        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            thickness = 1.dp
+        )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         // Navigation Items
         Screen.values().forEach { screen ->
@@ -182,6 +206,67 @@ fun NavigationSidebar(
         }
 
         Spacer(modifier = Modifier.weight(1f))
+
+        // User info and logout
+        val currentUser = authService.getCurrentUser()
+        if (currentUser != null) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        Icons.Default.AccountCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "${currentUser.firstName} ${currentUser.lastName}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = currentUser.role,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                authService.logout()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        ),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Logout,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("تسجيل الخروج")
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
 
         // Footer info
         Card(
@@ -218,36 +303,37 @@ fun NavigationItem(item: NavigationItem) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp),
+            .height(60.dp),
         onClick = item.onClick,
         colors = CardDefaults.cardColors(
             containerColor = if (item.isSelected)
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
             else Color.Transparent
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(14.dp),
+        elevation = if (item.isSelected) CardDefaults.cardElevation(defaultElevation = 2.dp) else CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.End // تغيير الترتيب للعربية
         ) {
             Text(
                 text = item.screen.title,
                 style = MaterialTheme.typography.bodyLarge,
-                fontWeight = if (item.isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                fontWeight = if (item.isSelected) FontWeight.Bold else FontWeight.Medium,
                 color = if (item.isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Right,
                 modifier = Modifier.weight(1f)
             )
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(16.dp))
             Icon(
                 item.screen.icon,
                 contentDescription = item.screen.title,
                 tint = if (item.isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(26.dp)
             )
         }
     }

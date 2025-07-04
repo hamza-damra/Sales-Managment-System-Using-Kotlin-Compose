@@ -6,7 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
-// Custom App Colors
+// Enhanced AppColors with additional properties for compatibility
 @Immutable
 data class AppColors(
     val success: Color,
@@ -23,7 +23,13 @@ data class AppColors(
     val cardStrokeVariant: Color,
     val shadowColor: Color,
     val elevatedShadowColor: Color,
-    val chartColors: List<Color>
+    val chartColors: List<Color>,
+    // Add compatibility properties
+    val primary: Color,
+    val onSurface: Color,
+    val onSurfaceVariant: Color,
+    val surface: Color,
+    val cardBorder: Color
 )
 
 val LocalAppColors = staticCompositionLocalOf<AppColors> {
@@ -152,7 +158,13 @@ private val LightAppColors = AppColors(
         Color(0xFFDB2777), // pink
         Color(0xFF4F46E5), // indigo
         Color(0xFF0D9488)  // teal
-    )
+    ),
+    // Compatibility properties
+    primary = Color(0xFF2563EB),
+    onSurface = Color(0xFF1E293B),
+    onSurfaceVariant = Color(0xFF64748B),
+    surface = Color(0xFFFFFFFF),
+    cardBorder = Color(0xFFE2E8F0)
 )
 
 private val DarkAppColors = AppColors(
@@ -180,7 +192,13 @@ private val DarkAppColors = AppColors(
         Color(0xFFF472B6), // pink
         Color(0xFF818CF8), // indigo
         Color(0xFF2DD4BF)  // teal
-    )
+    ),
+    // Compatibility properties
+    primary = Color(0xFF60A5FA),
+    onSurface = Color(0xFFE2E8F0),
+    onSurfaceVariant = Color(0xFF94A3B8),
+    surface = Color(0xFF1E293B),
+    cardBorder = Color(0xFF4B5563)
 )
 
 // Enhanced AppColors object that adapts to theme
@@ -189,6 +207,12 @@ object AppTheme {
         @Composable
         @ReadOnlyComposable
         get() = LocalAppColors.current
+
+    // Material 3 color scheme access
+    val colorScheme: androidx.compose.material3.ColorScheme
+        @Composable
+        @ReadOnlyComposable
+        get() = MaterialTheme.colorScheme
 }
 
 // Enhanced card styling utilities

@@ -1,6 +1,6 @@
 package ui.components
 
-import androidx.compose.animation.*
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,26 +8,57 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Brush
 import ui.theme.AppTheme
 import ui.theme.CardStyles
+import ui.utils.ResponsiveUtils
 import data.*
 import java.text.NumberFormat
+
+// Responsive design utilities
+@Composable
+fun rememberResponsiveValues(): ResponsiveValues {
+    // For now, return desktop values. This can be enhanced later with proper screen detection
+    return ResponsiveValues(
+        isTablet = false,
+        isDesktop = true,
+        cardPadding = 28.dp,
+        cardRadius = 24.dp,
+        iconSize = 28.dp,
+        buttonHeight = 56.dp
+    )
+}
+
+data class ResponsiveValues(
+    val isTablet: Boolean,
+    val isDesktop: Boolean,
+    val cardPadding: androidx.compose.ui.unit.Dp,
+    val cardRadius: androidx.compose.ui.unit.Dp,
+    val iconSize: androidx.compose.ui.unit.Dp,
+    val buttonHeight: androidx.compose.ui.unit.Dp
+)
 
 @Composable
 fun StatCard(
@@ -43,65 +74,93 @@ fun StatCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .height(120.dp)
-            .border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outlineVariant,
-                shape = RoundedCornerShape(16.dp)
-            ),
-        colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardStyles.defaultCardElevation()
+            .height(140.dp),
+        colors = CardStyles.elevatedCardColors(),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardStyles.elevatedCardElevation()
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            modifier = Modifier.fillMaxSize()
         ) {
-            // Icon
+            // Subtle gradient background
             Box(
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(iconColor.copy(alpha = 0.1f)),
-                contentAlignment = Alignment.Center
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                iconColor.copy(alpha = 0.02f),
+                                iconColor.copy(alpha = 0.08f)
+                            )
+                        )
+                    )
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(20.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = iconColor,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            // Content
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = valueColor
-                )
-
-                subtitle?.let {
-                    Spacer(modifier = Modifier.height(2.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.Center
+                ) {
                     Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = value,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = valueColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    subtitle?.let {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                // Enhanced icon with gradient background
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    iconColor.copy(alpha = 0.15f),
+                                    iconColor.copy(alpha = 0.25f)
+                                )
+                            )
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = iconColor.copy(alpha = 0.2f),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = iconColor,
+                        modifier = Modifier.size(28.dp)
                     )
                 }
             }
@@ -293,31 +352,43 @@ fun QuickActionButton(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
+    val responsive = rememberResponsiveValues()
 
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.height(48.dp),
+        modifier = modifier.height(responsive.buttonHeight),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (isDestructive) AppTheme.colors.error else AppTheme.colors.success,
-            contentColor = MaterialTheme.colorScheme.onPrimary
+            containerColor = if (isDestructive) AppTheme.colors.error else MaterialTheme.colorScheme.primary,
+            contentColor = Color.White
         ),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         elevation = ButtonDefaults.buttonElevation(
-            defaultElevation = if (isHovered) 4.dp else 2.dp
+            defaultElevation = if (isHovered) 6.dp else 3.dp,
+            hoveredElevation = 8.dp,
+            pressedElevation = 1.dp
         ),
         interactionSource = interactionSource
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            modifier = Modifier.size(20.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.2f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.size(responsive.iconSize),
+                tint = Color.White
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
         Text(
             text,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
         )
     }
 }
@@ -333,12 +404,19 @@ fun SearchBar(
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
-        placeholder = { Text(placeholder) },
+        placeholder = {
+            Text(
+                placeholder,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
         leadingIcon = {
             Icon(
                 leadingIcon,
                 contentDescription = "البحث",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp)
             )
         },
         trailingIcon = if (query.isNotEmpty()) {
@@ -347,19 +425,21 @@ fun SearchBar(
                     Icon(
                         Icons.Default.Clear,
                         contentDescription = "مسح",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
         } else null,
-        modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
+        modifier = modifier.height(60.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = MaterialTheme.colorScheme.primary,
-            unfocusedBorderColor = MaterialTheme.colorScheme.surfaceVariant,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
             focusedContainerColor = MaterialTheme.colorScheme.surface,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surface
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer
         ),
+        textStyle = MaterialTheme.typography.bodyLarge,
         singleLine = true
     )
 }
@@ -685,63 +765,111 @@ fun MetricCard(
     icon: ImageVector? = null,
     modifier: Modifier = Modifier
 ) {
+    val iconColor = if (isPositiveChange) AppTheme.colors.success else MaterialTheme.colorScheme.primary
+
     Card(
         modifier = modifier,
-        colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardStyles.defaultCardElevation()
+        colors = CardStyles.elevatedCardColors(),
+        shape = RoundedCornerShape(18.dp),
+        elevation = CardStyles.elevatedCardElevation()
     ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        Box(
+            modifier = Modifier.fillMaxSize()
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+            // Subtle gradient background
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                iconColor.copy(alpha = 0.02f),
+                                iconColor.copy(alpha = 0.06f)
+                            )
+                        )
+                    )
+            )
+
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = value,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                icon?.let {
-                    Icon(
-                        it,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-
-            change?.let {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Icon(
-                        if (isPositiveChange) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
-                        contentDescription = null,
-                        tint = if (isPositiveChange) AppTheme.colors.success else AppTheme.colors.error,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isPositiveChange) AppTheme.colors.success else AppTheme.colors.error,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = value,
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    icon?.let {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            iconColor.copy(alpha = 0.15f),
+                                            iconColor.copy(alpha = 0.25f)
+                                        )
+                                    )
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = iconColor.copy(alpha = 0.2f),
+                                    shape = CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                it,
+                                contentDescription = null,
+                                tint = iconColor,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                }
+
+                change?.let {
+                    Surface(
+                        color = if (isPositiveChange) AppTheme.colors.success.copy(alpha = 0.1f)
+                               else AppTheme.colors.error.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                if (isPositiveChange) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
+                                contentDescription = null,
+                                tint = if (isPositiveChange) AppTheme.colors.success else AppTheme.colors.error,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (isPositiveChange) AppTheme.colors.success else AppTheme.colors.error,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1055,6 +1183,203 @@ fun SaleItemCard(
     }
 }
 
+// Missing Dashboard Components
+@Composable
+fun SaleItem(
+    sale: Sale,
+    currencyFormatter: NumberFormat,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardStyles.elevatedCardColors(),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardStyles.defaultCardElevation()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "فاتورة #${sale.id}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = sale.customer?.name ?: "عميل غير محدد",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = currencyFormatter.format(sale.total),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "${sale.items.sumOf { it.quantity }} عنصر",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = sale.date.toString().substringBefore('T'),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Surface(
+                    color = AppTheme.colors.success.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = "مكتملة",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AppTheme.colors.success,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ProductStatsItem(
+    productStats: ProductStats,
+    currencyFormatter: NumberFormat,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardStyles.elevatedCardColors(),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardStyles.defaultCardElevation()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = productStats.product.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = productStats.product.category,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "${productStats.totalSold} مباع",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "الإيرادات: ${currencyFormatter.format(productStats.revenue)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Text(
+                    text = "الربح: ${currencyFormatter.format(productStats.profit)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppTheme.colors.success,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun LowStockItem(
+    productName: String,
+    currentStock: Int,
+    minStock: Int,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardStyles.elevatedCardColors(),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardStyles.defaultCardElevation()
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = productName,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "المخزون الحالي: $currentStock",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Surface(
+                color = AppTheme.colors.warning.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(
+                    text = "أقل من $minStock",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AppTheme.colors.warning,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+        }
+    }
+}
+
 @Composable
 fun CustomerSelectionDialog(
     customers: List<Customer>,
@@ -1202,4 +1527,595 @@ fun SaleSuccessDialog(
             }
         }
     )
+}
+
+// Enhanced Section Card Component
+@Composable
+fun EnhancedSectionCard(
+    title: String,
+    modifier: Modifier = Modifier,
+    headerAction: @Composable (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val responsive = rememberResponsiveValues()
+
+    Card(
+        modifier = modifier,
+        colors = CardStyles.elevatedCardColors(),
+        shape = RoundedCornerShape(responsive.cardRadius),
+        elevation = CardStyles.elevatedCardElevation()
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // Subtle gradient background
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.01f),
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.03f)
+                            )
+                        )
+                    )
+            )
+
+            Column(
+                modifier = Modifier.padding(responsive.cardPadding),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    headerAction?.invoke()
+                }
+
+                // Content
+                content()
+            }
+        }
+    }
+}
+
+// Enhanced Dashboard Components
+@Composable
+fun EnhancedSectionHeader(
+    title: String,
+    subtitle: String,
+    isDesktop: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = title,
+            style = if (isDesktop) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = subtitle,
+            style = if (isDesktop) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+fun EnhancedQuickActionsCard(
+    modifier: Modifier = Modifier,
+    isDesktop: Boolean,
+    onNewSale: () -> Unit,
+    onAddProduct: () -> Unit,
+    onAddCustomer: () -> Unit
+) {
+    Card(
+        modifier = modifier,
+        colors = CardStyles.elevatedCardColors(),
+        shape = RoundedCornerShape(if (isDesktop) 20.dp else 16.dp),
+        elevation = CardStyles.elevatedCardElevation()
+    ) {
+        Column(
+            modifier = Modifier.padding(if (isDesktop) 24.dp else 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "إجراءات سريعة",
+                style = if (isDesktop) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            QuickActionButton(
+                text = "بيع جديد",
+                icon = Icons.Default.Add,
+                onClick = onNewSale,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            QuickActionButton(
+                text = "إضافة منتج",
+                icon = Icons.Default.Inventory,
+                onClick = onAddProduct,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            QuickActionButton(
+                text = "إضافة عميل",
+                icon = Icons.Default.PersonAdd,
+                onClick = onAddCustomer,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Composable
+fun EnhancedRecentSalesCard(
+    modifier: Modifier = Modifier,
+    recentSales: List<data.Sale>,
+    currencyFormatter: NumberFormat,
+    isDesktop: Boolean,
+    onViewAll: () -> Unit
+) {
+    Card(
+        modifier = modifier,
+        colors = CardStyles.elevatedCardColors(),
+        shape = RoundedCornerShape(if (isDesktop) 20.dp else 16.dp),
+        elevation = CardStyles.elevatedCardElevation()
+    ) {
+        Column(
+            modifier = Modifier.padding(if (isDesktop) 24.dp else 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "آخر المبيعات",
+                    style = if (isDesktop) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                TextButton(onClick = onViewAll) {
+                    Text(
+                        text = "عرض الكل",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            if (recentSales.isEmpty()) {
+                EnhancedEmptyState(
+                    icon = Icons.Default.ShoppingCart,
+                    title = "لا توجد مبيعات",
+                    description = "لم يتم تسجيل أي مبيعات حتى الآن",
+                    isCompact = true
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.height(if (isDesktop) 350.dp else 300.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(recentSales) { sale ->
+                        EnhancedSaleItem(
+                            sale = sale,
+                            currencyFormatter = currencyFormatter,
+                            isDesktop = isDesktop
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EnhancedSaleItem(
+    sale: data.Sale,
+    currencyFormatter: NumberFormat,
+    isDesktop: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardStyles.defaultCardColors(),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardStyles.defaultCardElevation()
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Sale Icon
+            Surface(
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    Icons.Default.Receipt,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .padding(10.dp)
+                )
+            }
+
+            // Sale Details
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "فاتورة #${sale.id}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = sale.customer?.name ?: "عميل مباشر",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "${sale.items.sumOf { it.quantity }} عنصر",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Sale Amount
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = currencyFormatter.format(sale.total),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Surface(
+                    color = AppTheme.colors.success.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        text = "مكتملة",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AppTheme.colors.success,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EnhancedEmptyState(
+    icon: ImageVector,
+    title: String,
+    description: String,
+    isCompact: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(if (isCompact) 8.dp else 16.dp)
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            shape = RoundedCornerShape(if (isCompact) 12.dp else 16.dp),
+            modifier = Modifier.size(if (isCompact) 48.dp else 64.dp)
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .size(if (isCompact) 24.dp else 32.dp)
+                    .padding(if (isCompact) 12.dp else 16.dp)
+            )
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = title,
+                style = if (isCompact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = description,
+                style = if (isCompact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@Composable
+fun EnhancedTopProductsCard(
+    modifier: Modifier = Modifier,
+    topProducts: List<data.ProductStats>,
+    currencyFormatter: NumberFormat,
+    isDesktop: Boolean
+) {
+    Card(
+        modifier = modifier,
+        colors = CardStyles.elevatedCardColors(),
+        shape = RoundedCornerShape(if (isDesktop) 20.dp else 16.dp),
+        elevation = CardStyles.elevatedCardElevation()
+    ) {
+        Column(
+            modifier = Modifier.padding(if (isDesktop) 24.dp else 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "أفضل المنتجات مبيعاً",
+                style = if (isDesktop) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            if (topProducts.isEmpty()) {
+                EnhancedEmptyState(
+                    icon = Icons.Default.Inventory,
+                    title = "لا توجد مبيعات",
+                    description = "لم يتم بيع أي منتجات حتى الآن",
+                    isCompact = true
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.height(if (isDesktop) 350.dp else 300.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(topProducts) { productStats ->
+                        EnhancedProductStatsItem(
+                            productStats = productStats,
+                            currencyFormatter = currencyFormatter,
+                            isDesktop = isDesktop
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EnhancedLowStockCard(
+    modifier: Modifier = Modifier,
+    lowStockProducts: List<data.Product>,
+    isDesktop: Boolean
+) {
+    Card(
+        modifier = modifier,
+        colors = CardStyles.elevatedCardColors(),
+        shape = RoundedCornerShape(if (isDesktop) 20.dp else 16.dp),
+        elevation = CardStyles.elevatedCardElevation()
+    ) {
+        Column(
+            modifier = Modifier.padding(if (isDesktop) 24.dp else 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "تنبيه المخزون",
+                    style = if (isDesktop) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = AppTheme.colors.warning,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            if (lowStockProducts.isEmpty()) {
+                EnhancedEmptyState(
+                    icon = Icons.Default.CheckCircle,
+                    title = "الوضع جيد",
+                    description = "جميع المنتجات متوفرة بكميات كافية",
+                    isCompact = true
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.height(if (isDesktop) 350.dp else 300.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(lowStockProducts) { product ->
+                        EnhancedLowStockItem(
+                            product = product,
+                            isDesktop = isDesktop
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EnhancedProductStatsItem(
+    productStats: data.ProductStats,
+    currencyFormatter: NumberFormat,
+    isDesktop: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardStyles.defaultCardColors(),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardStyles.defaultCardElevation()
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Product Icon
+            Surface(
+                color = AppTheme.colors.success.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    Icons.Default.TrendingUp,
+                    contentDescription = null,
+                    tint = AppTheme.colors.success,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .padding(10.dp)
+                )
+            }
+
+            // Product Details
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = productStats.product.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = productStats.product.category,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "الإيرادات: ${currencyFormatter.format(productStats.revenue)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Sales Stats
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "${productStats.totalSold}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "مباع",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun EnhancedLowStockItem(
+    product: data.Product,
+    isDesktop: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardStyles.defaultCardColors(),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardStyles.defaultCardElevation()
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Warning Icon
+            Surface(
+                color = AppTheme.colors.warning.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = AppTheme.colors.warning,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .padding(10.dp)
+                )
+            }
+
+            // Product Details
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = product.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "المخزون الحالي: ${product.stock}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Stock Status
+            Surface(
+                color = AppTheme.colors.warning.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(
+                    text = "أقل من 10",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AppTheme.colors.warning,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+        }
+    }
 }
