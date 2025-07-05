@@ -161,12 +161,17 @@ object ResponsiveUtils {
         desktop: Dp = 160.dp
     ): Dp {
         val screenInfo = getScreenInfo()
-        
+
         return when {
             screenInfo.isDesktop -> desktop
             screenInfo.isTablet -> tablet
             else -> mobile
         }
+    }
+
+    @Composable
+    fun isDesktop(): Boolean {
+        return getScreenInfo().isDesktop
     }
 }
 

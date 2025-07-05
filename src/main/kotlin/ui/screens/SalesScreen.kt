@@ -223,9 +223,11 @@ fun SalesScreen(salesDataManager: SalesDataManager) {
                                             val existingItem = selectedProducts.find { it.product.id == product.id }
                                             if (existingItem != null) {
                                                 val index = selectedProducts.indexOf(existingItem)
-                                                selectedProducts[index] = existingItem.copy(
-                                                    quantity = existingItem.quantity + quantity
-                                                )
+                                                if (index >= 0) {
+                                                    selectedProducts[index] = existingItem.copy(
+                                                        quantity = existingItem.quantity + quantity
+                                                    )
+                                                }
                                             } else {
                                                 selectedProducts.add(
                                                     SaleItem(
@@ -379,8 +381,10 @@ fun SalesScreen(salesDataManager: SalesDataManager) {
                                             item = item,
                                             onQuantityChange = { newQuantity ->
                                                 if (newQuantity > 0) {
-                                                    selectedProducts[selectedProducts.indexOf(item)] =
-                                                        item.copy(quantity = newQuantity)
+                                                    val index = selectedProducts.indexOf(item)
+                                                    if (index >= 0) {
+                                                        selectedProducts[index] = item.copy(quantity = newQuantity)
+                                                    }
                                                 } else {
                                                     selectedProducts.remove(item)
                                                 }

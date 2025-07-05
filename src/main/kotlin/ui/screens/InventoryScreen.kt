@@ -543,6 +543,11 @@ fun ModernInventoryAlertsCards(
         else -> 1
     }
 
+    // Access theme colors in composable context first
+    val warningColor = AppTheme.colors.warning
+    val errorColor = AppTheme.colors.error
+    val infoColor = AppTheme.colors.info
+
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -557,10 +562,10 @@ fun ModernInventoryAlertsCards(
     ) {
         items(4) { index ->
             val alertData = when (index) {
-                0 -> AlertData("مخزون منخفض", 12, Icons.Default.Warning, AppTheme.colors.warning)
-                1 -> AlertData("نفاد المخزون", 3, Icons.Default.Error, AppTheme.colors.error)
-                2 -> AlertData("قارب على الانتهاء", 8, Icons.Default.Schedule, AppTheme.colors.info)
-                else -> AlertData("منتهي الصلاحية", 2, Icons.Default.Block, AppTheme.colors.error)
+                0 -> AlertData("مخزون منخفض", 12, Icons.Default.Warning, warningColor)
+                1 -> AlertData("نفاد المخزون", 3, Icons.Default.Error, errorColor)
+                2 -> AlertData("قارب على الانتهاء", 8, Icons.Default.Schedule, infoColor)
+                else -> AlertData("منتهي الصلاحية", 2, Icons.Default.Block, errorColor)
             }
 
             ModernAlertCard(
@@ -966,6 +971,11 @@ fun ModernInventoryOverviewContent(
                 else -> 1
             }
 
+            // Access theme colors in composable context first
+            val primaryColor = AppTheme.colors.primary
+            val infoColor = AppTheme.colors.info
+            val successColor = AppTheme.colors.success
+
             LazyVerticalGrid(
                 columns = GridCells.Fixed(summaryColumns),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -978,13 +988,13 @@ fun ModernInventoryOverviewContent(
                     }
                 )
             ) {
-                // Create the summary data list inside the composable context
+                // Create the summary data list using the pre-accessed colors
                 val summaryDataList = listOf(
                     SummaryData(
                         title = "إجمالي قيمة المخزون",
                         value = UiUtils.formatCurrency(125000.0),
                         icon = Icons.Default.AccountBalance,
-                        color = AppTheme.colors.primary,
+                        color = primaryColor,
                         trend = "+12.5%",
                         trendPositive = true
                     ),
@@ -992,7 +1002,7 @@ fun ModernInventoryOverviewContent(
                         title = "عدد المنتجات",
                         value = "1,234",
                         icon = Icons.Default.Inventory,
-                        color = AppTheme.colors.info,
+                        color = infoColor,
                         trend = "+45",
                         trendPositive = true
                     ),
@@ -1000,7 +1010,7 @@ fun ModernInventoryOverviewContent(
                         title = "معدل دوران المخزون",
                         value = "4.2x",
                         icon = Icons.Default.TrendingUp,
-                        color = AppTheme.colors.success,
+                        color = successColor,
                         trend = "+0.3x",
                         trendPositive = true
                     )
