@@ -28,13 +28,13 @@ import androidx.compose.material.icons.outlined.*
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -46,12 +46,16 @@ import data.*
 import ui.components.*
 import ui.theme.AppTheme
 import ui.theme.CardStyles
+import services.PdfReceiptService
+import services.CanvasPdfReceiptService
+import utils.FileDialogUtils
 import java.text.NumberFormat
 import java.util.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import java.io.File
 
 @Composable
 fun SalesScreen(salesDataManager: SalesDataManager) {
@@ -66,6 +70,7 @@ fun SalesScreen(salesDataManager: SalesDataManager) {
         var showSaleSuccess by remember { mutableStateOf(false) }
         var isProcessingSale by remember { mutableStateOf(false) }
         var showAddToCartAnimation by remember { mutableStateOf(false) }
+        var lastCompletedSale by remember { mutableStateOf<Sale?>(null) }
         val coroutineScope = rememberCoroutineScope()
 
         // Currency formatter for Arabic locale
@@ -440,9 +445,21 @@ fun SalesScreen(salesDataManager: SalesDataManager) {
                             onClick = {
                                 coroutineScope.launch {
                                     isProcessingSale = true
-                                    delay(2000) // Simulate processing
-                                    isProcessingSale = false
-                                    showSaleSuccess = true
+                                    try {
+                                        // Create sale using SalesDataManager
+                                        val completedSale = salesDataManager.createSale(
+                                            items = selectedProducts,
+                                            customer = selectedCustomer,
+                                            paymentMethod = selectedPaymentMethod
+                                        )
+                                        lastCompletedSale = completedSale
+                                        isProcessingSale = false
+                                        showSaleSuccess = true
+                                    } catch (e: Exception) {
+                                        isProcessingSale = false
+                                        // Handle error - could show error dialog
+                                        println("Error creating sale: ${e.message}")
+                                    }
                                 }
                             },
                             modifier = Modifier
@@ -557,11 +574,16 @@ fun SalesScreen(salesDataManager: SalesDataManager) {
             SaleSuccessDialogImproved(
                 total = total,
                 currencyFormatter = currencyFormatter,
+                saleData = lastCompletedSale,
+                selectedCustomer = selectedCustomer,
+                selectedPaymentMethod = selectedPaymentMethod,
+                selectedProducts = selectedProducts,
                 onDismiss = {
                     showSaleSuccess = false
                     selectedProducts.clear()
                     selectedCustomer = null
                     selectedPaymentMethod = PaymentMethod.CASH
+                    lastCompletedSale = null
                 }
             )
         }
@@ -1042,30 +1064,372 @@ private fun EmptyStateImproved(
 private fun SaleSuccessDialogImproved(
     total: Double,
     currencyFormatter: NumberFormat,
+    saleData: Sale?,
+    selectedCustomer: Customer?,
+    selectedPaymentMethod: PaymentMethod,
+    selectedProducts: List<SaleItem>,
     onDismiss: () -> Unit
 ) {
+    var showPdfViewer by remember { mutableStateOf(false) }
+    var generatedPdfFile by remember { mutableStateOf<File?>(null) }
+    var isGeneratingPdf by remember { mutableStateOf(false) }
+    var showError by remember { mutableStateOf<String?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            Button(
-                onClick = onDismiss,
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = AppTheme.colors.success
-                )
+            // Done button
+            val doneInteractionSource = remember { MutableInteractionSource() }
+            val isDoneHovered by doneInteractionSource.collectIsHoveredAsState()
+
+            Box(
+                modifier = Modifier
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(12.dp))
             ) {
-                Text("تم", fontWeight = FontWeight.Bold)
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxSize(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isDoneHovered)
+                            AppTheme.colors.success.copy(alpha = 0.9f)
+                        else
+                            AppTheme.colors.success
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    interactionSource = doneInteractionSource
+                ) {
+                    Text(
+                        "تم",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = { /* Print receipt */ }) {
-                Icon(
-                    Icons.Default.Print,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("طباعة الفاتورة")
+            // Essential action buttons row
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Print Button
+                val printInteractionSource = remember { MutableInteractionSource() }
+                val isPrintHovered by printInteractionSource.collectIsHoveredAsState()
+
+                Box(
+                    modifier = Modifier
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                ) {
+                    Button(
+                        onClick = {
+                            if (saleData != null) {
+                                coroutineScope.launch {
+                                    isGeneratingPdf = true
+                                    try {
+                                        val receiptsDir = CanvasPdfReceiptService.getReceiptsDirectory()
+                                        val fileName = CanvasPdfReceiptService.generateReceiptFilename(saleData.id)
+                                        val pdfFile = File(receiptsDir, fileName)
+
+                                        val success = CanvasPdfReceiptService.generateReceipt(saleData, pdfFile, useArabicIndic = false)
+                                        if (success) {
+                                            val printResult = FileDialogUtils.printFile(pdfFile)
+                                            when (printResult) {
+                                                is FileDialogUtils.PrintResult.Success -> {
+                                                    // Print successful
+                                                }
+                                                is FileDialogUtils.PrintResult.NoAssociatedApp,
+                                                is FileDialogUtils.PrintResult.NotSupported,
+                                                is FileDialogUtils.PrintResult.Error -> {
+                                                    // Fallback: open file for manual printing
+                                                    FileDialogUtils.openWithSystemDefault(pdfFile)
+                                                }
+                                            }
+                                        } else {
+                                            showError = "فشل في إنشاء الفاتورة"
+                                        }
+                                    } catch (e: Exception) {
+                                        showError = "خطأ في طباعة الفاتورة: ${e.message}"
+                                    } finally {
+                                        isGeneratingPdf = false
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isPrintHovered)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                            else
+                                MaterialTheme.colorScheme.primary
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        interactionSource = printInteractionSource,
+                        enabled = !isGeneratingPdf && saleData != null
+                    ) {
+                        if (isGeneratingPdf) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            )
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Print,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = Color.White
+                                )
+                                Text(
+                                    "طباعة",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Save PDF Button
+                val saveInteractionSource = remember { MutableInteractionSource() }
+                val isSaveHovered by saveInteractionSource.collectIsHoveredAsState()
+
+                Box(
+                    modifier = Modifier
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            if (saleData != null) {
+                                coroutineScope.launch {
+                                    isGeneratingPdf = true
+                                    try {
+                                        val defaultFileName = CanvasPdfReceiptService.generateReceiptFilename(saleData.id)
+                                        val selectedFile = FileDialogUtils.selectPdfSaveFile(defaultFileName)
+
+                                        if (selectedFile != null) {
+                                            val success = CanvasPdfReceiptService.generateReceipt(saleData, selectedFile, useArabicIndic = false)
+                                            if (success) {
+                                                // Optionally open the folder where file was saved
+                                                try {
+                                                    FileDialogUtils.openFolder(selectedFile.parentFile)
+                                                } catch (e: Exception) {
+                                                    // Ignore if can't open folder
+                                                }
+                                            } else {
+                                                showError = "فشل في حفظ الفاتورة"
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        showError = "خطأ في حفظ الفاتورة: ${e.message}"
+                                    } finally {
+                                        isGeneratingPdf = false
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = if (isSaveHovered)
+                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f)
+                            else
+                                Color.Transparent
+                        ),
+                        border = BorderStroke(
+                            1.dp,
+                            if (isSaveHovered)
+                                MaterialTheme.colorScheme.secondary
+                            else
+                                MaterialTheme.colorScheme.outline
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        interactionSource = saveInteractionSource,
+                        enabled = !isGeneratingPdf && saleData != null
+                    ) {
+                        if (isGeneratingPdf) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Save,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    "حفظ باسم",
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // View PDF on PC Button
+                val viewPcInteractionSource = remember { MutableInteractionSource() }
+                val isViewPcHovered by viewPcInteractionSource.collectIsHoveredAsState()
+
+                Box(
+                    modifier = Modifier
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            if (saleData != null) {
+                                coroutineScope.launch {
+                                    isGeneratingPdf = true
+                                    try {
+                                        val receiptsDir = CanvasPdfReceiptService.getReceiptsDirectory()
+                                        val fileName = CanvasPdfReceiptService.generateReceiptFilename(saleData.id)
+                                        val pdfFile = File(receiptsDir, fileName)
+
+                                        val success = CanvasPdfReceiptService.generateReceipt(saleData, pdfFile, useArabicIndic = false)
+                                        if (success) {
+                                            FileDialogUtils.openWithSystemDefault(pdfFile)
+                                        } else {
+                                            showError = "فشل في إنشاء الفاتورة"
+                                        }
+                                    } catch (e: Exception) {
+                                        showError = "خطأ في فتح الفاتورة: ${e.message}"
+                                    } finally {
+                                        isGeneratingPdf = false
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = if (isViewPcHovered)
+                                MaterialTheme.colorScheme.tertiary.copy(alpha = 0.1f)
+                            else
+                                Color.Transparent
+                        ),
+                        border = BorderStroke(
+                            1.dp,
+                            if (isViewPcHovered)
+                                MaterialTheme.colorScheme.tertiary
+                            else
+                                MaterialTheme.colorScheme.outline
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        interactionSource = viewPcInteractionSource,
+                        enabled = !isGeneratingPdf && saleData != null
+                    ) {
+                        if (isGeneratingPdf) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.OpenInNew,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    "عرض خارجياً",
+                                    fontWeight = FontWeight.Medium,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // View PDF Here Button
+                val viewHereInteractionSource = remember { MutableInteractionSource() }
+                val isViewHereHovered by viewHereInteractionSource.collectIsHoveredAsState()
+
+                Box(
+                    modifier = Modifier
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            if (saleData != null) {
+                                coroutineScope.launch {
+                                    isGeneratingPdf = true
+                                    try {
+                                        val receiptsDir = CanvasPdfReceiptService.getReceiptsDirectory()
+                                        val fileName = CanvasPdfReceiptService.generateReceiptFilename(saleData.id)
+                                        val pdfFile = File(receiptsDir, fileName)
+
+                                        val success = CanvasPdfReceiptService.generateReceipt(saleData, pdfFile, useArabicIndic = false)
+                                        if (success) {
+                                            generatedPdfFile = pdfFile
+                                            showPdfViewer = true
+                                        } else {
+                                            showError = "فشل في إنشاء الفاتورة"
+                                        }
+                                    } catch (e: Exception) {
+                                        showError = "خطأ في إنشاء الفاتورة: ${e.message}"
+                                    } finally {
+                                        isGeneratingPdf = false
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = if (isViewHereHovered)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                            else
+                                Color.Transparent
+                        ),
+                        border = BorderStroke(
+                            1.dp,
+                            if (isViewHereHovered)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.outline
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        interactionSource = viewHereInteractionSource,
+                        enabled = !isGeneratingPdf && saleData != null
+                    ) {
+                        if (isGeneratingPdf) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Visibility,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    "عرض هنا",
+                                    fontWeight = FontWeight.Medium,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
+                }
             }
         },
         icon = {
@@ -1119,10 +1483,190 @@ private fun SaleSuccessDialogImproved(
                         modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
                     )
                 }
+
+                // Show sale details if available
+                saleData?.let { sale ->
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "رقم الفاتورة:",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "#${sale.id}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "طريقة الدفع:",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = sale.paymentMethod.displayName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+
+                            if (sale.customer != null) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "العميل:",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = sale.customer.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Error message if any
+                showError?.let { error ->
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = "تنبيه",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                            Text(
+                                text = error,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            if (error.contains("لا يوجد تطبيق مرتبط")) {
+                                Text(
+                                    text = "💡 نصيحة: يمكنك تحميل Adobe Reader أو أي قارئ PDF مجاني لتمكين الطباعة المباشرة",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Simple info message
+                if (saleData != null && showError == null) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = "تم إنشاء الفاتورة بصيغة PDF بنجاح",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
             }
         },
         shape = RoundedCornerShape(24.dp)
     )
+
+    // PDF Viewer Dialog
+    generatedPdfFile?.let { pdfFile ->
+        if (showPdfViewer) {
+            ui.screens.PdfViewerDialog(
+                pdfFile = pdfFile,
+                onDismiss = {
+                    showPdfViewer = false
+                    generatedPdfFile = null
+                },
+                onPrint = {
+                    coroutineScope.launch {
+                        val printResult = FileDialogUtils.printFile(pdfFile)
+                        when (printResult) {
+                            is FileDialogUtils.PrintResult.Success -> {
+                                // Print successful
+                            }
+                            is FileDialogUtils.PrintResult.NoAssociatedApp,
+                            is FileDialogUtils.PrintResult.NotSupported,
+                            is FileDialogUtils.PrintResult.Error -> {
+                                // Fallback: open file for manual printing
+                                FileDialogUtils.openWithSystemDefault(pdfFile)
+                            }
+                        }
+                    }
+                },
+                onDownload = {
+                    coroutineScope.launch {
+                        val selectedFile = FileDialogUtils.selectPdfSaveFile(pdfFile.name)
+                        if (selectedFile != null) {
+                            try {
+                                pdfFile.copyTo(selectedFile, overwrite = true)
+                            } catch (e: Exception) {
+                                showError = "خطأ في حفظ الملف: ${e.message}"
+                            }
+                        }
+                    }
+                }
+            )
+        }
+    }
 }
 
 @Composable

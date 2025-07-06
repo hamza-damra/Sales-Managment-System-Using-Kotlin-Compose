@@ -50,6 +50,10 @@ dependencies {
     implementation("com.itextpdf:itext7-core:7.2.5")
     implementation("com.itextpdf:html2pdf:4.0.5")
 
+    // PDF Rendering - Apache PDFBox for PDF viewing
+    implementation("org.apache.pdfbox:pdfbox:2.0.29")
+    implementation("org.apache.pdfbox:pdfbox-tools:2.0.29")
+
     // File operations - Desktop integration for file dialogs
 
     // Logging dependencies to fix warnings
