@@ -4,6 +4,7 @@ import data.api.*
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import io.ktor.http.*
 
 /**
@@ -21,7 +22,7 @@ class SalesApiService(private val httpClient: HttpClient) {
         endDate: String? = null
     ): NetworkResult<PageResponse<SaleDTO>> {
         return safeApiCall {
-            val response = httpClient.get(ApiConfig.Endpoints.SALES) {
+            val response = httpClient.get("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.SALES}") {
                 parameter("page", page)
                 parameter("size", size.coerceAtMost(ApiConfig.Pagination.MAX_SIZE))
                 parameter("sortBy", sortBy)
@@ -36,18 +37,18 @@ class SalesApiService(private val httpClient: HttpClient) {
     
     suspend fun getSaleById(id: Long): NetworkResult<SaleDTO> {
         return safeApiCall {
-            val response = httpClient.get(ApiConfig.Endpoints.saleById(id))
+            val response = httpClient.get("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.saleById(id)}")
             response.body<SaleDTO>()
         }
     }
-    
+
     suspend fun getSalesByCustomer(
         customerId: Long,
         page: Int = ApiConfig.Pagination.DEFAULT_PAGE,
         size: Int = ApiConfig.Pagination.DEFAULT_SIZE
     ): NetworkResult<PageResponse<SaleDTO>> {
         return safeApiCall {
-            val response = httpClient.get(ApiConfig.Endpoints.salesByCustomer(customerId)) {
+            val response = httpClient.get("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.salesByCustomer(customerId)}") {
                 parameter("page", page)
                 parameter("size", size.coerceAtMost(ApiConfig.Pagination.MAX_SIZE))
             }
@@ -57,40 +58,64 @@ class SalesApiService(private val httpClient: HttpClient) {
     
     suspend fun createSale(sale: SaleDTO): NetworkResult<SaleDTO> {
         return safeApiCall {
-            val response = httpClient.post(ApiConfig.Endpoints.SALES) {
+            val url = "${ApiConfig.BASE_URL}${ApiConfig.Endpoints.SALES}"
+            println("🔍 Creating sale at URL: $url")
+            println("🔍 Sale data: $sale")
+            println("🔍 Sale items count: ${sale.items.size}")
+            println("🔍 Customer ID: ${sale.customerId}")
+            println("🔍 Total amount: ${sale.totalAmount}")
+
+            // Validate required fields before sending
+            if (sale.customerId <= 0) {
+                throw IllegalArgumentException("Customer ID must be greater than 0")
+            }
+            if (sale.items.isEmpty()) {
+                throw IllegalArgumentException("Sale must contain at least one item")
+            }
+            if (sale.totalAmount <= 0) {
+                throw IllegalArgumentException("Total amount must be greater than 0")
+            }
+
+            val response = httpClient.post(url) {
                 contentType(ContentType.Application.Json)
                 setBody(sale)
+            }
+
+            println("🔍 Create sale response status: ${response.status}")
+            if (response.status.value >= 400) {
+                val errorBody = response.bodyAsText()
+                println("🔍 Error response body: $errorBody")
             }
             response.body<SaleDTO>()
         }
     }
-    
+
     suspend fun updateSale(id: Long, sale: SaleDTO): NetworkResult<SaleDTO> {
         return safeApiCall {
-            val response = httpClient.put(ApiConfig.Endpoints.saleById(id)) {
+            val response = httpClient.put("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.saleById(id)}") {
                 contentType(ContentType.Application.Json)
                 setBody(sale)
             }
             response.body<SaleDTO>()
         }
     }
-    
+
     suspend fun deleteSale(id: Long): NetworkResult<Unit> {
         return safeApiCall {
-            httpClient.delete(ApiConfig.Endpoints.saleById(id))
+            httpClient.delete("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.saleById(id)}")
         }
     }
     
     suspend fun completeSale(id: Long): NetworkResult<SaleDTO> {
         return safeApiCall {
-            val response = httpClient.post(ApiConfig.Endpoints.completeSale(id))
+            val response = httpClient.post("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.completeSale(id)}")
             response.body<SaleDTO>()
         }
     }
-    
+
     suspend fun cancelSale(id: Long): NetworkResult<SaleDTO> {
         return safeApiCall {
-            val response = httpClient.post(ApiConfig.Endpoints.cancelSale(id))
+            val response = httpClient.post("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.cancelSale(id)}")
             response.body<SaleDTO>()
         }
     }

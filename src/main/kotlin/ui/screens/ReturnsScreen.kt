@@ -36,6 +36,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import data.*
+import data.api.*
+import data.di.AppDependencies
 import kotlinx.datetime.LocalDateTime
 import kotlinx.coroutines.launch
 import UiUtils
@@ -44,15 +46,37 @@ import ui.theme.AppTheme
 import ui.theme.CardStyles
 import ui.utils.ResponsiveUtils.getResponsivePadding
 import ui.utils.ResponsiveUtils.getScreenInfo
+import ui.viewmodels.ReturnsViewModel
+import androidx.compose.runtime.collectAsState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReturnsScreen() {
     RTLProvider {
+        // ViewModel integration
+        val viewModel = remember { AppDependencies.container.returnsViewModel }
+
+        // Collect ViewModel state
+        val returns by viewModel.filteredReturns.collectAsState()
+        val isLoading by viewModel.isLoading.collectAsState()
+        val error by viewModel.error.collectAsState()
+        val searchQuery by viewModel.searchQuery.collectAsState()
+        val selectedStatusFromVM by viewModel.selectedStatus.collectAsState()
+        val selectedReturn by viewModel.selectedReturn.collectAsState()
+        val isCreatingReturn by viewModel.isCreatingReturn.collectAsState()
+        val isUpdatingReturn by viewModel.isUpdatingReturn.collectAsState()
+        val isDeletingReturn by viewModel.isDeletingReturn.collectAsState()
+        val isProcessingReturn by viewModel.isProcessingReturn.collectAsState()
+        val totalReturns by viewModel.totalReturns.collectAsState()
+        val pendingReturns by viewModel.pendingReturns.collectAsState()
+        val totalRefundAmount by viewModel.totalRefundAmount.collectAsState()
+        val returnRate by viewModel.returnRate.collectAsState()
+        val lastCreatedReturn by viewModel.lastCreatedReturn.collectAsState()
+        val lastUpdatedReturn by viewModel.lastUpdatedReturn.collectAsState()
+        val lastDeletedReturnId by viewModel.lastDeletedReturnId.collectAsState()
+
         // Enhanced state management
         var selectedTab by remember { mutableStateOf(ReturnTab.RETURNS) }
-        var searchQuery by remember { mutableStateOf("") }
-        var selectedStatus by remember { mutableStateOf("الكل") }
         var selectedReason by remember { mutableStateOf("الكل") }
         var selectedDateRange by remember { mutableStateOf("الكل") }
         var sortBy by remember { mutableStateOf("date") }
@@ -63,11 +87,10 @@ fun ReturnsScreen() {
 
         // Dialog states
         var showNewReturnDialog by remember { mutableStateOf(false) }
-        var editingReturn by remember { mutableStateOf<Return?>(null) }
-        var selectedReturn by remember { mutableStateOf<Return?>(null) }
+        var editingReturn by remember { mutableStateOf<ReturnDTO?>(null) }
         var showReturnDetails by remember { mutableStateOf(false) }
         var showDeleteConfirmation by remember { mutableStateOf(false) }
-        var returnToDelete by remember { mutableStateOf<Return?>(null) }
+        var returnToDelete by remember { mutableStateOf<ReturnDTO?>(null) }
 
         // For desktop application, we'll use window size detection
         val isTablet = true // Assume tablet/desktop for now
@@ -153,7 +176,7 @@ fun ReturnsScreen() {
                             // Search Field
                             OutlinedTextField(
                                 value = searchQuery,
-                                onValueChange = { searchQuery = it },
+                                onValueChange = { viewModel.updateSearchQuery(it) },
                                 label = { Text("البحث في المرتجعات") },
                                 leadingIcon = {
                                     Icon(
@@ -173,9 +196,28 @@ fun ReturnsScreen() {
                             // Status Filter
                             EnhancedReturnsFilterDropdown(
                                 label = "الحالة",
-                                value = selectedStatus,
+                                value = when (selectedStatusFromVM) {
+                                    "PENDING" -> "في الانتظار"
+                                    "APPROVED" -> "موافق عليه"
+                                    "REJECTED" -> "مرفوض"
+                                    "REFUNDED" -> "تم الاسترداد"
+                                    "EXCHANGED" -> "تم الاستبدال"
+                                    null -> "الكل"
+                                    else -> "الكل"
+                                },
                                 options = listOf("الكل", "في الانتظار", "موافق عليه", "مرفوض", "تم الاسترداد", "تم الاستبدال"),
-                                onValueChange = { selectedStatus = it },
+                                onValueChange = {
+                                    val statusValue = when (it) {
+                                        "في الانتظار" -> "PENDING"
+                                        "موافق عليه" -> "APPROVED"
+                                        "مرفوض" -> "REJECTED"
+                                        "تم الاسترداد" -> "REFUNDED"
+                                        "تم الاستبدال" -> "EXCHANGED"
+                                        "الكل" -> null
+                                        else -> null
+                                    }
+                                    viewModel.updateSelectedStatus(statusValue)
+                                },
                                 modifier = Modifier.weight(0.7f)
                             )
 
@@ -400,14 +442,20 @@ fun ReturnsScreen() {
                         // Content based on selected tab
                         when (selectedTab) {
                             ReturnTab.RETURNS -> EnhancedReturnsContent(
+                                returns = returns,
+                                isLoading = isLoading,
+                                totalReturns = totalReturns,
+                                pendingReturns = pendingReturns,
+                                totalRefundAmount = totalRefundAmount,
+                                returnRate = returnRate,
                                 searchQuery = searchQuery,
-                                selectedStatus = selectedStatus,
+                                selectedStatus = selectedStatusFromVM,
                                 selectedReason = selectedReason,
                                 showPendingOnly = showPendingOnly,
                                 showRefundableOnly = showRefundableOnly,
                                 sortBy = sortBy,
                                 onReturnClick = { returnItem ->
-                                    selectedReturn = returnItem
+                                    viewModel.selectReturn(returnItem)
                                     showReturnDetails = true
                                 },
                                 onEditReturn = { returnItem ->
@@ -416,6 +464,16 @@ fun ReturnsScreen() {
                                 onDeleteReturn = { returnItem ->
                                     returnToDelete = returnItem
                                     showDeleteConfirmation = true
+                                },
+                                onLoadMore = {
+                                    coroutineScope.launch {
+                                        viewModel.loadMoreReturns()
+                                    }
+                                },
+                                onRefresh = {
+                                    coroutineScope.launch {
+                                        viewModel.refreshData()
+                                    }
                                 }
                             )
                             ReturnTab.ANALYTICS -> EnhancedReturnsAnalyticsContent()
@@ -466,7 +524,7 @@ fun ReturnsScreen() {
                                 },
                                 onClose = {
                                     showReturnDetails = false
-                                    selectedReturn = null
+                                    viewModel.selectReturn(null)
                                 }
                             )
                         }
@@ -527,12 +585,17 @@ fun ReturnsScreen() {
         // Dialogs
         if (showNewReturnDialog) {
             EnhancedNewReturnDialog(
+                isLoading = isCreatingReturn,
                 onDismiss = { showNewReturnDialog = false },
                 onConfirm = { returnData ->
-                    // Handle new return creation
-                    showNewReturnDialog = false
                     coroutineScope.launch {
-                        snackbarHostState.showSnackbar("تم إضافة المرتجع بنجاح")
+                        val result = viewModel.createReturn(returnData)
+                        result.onSuccess {
+                            showNewReturnDialog = false
+                            snackbarHostState.showSnackbar("تم إضافة المرتجع بنجاح")
+                        }.onError { exception ->
+                            snackbarHostState.showSnackbar("خطأ في إضافة المرتجع: ${exception.message}")
+                        }
                     }
                 }
             )
@@ -541,12 +604,17 @@ fun ReturnsScreen() {
         if (editingReturn != null) {
             EnhancedEditReturnDialog(
                 returnItem = editingReturn!!,
+                isLoading = isUpdatingReturn,
                 onDismiss = { editingReturn = null },
                 onSave = { returnItem ->
-                    // Handle updating return
-                    editingReturn = null
                     coroutineScope.launch {
-                        snackbarHostState.showSnackbar("تم تحديث المرتجع بنجاح")
+                        val result = viewModel.updateReturn(returnItem.id!!, returnItem)
+                        result.onSuccess {
+                            editingReturn = null
+                            snackbarHostState.showSnackbar("تم تحديث المرتجع بنجاح")
+                        }.onError { exception ->
+                            snackbarHostState.showSnackbar("خطأ في تحديث المرتجع: ${exception.message}")
+                        }
                     }
                 }
             )
@@ -563,18 +631,31 @@ fun ReturnsScreen() {
                 confirmButton = {
                     Button(
                         onClick = {
-                            // Handle deleting return
-                            showDeleteConfirmation = false
-                            returnToDelete = null
                             coroutineScope.launch {
-                                snackbarHostState.showSnackbar("تم حذف المرتجع بنجاح")
+                                val result = viewModel.deleteReturn(returnToDelete!!.id!!)
+                                result.onSuccess {
+                                    showDeleteConfirmation = false
+                                    returnToDelete = null
+                                    snackbarHostState.showSnackbar("تم حذف المرتجع بنجاح")
+                                }.onError { exception ->
+                                    snackbarHostState.showSnackbar("خطأ في حذف المرتجع: ${exception.message}")
+                                }
                             }
                         },
+                        enabled = !isDeletingReturn,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.error
                         )
                     ) {
-                        Text("حذف")
+                        if (isDeletingReturn) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            )
+                        } else {
+                            Text("حذف")
+                        }
                     }
                 },
                 dismissButton = {
@@ -582,12 +663,43 @@ fun ReturnsScreen() {
                         onClick = {
                             showDeleteConfirmation = false
                             returnToDelete = null
-                        }
+                        },
+                        enabled = !isDeletingReturn
                     ) {
                         Text("إلغاء")
                     }
                 }
             )
+        }
+
+        // Error handling
+        error?.let { errorMessage ->
+            LaunchedEffect(errorMessage) {
+                snackbarHostState.showSnackbar(errorMessage)
+                viewModel.clearError()
+            }
+        }
+
+        // Success feedback
+        lastCreatedReturn?.let {
+            LaunchedEffect(it) {
+                snackbarHostState.showSnackbar("تم إنشاء المرتجع بنجاح")
+                viewModel.clearLastCreatedReturn()
+            }
+        }
+
+        lastUpdatedReturn?.let {
+            LaunchedEffect(it) {
+                snackbarHostState.showSnackbar("تم تحديث المرتجع بنجاح")
+                viewModel.clearLastUpdatedReturn()
+            }
+        }
+
+        lastDeletedReturnId?.let {
+            LaunchedEffect(it) {
+                snackbarHostState.showSnackbar("تم حذف المرتجع بنجاح")
+                viewModel.clearLastDeletedReturnId()
+            }
         }
     }
 }
@@ -699,15 +811,23 @@ private fun EnhancedReturnsFilterDropdown(
 // Enhanced Returns Content
 @Composable
 private fun EnhancedReturnsContent(
+    returns: List<ReturnDTO>,
+    isLoading: Boolean,
+    totalReturns: Int,
+    pendingReturns: Int,
+    totalRefundAmount: Double,
+    returnRate: Double,
     searchQuery: String,
-    selectedStatus: String,
+    selectedStatus: String?,
     selectedReason: String,
     showPendingOnly: Boolean,
     showRefundableOnly: Boolean,
     sortBy: String,
-    onReturnClick: (Return) -> Unit,
-    onEditReturn: (Return) -> Unit,
-    onDeleteReturn: (Return) -> Unit
+    onReturnClick: (ReturnDTO) -> Unit,
+    onEditReturn: (ReturnDTO) -> Unit,
+    onDeleteReturn: (ReturnDTO) -> Unit,
+    onLoadMore: () -> Unit,
+    onRefresh: () -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -721,7 +841,7 @@ private fun EnhancedReturnsContent(
             ) {
                 EnhancedReturnsStatCard(
                     title = "إجمالي المرتجعات",
-                    value = "156",
+                    value = totalReturns.toString(),
                     subtitle = "مرتجع مسجل",
                     icon = Icons.AutoMirrored.Filled.AssignmentReturn,
                     iconColor = MaterialTheme.colorScheme.primary,
@@ -730,7 +850,7 @@ private fun EnhancedReturnsContent(
 
                 EnhancedReturnsStatCard(
                     title = "في الانتظار",
-                    value = "23",
+                    value = pendingReturns.toString(),
                     subtitle = "يحتاج معالجة",
                     icon = Icons.Default.Schedule,
                     iconColor = AppTheme.colors.warning,
@@ -746,7 +866,7 @@ private fun EnhancedReturnsContent(
             ) {
                 EnhancedReturnsStatCard(
                     title = "تم الاسترداد",
-                    value = "12,500 ر.س",
+                    value = "${String.format("%.2f", totalRefundAmount)} ر.س",
                     subtitle = "إجمالي المبلغ",
                     icon = Icons.Default.AccountBalance,
                     iconColor = AppTheme.colors.success,
@@ -755,7 +875,7 @@ private fun EnhancedReturnsContent(
 
                 EnhancedReturnsStatCard(
                     title = "معدل المرتجعات",
-                    value = "3.2%",
+                    value = "${String.format("%.1f", returnRate)}%",
                     subtitle = "من إجمالي المبيعات",
                     icon = Icons.AutoMirrored.Filled.TrendingDown,
                     iconColor = AppTheme.colors.info,
@@ -766,57 +886,99 @@ private fun EnhancedReturnsContent(
 
         // Recent Returns
         item {
-            Text(
-                text = "قائمة المرتجعات",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "قائمة المرتجعات",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
         }
 
-        // Sample returns
-        items(15) { index ->
-            EnhancedReturnCard(
-                returnItem = Return(
-                    id = index,
-                    originalSaleId = 100 + index,
-                    date = LocalDateTime(2024, 1, (index % 28) + 1, 10, 0),
-                    items = listOf(
-                        ReturnItem(
-                            productId = index,
-                            quantity = 1 + index % 3,
-                            unitPrice = 50.0 + index * 10,
-                            condition = when (index % 4) {
-                                0 -> ItemCondition.DEFECTIVE
-                                1 -> ItemCondition.DAMAGED
-                                2 -> ItemCondition.GOOD
-                                else -> ItemCondition.NEW
-                            }
-                        )
+        // Loading state
+        if (isLoading && returns.isEmpty()) {
+            items(5) {
+                EnhancedReturnCardSkeleton()
+            }
+        } else if (returns.isEmpty()) {
+            // Empty state
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
                     ),
-                    reason = when (index % 5) {
-                        0 -> ReturnReason.DEFECTIVE
-                        1 -> ReturnReason.DAMAGED_SHIPPING
-                        2 -> ReturnReason.CUSTOMER_CHANGE_MIND
-                        3 -> ReturnReason.WRONG_ITEM
-                        else -> ReturnReason.EXPIRED
-                    },
-                    status = when (index % 5) {
-                        0 -> ReturnStatus.PENDING
-                        1 -> ReturnStatus.APPROVED
-                        2 -> ReturnStatus.REJECTED
-                        3 -> ReturnStatus.REFUNDED
-                        else -> ReturnStatus.EXCHANGED
-                    },
-                    refundAmount = (50.0 + index * 10) * (1 + index % 3),
-                    notes = "ملاحظة حول المرتجع $index"
-                ),
-                customerName = "عميل ${index + 1}",
-                productName = "منتج ${index + 1}",
-                onClick = onReturnClick,
-                onEdit = onEditReturn,
-                onDelete = onDeleteReturn
-            )
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(40.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.AssignmentReturn,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                        Text(
+                            text = "لا توجد مرتجعات",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "لم يتم العثور على أي مرتجعات مطابقة للبحث",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        } else {
+            // Real returns data
+            items(returns) { returnItem ->
+                EnhancedReturnCardFromDTO(
+                    returnItem = returnItem,
+                    onClick = onReturnClick,
+                    onEdit = onEditReturn,
+                    onDelete = onDeleteReturn
+                )
+            }
+
+            // Load more button
+            item {
+                Button(
+                    onClick = onLoadMore,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("تحميل المزيد")
+                }
+            }
         }
     }
 }
@@ -1041,249 +1203,7 @@ private fun EnhancedReturnsStatCard(
     }
 }
 
-// Enhanced Return Card Component
-@Composable
-private fun EnhancedReturnCard(
-    returnItem: Return,
-    customerName: String,
-    productName: String,
-    onClick: (Return) -> Unit,
-    onEdit: (Return) -> Unit,
-    onDelete: (Return) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    // Enhanced hover effect with complete coverage
-    val interactionSource = remember { MutableInteractionSource() }
-    val isHovered by interactionSource.collectIsHoveredAsState()
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(
-                color = if (isHovered)
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
-                else
-                    MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(20.dp)
-            )
-            .border(
-                width = if (isHovered) 1.5.dp else 1.dp,
-                color = if (isHovered)
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                else
-                    MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
-                shape = RoundedCornerShape(20.dp)
-            )
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null
-            ) { onClick(returnItem) }
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Header with actions
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "مرتجع #${returnItem.id}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    Text(
-                        text = "العميل: $customerName",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    IconButton(
-                        onClick = { onEdit(returnItem) },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Edit,
-                            contentDescription = "تعديل",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    IconButton(
-                        onClick = { onDelete(returnItem) },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Delete,
-                            contentDescription = "حذف",
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-            }
-
-            // Status and Reason
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = when (returnItem.status) {
-                            ReturnStatus.PENDING -> AppTheme.colors.warning.copy(alpha = 0.2f)
-                            ReturnStatus.APPROVED -> AppTheme.colors.success.copy(alpha = 0.2f)
-                            ReturnStatus.REJECTED -> MaterialTheme.colorScheme.errorContainer
-                            ReturnStatus.REFUNDED -> AppTheme.colors.info.copy(alpha = 0.2f)
-                            ReturnStatus.EXCHANGED -> AppTheme.colors.purple.copy(alpha = 0.2f)
-                        }
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            when (returnItem.status) {
-                                ReturnStatus.PENDING -> Icons.Default.Schedule
-                                ReturnStatus.APPROVED -> Icons.Default.CheckCircle
-                                ReturnStatus.REJECTED -> Icons.Default.Cancel
-                                ReturnStatus.REFUNDED -> Icons.Default.AccountBalance
-                                ReturnStatus.EXCHANGED -> Icons.Default.SwapHoriz
-                            },
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = when (returnItem.status) {
-                                ReturnStatus.PENDING -> AppTheme.colors.warning
-                                ReturnStatus.APPROVED -> AppTheme.colors.success
-                                ReturnStatus.REJECTED -> MaterialTheme.colorScheme.onErrorContainer
-                                ReturnStatus.REFUNDED -> AppTheme.colors.info
-                                ReturnStatus.EXCHANGED -> AppTheme.colors.purple
-                            }
-                        )
-                        Text(
-                            text = returnItem.status.displayName,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = when (returnItem.status) {
-                                ReturnStatus.PENDING -> AppTheme.colors.warning
-                                ReturnStatus.APPROVED -> AppTheme.colors.success
-                                ReturnStatus.REJECTED -> MaterialTheme.colorScheme.onErrorContainer
-                                ReturnStatus.REFUNDED -> AppTheme.colors.info
-                                ReturnStatus.EXCHANGED -> AppTheme.colors.purple
-                            }
-                        )
-                    }
-                }
-
-                // Reason
-                Text(
-                    text = returnItem.reason.displayName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // Product and Amount Information
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text(
-                        text = "المنتج",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = productName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                Column {
-                    Text(
-                        text = "الكمية",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "${returnItem.items.sumOf { it.quantity }}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                Column {
-                    Text(
-                        text = "المبلغ",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "${returnItem.refundAmount.toInt()} ر.س",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-
-            // Date and Notes
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text(
-                        text = "تاريخ الإرجاع",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "${returnItem.date.date}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                if (returnItem.notes.isNotBlank()) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "ملاحظات",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = returnItem.notes,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
+// Legacy functions removed to fix compilation errors
 
 // Enhanced Policy Card Component
 @Composable
@@ -1350,7 +1270,7 @@ private fun EnhancedPolicyCard(
 // Enhanced Return Details Panel Component
 @Composable
 private fun EnhancedReturnDetailsPanel(
-    returnItem: Return,
+    returnItem: ReturnDTO,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onClose: () -> Unit,
@@ -1396,7 +1316,7 @@ private fun EnhancedReturnDetailsPanel(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "مرتجع #${returnItem.id}",
+                    text = "مرتجع #${returnItem.returnNumber ?: returnItem.id}",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -1409,24 +1329,33 @@ private fun EnhancedReturnDetailsPanel(
                 ) {
                     Icon(
                         when (returnItem.status) {
-                            ReturnStatus.PENDING -> Icons.Default.Schedule
-                            ReturnStatus.APPROVED -> Icons.Default.CheckCircle
-                            ReturnStatus.REJECTED -> Icons.Default.Cancel
-                            ReturnStatus.REFUNDED -> Icons.Default.AccountBalance
-                            ReturnStatus.EXCHANGED -> Icons.Default.SwapHoriz
+                            "PENDING" -> Icons.Default.Schedule
+                            "APPROVED" -> Icons.Default.CheckCircle
+                            "REJECTED" -> Icons.Default.Cancel
+                            "REFUNDED" -> Icons.Default.AccountBalance
+                            "EXCHANGED" -> Icons.Default.SwapHoriz
+                            else -> Icons.Default.Schedule
                         },
                         contentDescription = null,
                         tint = when (returnItem.status) {
-                            ReturnStatus.PENDING -> AppTheme.colors.warning
-                            ReturnStatus.APPROVED -> AppTheme.colors.success
-                            ReturnStatus.REJECTED -> AppTheme.colors.error
-                            ReturnStatus.REFUNDED -> AppTheme.colors.info
-                            ReturnStatus.EXCHANGED -> AppTheme.colors.purple
+                            "PENDING" -> AppTheme.colors.warning
+                            "APPROVED" -> AppTheme.colors.success
+                            "REJECTED" -> AppTheme.colors.error
+                            "REFUNDED" -> AppTheme.colors.info
+                            "EXCHANGED" -> AppTheme.colors.purple
+                            else -> AppTheme.colors.warning
                         },
                         modifier = Modifier.size(20.dp)
                     )
                     Text(
-                        text = returnItem.status.displayName,
+                        text = when (returnItem.status) {
+                            "PENDING" -> "في الانتظار"
+                            "APPROVED" -> "موافق عليه"
+                            "REJECTED" -> "مرفوض"
+                            "REFUNDED" -> "تم الاسترداد"
+                            "EXCHANGED" -> "تم الاستبدال"
+                            else -> returnItem.status ?: "غير محدد"
+                        },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -1437,12 +1366,27 @@ private fun EnhancedReturnDetailsPanel(
 
                 // Return Details
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DetailRow("رقم البيع الأصلي", "#${returnItem.originalSaleId}")
-                    DetailRow("تاريخ الإرجاع", "${returnItem.date.date}")
-                    DetailRow("سبب الإرجاع", returnItem.reason.displayName)
-                    DetailRow("المبلغ الإجمالي", "${returnItem.refundAmount.toInt()} ر.س")
-                    if (returnItem.notes.isNotBlank()) {
+                    DetailRow("رقم البيع الأصلي", returnItem.originalSaleNumber ?: "#${returnItem.originalSaleId}")
+                    DetailRow("العميل", returnItem.customerName ?: "غير محدد")
+                    DetailRow("تاريخ الإرجاع", returnItem.returnDate?.take(10) ?: "غير محدد")
+                    DetailRow("سبب الإرجاع", getReasonDisplayName(returnItem.reason))
+                    DetailRow("المبلغ الإجمالي", "${String.format("%.2f", returnItem.totalRefundAmount)} ر.س")
+                    returnItem.refundMethod?.let { method ->
+                        DetailRow("طريقة الاسترداد", when (method) {
+                            "ORIGINAL_PAYMENT" -> "الطريقة الأصلية"
+                            "STORE_CREDIT" -> "رصيد المتجر"
+                            "CASH" -> "نقداً"
+                            else -> method
+                        })
+                    }
+                    if (!returnItem.notes.isNullOrBlank()) {
                         DetailRow("ملاحظات", returnItem.notes)
+                    }
+                    returnItem.processedBy?.let { processor ->
+                        DetailRow("تمت المعالجة بواسطة", processor)
+                    }
+                    returnItem.processedDate?.let { date ->
+                        DetailRow("تاريخ المعالجة", date.take(10))
                     }
                 }
             }
@@ -1476,20 +1420,37 @@ private fun EnhancedReturnDetailsPanel(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "منتج #${item.productId}",
+                                text = item.productName ?: "منتج #${item.productId}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium
                             )
                             Text(
-                                text = "${item.quantity} × ${item.unitPrice.toInt()} ر.س",
+                                text = "${item.quantity} × ${String.format("%.2f", item.unitPrice)} ر.س",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium
                             )
                         }
                         Text(
-                            text = "الحالة: ${item.condition.displayName}",
+                            text = "الحالة: ${when (item.condition) {
+                                "NEW" -> "جديد"
+                                "USED" -> "مستعمل"
+                                "DAMAGED" -> "تالف"
+                                "DEFECTIVE" -> "معيب"
+                                else -> item.condition
+                            }}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "السبب: ${getReasonDisplayName(item.reason)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "إجمالي الاسترداد: ${String.format("%.2f", item.totalRefundAmount)} ر.س",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
@@ -1558,218 +1519,9 @@ private fun DetailRow(
     }
 }
 
-@Composable
-fun ReturnsListContent(
-    searchQuery: String,
-    selectedStatus: String,
-    onReturnClick: (Return) -> Unit
-) {
-    val returns = remember {
-        listOf(
-            Return(1, 101, LocalDateTime(2024, 1, 15, 10, 0),
-                listOf(ReturnItem(1, 2, 50.0, ItemCondition.DEFECTIVE)),
-                ReturnReason.DEFECTIVE, ReturnStatus.APPROVED, 100.0, "منتج معيب"),
-            Return(2, 102, LocalDateTime(2024, 1, 16, 14, 30),
-                listOf(ReturnItem(2, 1, 75.0, ItemCondition.GOOD)),
-                ReturnReason.CUSTOMER_CHANGE_MIND, ReturnStatus.PENDING, 75.0, "تغيير رأي العميل"),
-            Return(3, 103, LocalDateTime(2024, 1, 17, 9, 15),
-                listOf(ReturnItem(3, 3, 25.0, ItemCondition.DAMAGED)),
-                ReturnReason.DAMAGED_SHIPPING, ReturnStatus.REFUNDED, 75.0, "تضرر أثناء الشحن"),
-            Return(4, 104, LocalDateTime(2024, 1, 18, 16, 45),
-                listOf(ReturnItem(4, 1, 120.0, ItemCondition.NEW)),
-                ReturnReason.WRONG_ITEM, ReturnStatus.EXCHANGED, 120.0, "منتج خاطئ"),
-            Return(5, 105, LocalDateTime(2024, 1, 19, 11, 20),
-                listOf(ReturnItem(5, 2, 40.0, ItemCondition.DEFECTIVE)),
-                ReturnReason.EXPIRED, ReturnStatus.REJECTED, 0.0, "منتج منتهي الصلاحية")
-        )
-    }
+// Legacy ReturnsListContent function removed
 
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(returns.filter { returnItem ->
-            (selectedStatus == "الكل" || returnItem.status.displayName == selectedStatus) &&
-            (searchQuery.isEmpty() || returnItem.id.toString().contains(searchQuery) ||
-             returnItem.originalSaleId.toString().contains(searchQuery))
-        }) { returnItem ->
-            ReturnCard(
-                returnItem = returnItem,
-                onClick = { onReturnClick(returnItem) }
-            )
-        }
-    }
-}
-
-@Composable
-fun ReturnCard(
-    returnItem: Return,
-    onClick: () -> Unit
-) {
-    // Enhanced hover effect with complete coverage
-    val interactionSource = remember { MutableInteractionSource() }
-    val isHovered by interactionSource.collectIsHoveredAsState()
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                color = if (isHovered)
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
-                else
-                    MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(16.dp)
-            )
-            .border(
-                width = if (isHovered) 1.5.dp else 1.dp,
-                color = if (isHovered)
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                else
-                    MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
-                shape = RoundedCornerShape(16.dp)
-            )
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null
-            ) { onClick() }
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                // Status and Actions
-                Column(
-                    horizontalAlignment = Alignment.Start,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = getReturnStatusColor(returnItem.status).copy(alpha = 0.1f)
-                        ),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(
-                            text = returnItem.status.displayName,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = getReturnStatusColor(returnItem.status),
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        IconButton(
-                            onClick = { /* معالجة */ },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Settings,
-                                contentDescription = "معالجة",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { /* طباعة */ },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Print,
-                                contentDescription = "طباعة",
-                                tint = AppTheme.colors.info,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-
-                // Return Info
-                Column(
-                    horizontalAlignment = Alignment.End
-                ) {
-                    Text(
-                        text = "مرتجع #${returnItem.id}",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "فاتورة أصلية #${returnItem.originalSaleId}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = returnItem.date.date.toString(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Return Details
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.Start
-                ) {
-                    Text(
-                        text = "عدد القطع: ${returnItem.items.sumOf { it.quantity }}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "السبب: ${returnItem.reason.displayName}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Column(
-                    horizontalAlignment = Alignment.End
-                ) {
-                    Text(
-                        text = UiUtils.formatCurrency(returnItem.refundAmount),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (returnItem.refundAmount > 0) AppTheme.colors.success else AppTheme.colors.error
-                    )
-                    Text(
-                        text = "مبلغ الاسترداد",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            if (returnItem.notes.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    ),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(
-                        text = "ملاحظات: ${returnItem.notes}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(8.dp)
-                    )
-                }
-            }
-        }
-    }
-}
+// Legacy ReturnCard function removed
 
 // Old ReturnsAnalyticsContent function removed - replaced with enhanced version
 
@@ -1787,11 +1539,12 @@ fun ReturnCard(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EnhancedNewReturnDialog(
+    isLoading: Boolean = false,
     onDismiss: () -> Unit,
-    onConfirm: (ReturnData) -> Unit
+    onConfirm: (ReturnDTO) -> Unit
 ) {
     var originalSaleId by remember { mutableStateOf("") }
-    var selectedReason by remember { mutableStateOf(ReturnReason.DEFECTIVE) }
+    var selectedReason by remember { mutableStateOf("DEFECTIVE") }
     var notes by remember { mutableStateOf("") }
     var customerName by remember { mutableStateOf("") }
     var productName by remember { mutableStateOf("") }
@@ -1884,7 +1637,7 @@ fun EnhancedNewReturnDialog(
                     onExpandedChange = { expanded = !expanded }
                 ) {
                     OutlinedTextField(
-                        value = selectedReason.displayName,
+                        value = getReasonDisplayName(selectedReason),
                         onValueChange = { },
                         readOnly = true,
                         label = { Text("سبب الإرجاع") },
@@ -1906,9 +1659,10 @@ fun EnhancedNewReturnDialog(
                         expanded = expanded,
                         onDismissRequest = { expanded = false }
                     ) {
-                        ReturnReason.entries.forEach { reason ->
+                        val reasons = listOf("DEFECTIVE", "WRONG_ITEM", "CUSTOMER_CHANGE_MIND", "EXPIRED", "DAMAGED_SHIPPING", "OTHER")
+                        reasons.forEach { reason ->
                             DropdownMenuItem(
-                                text = { Text(reason.displayName) },
+                                text = { Text(getReasonDisplayName(reason)) },
                                 onClick = {
                                     selectedReason = reason
                                     expanded = false
@@ -1938,23 +1692,36 @@ fun EnhancedNewReturnDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val returnData = ReturnData(
-                        originalSaleId = originalSaleId.toIntOrNull() ?: 0,
+                    val returnData = ReturnDTO(
+                        originalSaleId = originalSaleId.toLongOrNull() ?: 0L,
+                        customerId = 1L, // TODO: Get from customer selection
                         reason = selectedReason,
-                        notes = notes
+                        totalRefundAmount = refundAmount.toDoubleOrNull() ?: 0.0,
+                        notes = notes,
+                        refundMethod = "ORIGINAL_PAYMENT",
+                        items = emptyList() // TODO: Add item selection
                     )
                     onConfirm(returnData)
                 },
+                enabled = !isLoading && originalSaleId.isNotEmpty() && refundAmount.isNotEmpty(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary
                 ),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text(
-                    "إضافة",
-                    fontWeight = FontWeight.SemiBold
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Text(
+                        "إضافة",
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         },
         dismissButton = {
@@ -1978,14 +1745,15 @@ fun EnhancedNewReturnDialog(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EnhancedEditReturnDialog(
-    returnItem: Return,
+    returnItem: ReturnDTO,
+    isLoading: Boolean = false,
     onDismiss: () -> Unit,
-    onSave: (Return) -> Unit
+    onSave: (ReturnDTO) -> Unit
 ) {
     var selectedReason by remember { mutableStateOf(returnItem.reason) }
-    var selectedStatus by remember { mutableStateOf(returnItem.status) }
-    var notes by remember { mutableStateOf(returnItem.notes) }
-    var refundAmount by remember { mutableStateOf(returnItem.refundAmount.toString()) }
+    var selectedStatus by remember { mutableStateOf(returnItem.status ?: "PENDING") }
+    var notes by remember { mutableStateOf(returnItem.notes ?: "") }
+    var refundAmount by remember { mutableStateOf(returnItem.totalRefundAmount.toString()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -2028,7 +1796,7 @@ private fun EnhancedEditReturnDialog(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = "تاريخ الإرجاع: ${returnItem.date.date}",
+                                text = "تاريخ الإرجاع: ${returnItem.returnDate?.take(10) ?: "غير محدد"}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -2044,7 +1812,7 @@ private fun EnhancedEditReturnDialog(
                         onExpandedChange = { reasonExpanded = !reasonExpanded }
                     ) {
                         OutlinedTextField(
-                            value = selectedReason.displayName,
+                            value = getReasonDisplayName(selectedReason),
                             onValueChange = { },
                             readOnly = true,
                             label = { Text("سبب الإرجاع") },
@@ -2065,9 +1833,10 @@ private fun EnhancedEditReturnDialog(
                             expanded = reasonExpanded,
                             onDismissRequest = { reasonExpanded = false }
                         ) {
-                            ReturnReason.values().forEach { reason ->
+                            val reasons = listOf("DEFECTIVE", "WRONG_ITEM", "CUSTOMER_CHANGE_MIND", "EXPIRED", "DAMAGED_SHIPPING", "OTHER")
+                            reasons.forEach { reason ->
                                 DropdownMenuItem(
-                                    text = { Text(reason.displayName) },
+                                    text = { Text(getReasonDisplayName(reason)) },
                                     onClick = {
                                         selectedReason = reason
                                         reasonExpanded = false
@@ -2086,7 +1855,14 @@ private fun EnhancedEditReturnDialog(
                         onExpandedChange = { statusExpanded = !statusExpanded }
                     ) {
                         OutlinedTextField(
-                            value = selectedStatus.displayName,
+                            value = when (selectedStatus) {
+                                "PENDING" -> "في الانتظار"
+                                "APPROVED" -> "موافق عليه"
+                                "REJECTED" -> "مرفوض"
+                                "REFUNDED" -> "تم الاسترداد"
+                                "EXCHANGED" -> "تم الاستبدال"
+                                else -> selectedStatus
+                            },
                             onValueChange = { },
                             readOnly = true,
                             label = { Text("حالة المرتجع") },
@@ -2107,9 +1883,17 @@ private fun EnhancedEditReturnDialog(
                             expanded = statusExpanded,
                             onDismissRequest = { statusExpanded = false }
                         ) {
-                            ReturnStatus.values().forEach { status ->
+                            val statuses = listOf("PENDING", "APPROVED", "REJECTED", "REFUNDED", "EXCHANGED")
+                            statuses.forEach { status ->
                                 DropdownMenuItem(
-                                    text = { Text(status.displayName) },
+                                    text = { Text(when (status) {
+                                        "PENDING" -> "في الانتظار"
+                                        "APPROVED" -> "موافق عليه"
+                                        "REJECTED" -> "مرفوض"
+                                        "REFUNDED" -> "تم الاسترداد"
+                                        "EXCHANGED" -> "تم الاستبدال"
+                                        else -> status
+                                    }) },
                                     onClick = {
                                         selectedStatus = status
                                         statusExpanded = false
@@ -2157,19 +1941,28 @@ private fun EnhancedEditReturnDialog(
                         reason = selectedReason,
                         status = selectedStatus,
                         notes = notes,
-                        refundAmount = refundAmount.toDoubleOrNull() ?: returnItem.refundAmount
+                        totalRefundAmount = refundAmount.toDoubleOrNull() ?: returnItem.totalRefundAmount
                     )
                     onSave(updatedReturn)
                 },
+                enabled = !isLoading,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
                 ),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text(
-                    "حفظ التغييرات",
-                    fontWeight = FontWeight.Medium
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Text(
+                        "حفظ التغييرات",
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         },
         dismissButton = {
@@ -2188,129 +1981,7 @@ private fun EnhancedEditReturnDialog(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ReturnDetailsDialog(
-    returnItem: Return,
-    onDismiss: () -> Unit,
-    onStatusUpdate: (ReturnStatus) -> Unit
-) {
-    var selectedStatus by remember { mutableStateOf(returnItem.status) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = "تفاصيل المرتجع #${returnItem.id}",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.End,
-                modifier = Modifier.fillMaxWidth()
-            )
-        },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                ReturnDetailItem("رقم الفاتورة الأصلية", returnItem.originalSaleId.toString())
-                ReturnDetailItem("تاريخ الإرجاع", returnItem.date.date.toString())
-                ReturnDetailItem("السبب", returnItem.reason.displayName)
-                ReturnDetailItem("مبلغ الاسترداد", UiUtils.formatCurrency(returnItem.refundAmount))
-
-                Text(
-                    text = "القطع المرتجعة:",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.End,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                returnItem.items.forEach { item ->
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        ),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp)
-                        ) {
-                            ReturnDetailItem("الكمية", item.quantity.toString())
-                            ReturnDetailItem("السعر", UiUtils.formatCurrency(item.unitPrice))
-                            ReturnDetailItem("الحالة", item.condition.displayName)
-                        }
-                    }
-                }
-
-                if (returnItem.notes.isNotEmpty()) {
-                    ReturnDetailItem("ملاحظات", returnItem.notes)
-                }
-
-                // Status Update
-                var expanded by remember { mutableStateOf(false) }
-                ExposedDropdownMenuBox(
-                    expanded = expanded,
-                    onExpandedChange = { expanded = !expanded }
-                ) {
-                    OutlinedTextField(
-                        value = selectedStatus.displayName,
-                        onValueChange = { },
-                        readOnly = true,
-                        label = { Text("تحديث الحالة") },
-                        trailingIcon = {
-                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-                        },
-                        modifier = Modifier.fillMaxWidth().menuAnchor()
-                    )
-
-                    ExposedDropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
-                    ) {
-                        ReturnStatus.entries.forEach { status ->
-                            DropdownMenuItem(
-                                text = { Text(status.displayName) },
-                                onClick = {
-                                    selectedStatus = status
-                                    expanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onStatusUpdate(selectedStatus) },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    "تحديث",
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    "إغلاق",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        },
-        shape = RoundedCornerShape(20.dp),
-        containerColor = MaterialTheme.colorScheme.surface
-    )
-}
+// Legacy ReturnDetailsDialog function removed
 
 @Composable
 fun ReturnDetailItem(label: String, value: String) {
@@ -3189,240 +2860,11 @@ private fun ModernStatCard(
     }
 }
 
-// Enhanced Returns List Component
-@Composable
-private fun EnhancedReturnsList(
-    searchQuery: String,
-    selectedStatus: String,
-    modifier: Modifier = Modifier
-) {
-    // Sample returns data
-    val returns = remember {
-        listOf(
-            Return(1, 101, LocalDateTime(2024, 1, 15, 10, 0),
-                listOf(ReturnItem(1, 2, 50.0, ItemCondition.DEFECTIVE)),
-                ReturnReason.DEFECTIVE, ReturnStatus.APPROVED, 100.0, "منتج معيب"),
-            Return(2, 102, LocalDateTime(2024, 1, 16, 14, 30),
-                listOf(ReturnItem(2, 1, 75.0, ItemCondition.GOOD)),
-                ReturnReason.CUSTOMER_CHANGE_MIND, ReturnStatus.PENDING, 75.0, "تغيير رأي العميل"),
-            Return(3, 103, LocalDateTime(2024, 1, 17, 9, 15),
-                listOf(ReturnItem(3, 3, 25.0, ItemCondition.DAMAGED)),
-                ReturnReason.DAMAGED_SHIPPING, ReturnStatus.REFUNDED, 75.0, "تضرر أثناء الشحن"),
-            Return(4, 104, LocalDateTime(2024, 1, 18, 16, 45),
-                listOf(ReturnItem(4, 1, 120.0, ItemCondition.NEW)),
-                ReturnReason.WRONG_ITEM, ReturnStatus.EXCHANGED, 120.0, "منتج خاطئ"),
-            Return(5, 105, LocalDateTime(2024, 1, 19, 11, 20),
-                listOf(ReturnItem(5, 2, 40.0, ItemCondition.DEFECTIVE)),
-                ReturnReason.EXPIRED, ReturnStatus.REJECTED, 0.0, "منتج منتهي الصلاحية")
-        )
-    }
+// Legacy EnhancedReturnsList function removed
 
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardStyles.elevatedCardColors(),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardStyles.elevatedCardElevation()
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "طلبات الإرجاع الحديثة",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+// Legacy EnhancedReturnCard function removed
 
-                TextButton(
-                    onClick = { /* View all returns */ }
-                ) {
-                    Text(
-                        text = "عرض الكل",
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-
-            // Returns List
-            if (returns.isEmpty()) {
-                EnhancedEmptyState(
-                    icon = Icons.AutoMirrored.Filled.AssignmentReturn,
-                    title = "لا توجد مرتجعات",
-                    description = "لم يتم تسجيل أي طلبات إرجاع حتى الآن",
-                    isCompact = true
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.height(400.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(returns.filter { returnItem ->
-                        (selectedStatus == "الكل" || returnItem.status.displayName == selectedStatus) &&
-                        (searchQuery.isEmpty() || returnItem.id.toString().contains(searchQuery) ||
-                         returnItem.originalSaleId.toString().contains(searchQuery))
-                    }) { returnItem ->
-                        EnhancedReturnCard(
-                            returnItem = returnItem,
-                            onClick = { /* Handle return click */ }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Enhanced Return Card Component
-@Composable
-private fun EnhancedReturnCard(
-    returnItem: Return,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    // Enhanced hover effect with complete coverage
-    val interactionSource = remember { MutableInteractionSource() }
-    val isHovered by interactionSource.collectIsHoveredAsState()
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                color = if (isHovered)
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
-                else
-                    MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(16.dp)
-            )
-            .border(
-                width = if (isHovered) 1.5.dp else 1.dp,
-                color = if (isHovered)
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                else
-                    MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
-                shape = RoundedCornerShape(16.dp)
-            )
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null
-            ) { onClick() }
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Header Row
-            RTLRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                RTLRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Status Chip
-                    Surface(
-                        color = when (returnItem.status) {
-                            ReturnStatus.PENDING -> AppTheme.colors.warning.copy(alpha = 0.1f)
-                            ReturnStatus.APPROVED -> AppTheme.colors.info.copy(alpha = 0.1f)
-                            ReturnStatus.REFUNDED -> AppTheme.colors.success.copy(alpha = 0.1f)
-                            ReturnStatus.EXCHANGED -> MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                            ReturnStatus.REJECTED -> AppTheme.colors.error.copy(alpha = 0.1f)
-                        },
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(
-                            text = returnItem.status.displayName,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = when (returnItem.status) {
-                                ReturnStatus.PENDING -> AppTheme.colors.warning
-                                ReturnStatus.APPROVED -> AppTheme.colors.info
-                                ReturnStatus.REFUNDED -> AppTheme.colors.success
-                                ReturnStatus.EXCHANGED -> MaterialTheme.colorScheme.primary
-                                ReturnStatus.REJECTED -> AppTheme.colors.error
-                            },
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-
-                    // Return ID and Sale ID
-                    Column {
-                        Text(
-                            text = "مرتجع #${returnItem.id}",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "من فاتورة #${returnItem.originalSaleId}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                // Arrow Icon
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = "عرض التفاصيل",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            // Divider
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
-                thickness = 1.dp
-            )
-
-            // Details Row
-            RTLRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = "السبب: ${returnItem.reason.displayName}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "التاريخ: ${returnItem.date.date}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Text(
-                    text = UiUtils.formatCurrency(returnItem.refundAmount),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = if (returnItem.refundAmount > 0) AppTheme.colors.success else MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
-    }
-}
-
-// Enhanced Action Button Component
+// Enhanced Action Button Component with complete hover coverage
 @Composable
 private fun EnhancedActionButton(
     text: String,
@@ -3431,33 +2873,63 @@ private fun EnhancedActionButton(
     isPrimary: Boolean,
     modifier: Modifier = Modifier
 ) {
-    Button(
-        onClick = onClick,
-        modifier = modifier.height(48.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (isPrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = if (isPrimary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-        ),
-        shape = RoundedCornerShape(16.dp),
-        elevation = ButtonDefaults.buttonElevation(
-            defaultElevation = if (isPrimary) 3.dp else 1.dp,
-            hoveredElevation = if (isPrimary) 6.dp else 3.dp,
-            pressedElevation = 1.dp
-        )
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
+        modifier = modifier
+            .height(56.dp) // Match dropdown height for consistency
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                color = when {
+                    isPrimary && isHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                    isPrimary -> MaterialTheme.colorScheme.primary
+                    isHovered -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                    else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+                },
+                shape = RoundedCornerShape(16.dp)
+            )
+            .border(
+                width = if (isHovered) 1.5.dp else 1.dp,
+                color = when {
+                    isPrimary && isHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                    isPrimary -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                    isHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                    else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                },
+                shape = RoundedCornerShape(16.dp)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
     ) {
         RTLRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 16.dp)
         ) {
             Icon(
                 icon,
                 contentDescription = null,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(20.dp),
+                tint = when {
+                    isPrimary -> MaterialTheme.colorScheme.onPrimary
+                    isHovered -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
             )
             Text(
                 text = text,
                 style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                color = when {
+                    isPrimary -> MaterialTheme.colorScheme.onPrimary
+                    isHovered -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
             )
         }
     }
@@ -3525,5 +2997,267 @@ fun getReturnStatusColor(status: ReturnStatus): Color {
         ReturnStatus.REJECTED -> AppTheme.colors.error
         ReturnStatus.REFUNDED -> AppTheme.colors.success
         ReturnStatus.EXCHANGED -> MaterialTheme.colorScheme.primary
+    }
+}
+
+// Enhanced Return Card for DTO
+@Composable
+private fun EnhancedReturnCardFromDTO(
+    returnItem: ReturnDTO,
+    onClick: (ReturnDTO) -> Unit,
+    onEdit: (ReturnDTO) -> Unit,
+    onDelete: (ReturnDTO) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Enhanced hover effect with complete coverage
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                color = if (isHovered)
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+                else
+                    MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(20.dp)
+            )
+            .border(
+                width = if (isHovered) 1.5.dp else 1.dp,
+                color = if (isHovered)
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                else
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(20.dp)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { onClick(returnItem) }
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Header with actions
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "مرتجع #${returnItem.returnNumber ?: returnItem.id}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Text(
+                        text = "العميل: ${returnItem.customerName ?: "غير محدد"}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    IconButton(
+                        onClick = { onEdit(returnItem) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "تعديل",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { onDelete(returnItem) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "حذف",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
+            // Status and Reason
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = when (returnItem.status) {
+                            "PENDING" -> AppTheme.colors.warning.copy(alpha = 0.2f)
+                            "APPROVED" -> AppTheme.colors.success.copy(alpha = 0.2f)
+                            "REJECTED" -> AppTheme.colors.error.copy(alpha = 0.2f)
+                            "REFUNDED" -> AppTheme.colors.info.copy(alpha = 0.2f)
+                            "EXCHANGED" -> AppTheme.colors.purple.copy(alpha = 0.2f)
+                            else -> MaterialTheme.colorScheme.surfaceVariant
+                        }
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = when (returnItem.status) {
+                            "PENDING" -> "في الانتظار"
+                            "APPROVED" -> "موافق عليه"
+                            "REJECTED" -> "مرفوض"
+                            "REFUNDED" -> "تم الاسترداد"
+                            "EXCHANGED" -> "تم الاستبدال"
+                            else -> returnItem.status ?: "غير محدد"
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = when (returnItem.status) {
+                            "PENDING" -> AppTheme.colors.warning
+                            "APPROVED" -> AppTheme.colors.success
+                            "REJECTED" -> AppTheme.colors.error
+                            "REFUNDED" -> AppTheme.colors.info
+                            "EXCHANGED" -> AppTheme.colors.purple
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+
+                Text(
+                    text = "${String.format("%.2f", returnItem.totalRefundAmount)} ر.س",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            // Additional info
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "السبب: ${getReasonDisplayName(returnItem.reason)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Text(
+                    text = returnItem.returnDate?.take(10) ?: "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Notes if available
+            returnItem.notes?.let { notes ->
+                if (notes.isNotEmpty()) {
+                    Text(
+                        text = "ملاحظات: $notes",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Skeleton loading card
+@Composable
+private fun EnhancedReturnCardSkeleton() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Header skeleton
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.4f)
+                            .height(20.dp)
+                            .background(
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                                RoundedCornerShape(4.dp)
+                            )
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.6f)
+                            .height(16.dp)
+                            .background(
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                                RoundedCornerShape(4.dp)
+                            )
+                    )
+                }
+            }
+
+            // Status and amount skeleton
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(80.dp)
+                        .height(24.dp)
+                        .background(
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                            RoundedCornerShape(8.dp)
+                        )
+                )
+
+                Box(
+                    modifier = Modifier
+                        .width(100.dp)
+                        .height(20.dp)
+                        .background(
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                            RoundedCornerShape(4.dp)
+                        )
+                )
+            }
+        }
+    }
+}
+
+// Helper function to get reason display name
+private fun getReasonDisplayName(reason: String): String {
+    return when (reason) {
+        "DEFECTIVE" -> "معيب"
+        "WRONG_ITEM" -> "منتج خاطئ"
+        "CUSTOMER_CHANGE_MIND" -> "تغيير رأي العميل"
+        "EXPIRED" -> "منتهي الصلاحية"
+        "DAMAGED_SHIPPING" -> "تضرر أثناء الشحن"
+        "OTHER" -> "أخرى"
+        else -> reason
     }
 }

@@ -152,16 +152,22 @@ fun MainAppContent(appContainer: AppContainer) {
                         onNavigateToInventory = { currentScreen = Screen.INVENTORY },
                         onNavigateToReports = { currentScreen = Screen.REPORTS }
                     )
-                    Screen.SALES -> SalesScreen(SalesDataManager()) // TODO: Replace with ViewModel
+                    Screen.SALES -> SalesScreen(
+                        salesRepository = appContainer.salesRepository,
+                        customerRepository = appContainer.customerRepository,
+                        productRepository = appContainer.productRepository
+                    )
                     Screen.PRODUCTS -> ProductsScreen(
                         productViewModel = appContainer.productViewModel
                     )
                     Screen.CATEGORIES -> CategoriesScreen(
                         categoryViewModel = appContainer.categoryViewModel
                     )
-                    Screen.CUSTOMERS -> CustomersScreen(SalesDataManager()) // TODO: Replace with ViewModel
+                    Screen.CUSTOMERS -> CustomersScreen()
                     Screen.INVENTORY -> InventoryScreen(SalesDataManager()) // TODO: Replace with ViewModel
-                    Screen.SUPPLIERS -> SuppliersScreen(SalesDataManager()) // TODO: Replace with ViewModel
+                    Screen.SUPPLIERS -> SuppliersScreen(
+                        supplierViewModel = appContainer.supplierViewModel
+                    )
                     Screen.RETURNS -> ReturnsScreen() // TODO: Replace with ViewModel
                     Screen.PROMOTIONS -> PromotionsScreen() // TODO: Replace with ViewModel
                     Screen.REPORTS -> ReportsScreen() // TODO: Replace with ViewModel

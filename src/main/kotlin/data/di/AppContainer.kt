@@ -104,12 +104,24 @@ class AppContainer {
         DashboardViewModel(dashboardRepository)
     }
 
+    val salesViewModel: SalesViewModel by lazy {
+        SalesViewModel(salesRepository, customerRepository, productRepository)
+    }
+
     val productViewModel: ProductViewModel by lazy {
         ProductViewModel(productRepository, categoryRepository)
     }
 
     val categoryViewModel: CategoryViewModel by lazy {
         CategoryViewModel(categoryRepository)
+    }
+
+    val supplierViewModel: SupplierViewModel by lazy {
+        SupplierViewModel(supplierRepository)
+    }
+
+    val returnsViewModel: ReturnsViewModel by lazy {
+        ReturnsViewModel(returnRepository, customerRepository, productRepository)
     }
 
     /**

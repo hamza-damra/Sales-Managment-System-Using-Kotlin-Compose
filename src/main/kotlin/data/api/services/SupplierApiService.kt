@@ -81,4 +81,11 @@ class SupplierApiService(private val httpClient: HttpClient) {
             response.body<PageResponse<SupplierDTO>>()
         }
     }
+
+    suspend fun getSupplierAnalytics(id: Long): NetworkResult<SupplierAnalyticsDTO> {
+        return safeApiCall {
+            val response = httpClient.get("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.supplierAnalytics(id)}")
+            response.body<SupplierAnalyticsDTO>()
+        }
+    }
 }

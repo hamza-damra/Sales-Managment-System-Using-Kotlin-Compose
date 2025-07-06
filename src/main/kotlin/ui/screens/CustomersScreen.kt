@@ -41,9 +41,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import data.*
+import data.api.*
 import ui.components.*
 import ui.theme.AppTheme
 import ui.theme.CardStyles
+import ui.viewmodels.CustomerViewModel
+import ui.viewmodels.ViewModelFactory
 import java.text.NumberFormat
 import java.util.*
 import kotlinx.coroutines.delay
@@ -51,15 +54,29 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CustomersScreen(salesDataManager: SalesDataManager) {
+fun CustomersScreen() {
+    // Initialize ViewModel
+    val customerViewModel = remember { ViewModelFactory.createCustomerViewModel() }
+
+    // Collect state from ViewModel
+    val customers by customerViewModel.customers.collectAsState()
+    val filteredCustomers by customerViewModel.filteredCustomers.collectAsState()
+    val isLoading by customerViewModel.isLoading.collectAsState()
+    val error by customerViewModel.error.collectAsState()
+    val searchQuery by customerViewModel.searchQuery.collectAsState()
+    val sortBy by customerViewModel.sortBy.collectAsState()
+    val isCreatingCustomer by customerViewModel.isCreatingCustomer.collectAsState()
+    val isUpdatingCustomer by customerViewModel.isUpdatingCustomer.collectAsState()
+    val isDeletingCustomer by customerViewModel.isDeletingCustomer.collectAsState()
+
     RTLProvider {
-        var searchQuery by remember { mutableStateOf("") }
         var showAddCustomerDialog by remember { mutableStateOf(false) }
-        var editingCustomer by remember { mutableStateOf<Customer?>(null) }
+        var editingCustomer by remember { mutableStateOf<CustomerDTO?>(null) }
         var selectedCity by remember { mutableStateOf("الكل") }
         var showCustomerDetails by remember { mutableStateOf(false) }
-        var selectedCustomer by remember { mutableStateOf<Customer?>(null) }
-        var sortBy by remember { mutableStateOf("name") }
+        var selectedCustomer by remember { mutableStateOf<CustomerDTO?>(null) }
+        var showDeleteConfirmation by remember { mutableStateOf(false) }
+        var customerToDelete by remember { mutableStateOf<CustomerDTO?>(null) }
         val coroutineScope = rememberCoroutineScope()
 
         // Currency formatter for Arabic locale
@@ -69,30 +86,46 @@ fun CustomersScreen(salesDataManager: SalesDataManager) {
             }
         }
 
-        val cities = remember(salesDataManager.customers) {
-            listOf("الكل") + salesDataManager.customers.map { it.address }.distinct()
+        // Extract cities from customers for filtering
+        val cities = remember(customers) {
+            listOf("الكل") + customers.mapNotNull { it.address }.distinct()
         }
 
-        val filteredCustomers = remember(searchQuery, selectedCity, sortBy, salesDataManager.customers) {
-            var customers = if (searchQuery.isNotEmpty()) {
-                salesDataManager.searchCustomers(searchQuery)
-            } else {
-                salesDataManager.customers
-            }
-
+        // Apply city filter to already filtered customers from ViewModel
+        val displayCustomers = remember(filteredCustomers, selectedCity) {
             if (selectedCity != "الكل") {
-                customers = customers.filter { it.address == selectedCity }
-            }
-
-            when (sortBy) {
-                "name" -> customers.sortedBy { it.name }
-                "purchases" -> customers.sortedByDescending { it.totalPurchases }
-                "city" -> customers.sortedBy { it.address }
-                else -> customers
+                filteredCustomers.filter { it.address == selectedCity }
+            } else {
+                filteredCustomers
             }
         }
 
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            // Enhanced Error handling with retry functionality
+            error?.let { errorMessage ->
+                EnhancedErrorBanner(
+                    message = errorMessage,
+                    onDismiss = { customerViewModel.clearError() },
+                    onRetry = {
+                        coroutineScope.launch {
+                            customerViewModel.refreshCustomers()
+                        }
+                    }
+                )
+            }
+
+            // Loading indicator with progress details
+            if (isLoading) {
+                EnhancedLoadingIndicator(
+                    message = when {
+                        isCreatingCustomer -> "جاري إضافة العميل..."
+                        isUpdatingCustomer -> "جاري تحديث العميل..."
+                        isDeletingCustomer -> "جاري حذف العميل..."
+                        else -> "جاري تحميل العملاء..."
+                    }
+                )
+            }
+
             RTLRow(
                 modifier = Modifier
                     .fillMaxSize()
@@ -136,7 +169,7 @@ fun CustomersScreen(salesDataManager: SalesDataManager) {
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "${salesDataManager.customers.size} عميل مسجل",
+                                    text = "${customers.size} عميل مسجل",
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -184,7 +217,7 @@ fun CustomersScreen(salesDataManager: SalesDataManager) {
                         // Enhanced Search Bar
                         OutlinedTextField(
                             value = searchQuery,
-                            onValueChange = { searchQuery = it },
+                            onValueChange = { customerViewModel.updateSearchQuery(it) },
                             placeholder = {
                                 Text(
                                     "البحث في العملاء...",
@@ -237,14 +270,15 @@ fun CustomersScreen(salesDataManager: SalesDataManager) {
                             // Sort Dropdown
                             ModernSortDropdown(
                                 sortBy = sortBy,
-                                onSortChange = { sortBy = it }
+                                onSortChange = { customerViewModel.updateSorting(it) }
                             )
                         }
 
                         // Customers Grid
-                        if (filteredCustomers.isEmpty()) {
+                        if (displayCustomers.isEmpty()) {
                             EmptyCustomersState(
-                                hasSearch = searchQuery.isNotEmpty() || selectedCity != "الكل"
+                                hasSearch = searchQuery.isNotEmpty() || selectedCity != "الكل",
+                                isLoading = isLoading
                             )
                         } else {
                             LazyVerticalStaggeredGrid(
@@ -254,12 +288,15 @@ fun CustomersScreen(salesDataManager: SalesDataManager) {
                                 modifier = Modifier.fillMaxSize(),
                                 contentPadding = PaddingValues(4.dp)
                             ) {
-                                items(filteredCustomers) { customer ->
+                                items(displayCustomers) { customer ->
                                     ModernCustomerCard(
                                         customer = customer,
                                         currencyFormatter = currencyFormatter,
                                         onEdit = { editingCustomer = customer },
-                                        onDelete = { /* TODO: Implement delete logic */ },
+                                        onDelete = {
+                                            customerToDelete = customer
+                                            showDeleteConfirmation = true
+                                        },
                                         onClick = {
                                             selectedCustomer = customer
                                             showCustomerDetails = true
@@ -303,32 +340,39 @@ fun CustomersScreen(salesDataManager: SalesDataManager) {
                             color = MaterialTheme.colorScheme.onSurface
                         )
 
+                        val customerStats = remember(customers) { customerViewModel.getCustomerStats() }
+
                         ModernStatCard(
                             title = "إجمالي العملاء",
-                            value = salesDataManager.customers.size.toString(),
+                            value = (customerStats["totalCustomers"] as? Int)?.toString() ?: "0",
                             subtitle = "عميل مسجل",
                             icon = Icons.Default.People,
                             iconColor = MaterialTheme.colorScheme.primary
                         )
 
-                        val totalPurchases = salesDataManager.customers.sumOf { it.totalPurchases }
                         ModernStatCard(
-                            title = "إجمالي المشتريات",
-                            value = currencyFormatter.format(totalPurchases),
-                            subtitle = "من جميع العملاء",
-                            icon = Icons.Default.AttachMoney,
+                            title = "العملاء النشطين",
+                            value = (customerStats["activeCustomers"] as? Int)?.toString() ?: "0",
+                            subtitle = "عميل نشط",
+                            icon = Icons.Default.CheckCircle,
                             iconColor = AppTheme.colors.success
                         )
 
-                        val avgPurchases = if (salesDataManager.customers.isNotEmpty()) {
-                            salesDataManager.customers.sumOf { it.totalPurchases } / salesDataManager.customers.size
-                        } else 0.0
+                        val avgCreditLimit = customerStats["averageCreditLimit"] as? Double ?: 0.0
                         ModernStatCard(
-                            title = "متوسط المشتريات",
-                            value = currencyFormatter.format(avgPurchases),
+                            title = "متوسط الحد الائتماني",
+                            value = currencyFormatter.format(avgCreditLimit),
                             subtitle = "لكل عميل",
-                            icon = Icons.Default.TrendingUp,
+                            icon = Icons.Default.CreditCard,
                             iconColor = AppTheme.colors.info
+                        )
+
+                        ModernStatCard(
+                            title = "العملاء المميزين",
+                            value = (customerStats["premiumCustomers"] as? Int)?.toString() ?: "0",
+                            subtitle = "عميل مميز",
+                            icon = Icons.Default.Star,
+                            iconColor = AppTheme.colors.warning
                         )
 
                         // Quick Actions
@@ -361,10 +405,10 @@ fun CustomersScreen(salesDataManager: SalesDataManager) {
                             modifier = Modifier.fillMaxWidth()
                         )
 
-                        // Top Customers
-                        val topCustomers = salesDataManager.customers
-                            .sortedByDescending { it.totalPurchases }
-                            .take(5)
+                        // Top Customers by Credit Limit
+                        val topCustomers = remember(customers) {
+                            customerViewModel.getTopCustomersByCredit(5)
+                        }
 
                         if (topCustomers.isNotEmpty()) {
                             Text(
@@ -398,26 +442,33 @@ fun CustomersScreen(salesDataManager: SalesDataManager) {
 
         // Dialogs
         if (showAddCustomerDialog) {
-            ModernCustomerDialog(
+            EnhancedCustomerDialog(
                 customer = null,
+                isLoading = isCreatingCustomer,
                 onDismiss = { showAddCustomerDialog = false },
-                onSave = { customer: Customer ->
-                    salesDataManager.addCustomer(customer)
-                    showAddCustomerDialog = false
+                onSave = { customer: CustomerDTO ->
+                    coroutineScope.launch {
+                        val result = customerViewModel.createCustomer(customer)
+                        if (result.isSuccess) {
+                            showAddCustomerDialog = false
+                        }
+                    }
                 }
             )
         }
 
         if (editingCustomer != null) {
-            ModernCustomerDialog(
+            EnhancedCustomerDialog(
                 customer = editingCustomer!!,
+                isLoading = isUpdatingCustomer,
                 onDismiss = { editingCustomer = null },
-                onSave = { updatedCustomer: Customer ->
-                    val index = salesDataManager.customers.indexOfFirst { it.id == updatedCustomer.id }
-                    if (index != -1) {
-                        salesDataManager.customers[index] = updatedCustomer
+                onSave = { updatedCustomer: CustomerDTO ->
+                    coroutineScope.launch {
+                        val result = customerViewModel.updateCustomer(updatedCustomer)
+                        if (result.isSuccess) {
+                            editingCustomer = null
+                        }
                     }
-                    editingCustomer = null
                 }
             )
         }
@@ -434,6 +485,27 @@ fun CustomersScreen(salesDataManager: SalesDataManager) {
                     editingCustomer = selectedCustomer
                     showCustomerDetails = false
                     selectedCustomer = null
+                }
+            )
+        }
+
+        // Delete Confirmation Dialog
+        if (showDeleteConfirmation && customerToDelete != null) {
+            DeleteConfirmationDialog(
+                customerName = customerToDelete!!.name,
+                isLoading = isDeletingCustomer,
+                onConfirm = {
+                    coroutineScope.launch {
+                        val result = customerViewModel.deleteCustomer(customerToDelete!!.id!!)
+                        if (result.isSuccess) {
+                            showDeleteConfirmation = false
+                            customerToDelete = null
+                        }
+                    }
+                },
+                onDismiss = {
+                    showDeleteConfirmation = false
+                    customerToDelete = null
                 }
             )
         }
@@ -501,8 +573,11 @@ private fun ModernSortDropdown(
     var expanded by remember { mutableStateOf(false) }
     val sortOptions = mapOf(
         "name" to "الاسم",
-        "purchases" to "المشتريات",
-        "city" to "المدينة"
+        "email" to "البريد الإلكتروني",
+        "phone" to "رقم الهاتف",
+        "address" to "العنوان",
+        "customerType" to "نوع العميل",
+        "creditLimit" to "الحد الائتماني"
     )
 
     Card(
@@ -571,7 +646,7 @@ private fun ModernSortDropdown(
 
 @Composable
 private fun ModernCustomerCard(
-    customer: Customer,
+    customer: CustomerDTO,
     currencyFormatter: NumberFormat,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -580,7 +655,7 @@ private fun ModernCustomerCard(
 ) {
     val chartColors = AppTheme.colors.chartColors
     val avatarColor = remember(customer.id) {
-        chartColors[customer.id % chartColors.size]
+        chartColors[(customer.id?.toInt() ?: 0) % chartColors.size]
     }
 
     // Enhanced hover effect with complete coverage
@@ -650,7 +725,7 @@ private fun ModernCustomerCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = customer.email,
+                            text = customer.email ?: "لا يوجد بريد إلكتروني",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -692,20 +767,30 @@ private fun ModernCustomerCard(
             // Customer Details
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ModernInfoRow(
-                    icon = Icons.Default.ShoppingCart,
-                    label = "إجمالي المشتريات",
-                    value = currencyFormatter.format(customer.totalPurchases),
+                    icon = Icons.Default.CreditCard,
+                    label = "الحد الائتماني",
+                    value = customer.creditLimit?.let { currencyFormatter.format(it) } ?: "غير محدد",
                     valueColor = MaterialTheme.colorScheme.primary
                 )
                 ModernInfoRow(
                     icon = Icons.Default.LocationOn,
-                    label = "المدينة",
-                    value = customer.address
+                    label = "العنوان",
+                    value = customer.address ?: "غير محدد"
                 )
                 ModernInfoRow(
                     icon = Icons.Default.Phone,
                     label = "رقم الهاتف",
-                    value = customer.phone
+                    value = customer.phone ?: "غير محدد"
+                )
+                ModernInfoRow(
+                    icon = Icons.Default.Category,
+                    label = "نوع العميل",
+                    value = when (customer.customerType) {
+                        "PREMIUM" -> "مميز"
+                        "VIP" -> "كبار الشخصيات"
+                        "REGULAR" -> "عادي"
+                        else -> customer.customerType ?: "عادي"
+                    }
                 )
             }
         }
@@ -871,7 +956,7 @@ private fun ModernQuickActionButton(
 
 @Composable
 private fun ModernTopCustomerCard(
-    customer: Customer,
+    customer: CustomerDTO,
     currencyFormatter: NumberFormat,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -921,7 +1006,7 @@ private fun ModernTopCustomerCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = currencyFormatter.format(customer.totalPurchases),
+                    text = customer.creditLimit?.let { currencyFormatter.format(it) } ?: "غير محدد",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
@@ -941,6 +1026,7 @@ private fun ModernTopCustomerCard(
 @Composable
 private fun EmptyCustomersState(
     hasSearch: Boolean,
+    isLoading: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -956,7 +1042,11 @@ private fun EmptyCustomersState(
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = if (hasSearch) "لا يوجد عملاء" else "لا توجد عملاء",
+            text = when {
+                isLoading -> "جاري تحميل العملاء..."
+                hasSearch -> "لا يوجد عملاء"
+                else -> "لا توجد عملاء"
+            },
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -964,10 +1054,10 @@ private fun EmptyCustomersState(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = if (hasSearch) {
-                "لم يتم العثور على عملاء يطابقون بحثك. حاول تغيير الفلاتر."
-            } else {
-                "ابدأ بإضافة عملاء جدد لإدارة قاعدة عملائك"
+            text = when {
+                isLoading -> "يرجى الانتظار..."
+                hasSearch -> "لم يتم العثور على عملاء يطابقون بحثك. حاول تغيير الفلاتر."
+                else -> "ابدأ بإضافة عملاء جدد لإدارة قاعدة عملائك"
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -977,24 +1067,37 @@ private fun EmptyCustomersState(
     }
 }
 
-// Dialog Components
+// Enhanced Dialog Components
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ModernCustomerDialog(
-    customer: Customer?,
+private fun EnhancedCustomerDialog(
+    customer: CustomerDTO?,
+    isLoading: Boolean = false,
     onDismiss: () -> Unit,
-    onSave: (Customer) -> Unit
+    onSave: (CustomerDTO) -> Unit
 ) {
     var name by remember { mutableStateOf(customer?.name ?: "") }
+    var firstName by remember { mutableStateOf(customer?.firstName ?: "") }
+    var lastName by remember { mutableStateOf(customer?.lastName ?: "") }
     var phone by remember { mutableStateOf(customer?.phone ?: "") }
     var email by remember { mutableStateOf(customer?.email ?: "") }
     var address by remember { mutableStateOf(customer?.address ?: "") }
+    var billingAddress by remember { mutableStateOf(customer?.billingAddress ?: "") }
+    var shippingAddress by remember { mutableStateOf(customer?.shippingAddress ?: "") }
+    var customerType by remember { mutableStateOf(customer?.customerType ?: "REGULAR") }
+    var customerStatus by remember { mutableStateOf(customer?.customerStatus ?: "ACTIVE") }
+    var creditLimit by remember { mutableStateOf(customer?.creditLimit?.toString() ?: "") }
+    var taxNumber by remember { mutableStateOf(customer?.taxNumber ?: "") }
+    var companyName by remember { mutableStateOf(customer?.companyName ?: "") }
+    var website by remember { mutableStateOf(customer?.website ?: "") }
+    var notes by remember { mutableStateOf(customer?.notes ?: "") }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(onDismissRequest = if (!isLoading) onDismiss else {{}}) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(16.dp)
+                .heightIn(max = 600.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surface
             ),
@@ -1003,27 +1106,75 @@ private fun ModernCustomerDialog(
             Column(
                 modifier = Modifier
                     .padding(24.dp)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (customer == null) "إضافة عميل جديد" else "تعديل العميل",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp
+                        )
+                    }
+                }
+
+                // Basic Information Section
                 Text(
-                    text = if (customer == null) "إضافة عميل جديد" else "تعديل العميل",
-                    style = MaterialTheme.typography.headlineSmall,
+                    text = "المعلومات الأساسية",
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.primary
                 )
 
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("اسم العميل") },
+                    label = { Text("اسم العميل *") },
                     leadingIcon = {
                         Icon(Icons.Default.Person, contentDescription = null)
                     },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = !isLoading
                 )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedTextField(
+                        value = firstName,
+                        onValueChange = { firstName = it },
+                        label = { Text("الاسم الأول") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = !isLoading
+                    )
+                    OutlinedTextField(
+                        value = lastName,
+                        onValueChange = { lastName = it },
+                        label = { Text("اسم العائلة") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = !isLoading
+                    )
+                }
 
                 OutlinedTextField(
                     value = phone,
@@ -1034,7 +1185,8 @@ private fun ModernCustomerDialog(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = !isLoading
                 )
 
                 OutlinedTextField(
@@ -1046,58 +1198,207 @@ private fun ModernCustomerDialog(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = !isLoading
                 )
 
                 OutlinedTextField(
                     value = address,
                     onValueChange = { address = it },
-                    label = { Text("المدينة") },
+                    label = { Text("العنوان") },
                     leadingIcon = {
                         Icon(Icons.Default.LocationOn, contentDescription = null)
                     },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = !isLoading
+                )
+
+                // Additional Information Section
+                Text(
+                    text = "معلومات إضافية",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
                 )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Customer Type Dropdown
+                    var customerTypeExpanded by remember { mutableStateOf(false) }
+                    val customerTypes = mapOf(
+                        "REGULAR" to "عادي",
+                        "PREMIUM" to "مميز",
+                        "VIP" to "كبار الشخصيات"
+                    )
+
+                    ExposedDropdownMenuBox(
+                        expanded = customerTypeExpanded,
+                        onExpandedChange = { customerTypeExpanded = !customerTypeExpanded },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        OutlinedTextField(
+                            value = customerTypes[customerType] ?: "عادي",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("نوع العميل") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = customerTypeExpanded) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isLoading
+                        )
+                        ExposedDropdownMenu(
+                            expanded = customerTypeExpanded,
+                            onDismissRequest = { customerTypeExpanded = false }
+                        ) {
+                            customerTypes.forEach { (key, value) ->
+                                DropdownMenuItem(
+                                    text = { Text(value) },
+                                    onClick = {
+                                        customerType = key
+                                        customerTypeExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Customer Status Dropdown
+                    var customerStatusExpanded by remember { mutableStateOf(false) }
+                    val customerStatuses = mapOf(
+                        "ACTIVE" to "نشط",
+                        "INACTIVE" to "غير نشط",
+                        "SUSPENDED" to "معلق"
+                    )
+
+                    ExposedDropdownMenuBox(
+                        expanded = customerStatusExpanded,
+                        onExpandedChange = { customerStatusExpanded = !customerStatusExpanded },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        OutlinedTextField(
+                            value = customerStatuses[customerStatus] ?: "نشط",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("حالة العميل") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = customerStatusExpanded) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isLoading
+                        )
+                        ExposedDropdownMenu(
+                            expanded = customerStatusExpanded,
+                            onDismissRequest = { customerStatusExpanded = false }
+                        ) {
+                            customerStatuses.forEach { (key, value) ->
+                                DropdownMenuItem(
+                                    text = { Text(value) },
+                                    onClick = {
+                                        customerStatus = key
+                                        customerStatusExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = creditLimit,
+                    onValueChange = { creditLimit = it },
+                    label = { Text("الحد الائتماني") },
+                    leadingIcon = {
+                        Icon(Icons.Default.CreditCard, contentDescription = null)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = !isLoading
+                )
+
+                OutlinedTextField(
+                    value = companyName,
+                    onValueChange = { companyName = it },
+                    label = { Text("اسم الشركة") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Business, contentDescription = null)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = !isLoading
+                )
+
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("ملاحظات") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    maxLines = 3,
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = !isLoading
+                )
+
+                // Action Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    TextButton(
+                    OutlinedButton(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = !isLoading
                     ) {
                         Text("إلغاء")
                     }
 
-                    val isValid = name.isNotBlank() && phone.isNotBlank() &&
-                            email.isNotBlank() && address.isNotBlank()
+                    val isValid = name.isNotBlank()
 
                     Button(
                         onClick = {
                             if (isValid) {
-                                val newCustomer = Customer(
-                                    id = customer?.id ?: (System.currentTimeMillis().toInt()),
+                                val newCustomer = CustomerDTO(
+                                    id = customer?.id,
                                     name = name,
-                                    phone = phone,
-                                    email = email,
-                                    address = address,
-                                    totalPurchases = customer?.totalPurchases ?: 0.0
+                                    firstName = firstName.takeIf { it.isNotBlank() },
+                                    lastName = lastName.takeIf { it.isNotBlank() },
+                                    phone = phone.takeIf { it.isNotBlank() },
+                                    email = email.takeIf { it.isNotBlank() },
+                                    address = address.takeIf { it.isNotBlank() },
+                                    billingAddress = billingAddress.takeIf { it.isNotBlank() },
+                                    shippingAddress = shippingAddress.takeIf { it.isNotBlank() },
+                                    customerType = customerType,
+                                    customerStatus = customerStatus,
+                                    creditLimit = creditLimit.toDoubleOrNull(),
+                                    taxNumber = taxNumber.takeIf { it.isNotBlank() },
+                                    companyName = companyName.takeIf { it.isNotBlank() },
+                                    website = website.takeIf { it.isNotBlank() },
+                                    notes = notes.takeIf { it.isNotBlank() }
                                 )
                                 onSave(newCustomer)
                             }
                         },
                         modifier = Modifier.weight(1f),
-                        enabled = isValid,
+                        enabled = isValid && !isLoading,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary
                         ),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text(if (customer != null) "تحديث" else "إضافة")
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        } else {
+                            Text(if (customer != null) "تحديث" else "إضافة")
+                        }
                     }
                 }
             }
@@ -1107,14 +1408,14 @@ private fun ModernCustomerDialog(
 
 @Composable
 private fun CustomerDetailsDialog(
-    customer: Customer,
+    customer: CustomerDTO,
     currencyFormatter: NumberFormat,
     onDismiss: () -> Unit,
     onEdit: () -> Unit
 ) {
     val chartColors = AppTheme.colors.chartColors
     val avatarColor = remember(customer.id) {
-        chartColors[customer.id % chartColors.size]
+        chartColors[(customer.id?.toInt() ?: 0) % chartColors.size]
     }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -1178,7 +1479,7 @@ private fun CustomerDetailsDialog(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = customer.email,
+                            text = customer.email ?: "لا يوجد بريد إلكتروني",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1192,15 +1493,49 @@ private fun CustomerDetailsDialog(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     CustomerDetailRow("الاسم الكامل", customer.name, Icons.Default.Person)
-                    CustomerDetailRow("البريد الإلكتروني", customer.email, Icons.Default.Email)
-                    CustomerDetailRow("رقم الهاتف", customer.phone, Icons.Default.Phone)
-                    CustomerDetailRow("المدينة", customer.address, Icons.Default.LocationOn)
+                    customer.email?.let {
+                        CustomerDetailRow("البريد الإلكتروني", it, Icons.Default.Email)
+                    }
+                    customer.phone?.let {
+                        CustomerDetailRow("رقم الهاتف", it, Icons.Default.Phone)
+                    }
+                    customer.address?.let {
+                        CustomerDetailRow("العنوان", it, Icons.Default.LocationOn)
+                    }
                     CustomerDetailRow(
-                        "إجمالي المشتريات",
-                        currencyFormatter.format(customer.totalPurchases),
-                        Icons.Default.ShoppingCart,
-                        valueColor = MaterialTheme.colorScheme.primary
+                        "نوع العميل",
+                        when (customer.customerType) {
+                            "PREMIUM" -> "مميز"
+                            "VIP" -> "كبار الشخصيات"
+                            "REGULAR" -> "عادي"
+                            else -> customer.customerType ?: "عادي"
+                        },
+                        Icons.Default.Category
                     )
+                    CustomerDetailRow(
+                        "حالة العميل",
+                        when (customer.customerStatus) {
+                            "ACTIVE" -> "نشط"
+                            "INACTIVE" -> "غير نشط"
+                            "SUSPENDED" -> "معلق"
+                            else -> customer.customerStatus ?: "نشط"
+                        },
+                        Icons.Default.CheckCircle
+                    )
+                    customer.creditLimit?.let {
+                        CustomerDetailRow(
+                            "الحد الائتماني",
+                            currencyFormatter.format(it),
+                            Icons.Default.CreditCard,
+                            valueColor = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    customer.companyName?.let {
+                        CustomerDetailRow("اسم الشركة", it, Icons.Default.Business)
+                    }
+                    customer.notes?.let {
+                        CustomerDetailRow("ملاحظات", it, Icons.Default.Notes)
+                    }
                 }
 
                 // Action Buttons
@@ -1270,4 +1605,170 @@ private fun CustomerDetailRow(
             )
         }
     }
+}
+
+// Enhanced Error Banner Component
+@Composable
+private fun EnhancedErrorBanner(
+    message: String,
+    onDismiss: () -> Unit,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = AppTheme.colors.error.copy(alpha = 0.1f)
+        ),
+        border = BorderStroke(1.dp, AppTheme.colors.error.copy(alpha = 0.3f)),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    Icons.Default.Error,
+                    contentDescription = null,
+                    tint = AppTheme.colors.error,
+                    modifier = Modifier.size(24.dp)
+                )
+                Column {
+                    Text(
+                        text = "حدث خطأ",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = AppTheme.colors.error
+                    )
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TextButton(
+                    onClick = onRetry,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = AppTheme.colors.error
+                    )
+                ) {
+                    Text("إعادة المحاولة")
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "إغلاق",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Enhanced Loading Indicator Component
+@Composable
+private fun EnhancedLoadingIndicator(
+    message: String,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                strokeWidth = 3.dp,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+// Delete Confirmation Dialog Component
+@Composable
+private fun DeleteConfirmationDialog(
+    customerName: String,
+    isLoading: Boolean = false,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = if (!isLoading) onDismiss else {{}},
+        title = {
+            Text(
+                text = "تأكيد الحذف",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Text(
+                text = "هل أنت متأكد من حذف العميل \"$customerName\"؟ لا يمكن التراجع عن هذا الإجراء.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = !isLoading,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AppTheme.colors.error
+                ),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onError
+                    )
+                } else {
+                    Text("حذف", color = Color.White)
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isLoading
+            ) {
+                Text("إلغاء")
+            }
+        },
+        shape = RoundedCornerShape(16.dp)
+    )
 }

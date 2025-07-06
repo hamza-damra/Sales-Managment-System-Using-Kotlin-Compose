@@ -287,6 +287,27 @@ data class SupplierDTO(
     val updatedAt: String? = null // ISO datetime
 )
 
+@Serializable
+data class SupplierAnalyticsDTO(
+    val supplierId: Long,
+    val supplierName: String,
+    val totalOrders: Int,
+    val totalAmount: Double,
+    val averageOrderValue: Double,
+    val lastOrderDate: String? = null, // ISO datetime
+    val rating: Double,
+    val onTimeDeliveryRate: Double,
+    val qualityRating: Double,
+    val monthlyOrderTrends: List<MonthlyOrderTrendDTO>
+)
+
+@Serializable
+data class MonthlyOrderTrendDTO(
+    val month: String, // YYYY-MM format
+    val orderCount: Int,
+    val totalAmount: Double
+)
+
 // Return DTOs
 @Serializable
 data class ReturnDTO(

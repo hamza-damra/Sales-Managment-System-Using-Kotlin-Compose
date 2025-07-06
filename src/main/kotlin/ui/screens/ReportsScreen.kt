@@ -168,52 +168,28 @@ private fun EnhancedReportTypeSelector(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Scroll buttons for easy navigation (RTL corrected)
-                OutlinedButton(
-                    onClick = {
-                        coroutineScope.launch {
-                            val nextIndex = minOf(7, listState.firstVisibleItemIndex + 1) // 8 total items (0-7)
-                            listState.animateScrollToItem(nextIndex)
-                        }
-                    },
-                    modifier = Modifier.size(36.dp),
-                    contentPadding = PaddingValues(0.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Icon(
-                        Icons.Default.ChevronLeft,
-                        contentDescription = "التالي",
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-
-                OutlinedButton(
+                // Right arrow (positioned on the left, scrolls LEFT through report types)
+                EnhancedNavigationButton(
+                    icon = Icons.Default.ChevronRight,
+                    contentDescription = "السابق",
                     onClick = {
                         coroutineScope.launch {
                             val currentIndex = maxOf(0, listState.firstVisibleItemIndex - 1)
                             listState.animateScrollToItem(currentIndex)
                         }
-                    },
-                    modifier = Modifier.size(36.dp),
-                    contentPadding = PaddingValues(0.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Icon(
-                        Icons.Default.ChevronRight,
-                        contentDescription = "السابق",
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+                    }
+                )
 
-                // Drag hint
-                Text(
-                    text = "اسحب للتصفح",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                // Left arrow (positioned on the right, scrolls RIGHT through report types)
+                EnhancedNavigationButton(
+                    icon = Icons.Default.ChevronLeft,
+                    contentDescription = "التالي",
+                    onClick = {
+                        coroutineScope.launch {
+                            val nextIndex = minOf(7, listState.firstVisibleItemIndex + 1) // 8 total items (0-7)
+                            listState.animateScrollToItem(nextIndex)
+                        }
+                    }
                 )
             }
         }
@@ -766,43 +742,23 @@ private fun EnhancedDetailedReports(selectedType: String) {
                         color = MaterialTheme.colorScheme.onSurface
                     )
 
-                    // Export buttons
+                    // Enhanced export buttons
                     RTLRow(
                         horizontalArrangement = Arrangement.spacedBy(responsive.small)
                     ) {
-                        OutlinedButton(
-                            onClick = { /* Export to Excel */ },
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = AppTheme.colors.success
-                            ),
-                            border = BorderStroke(1.dp, AppTheme.colors.success.copy(alpha = 0.5f)),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.TableChart,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Excel", style = MaterialTheme.typography.labelMedium)
-                        }
+                        EnhancedExportButton(
+                            text = "Excel",
+                            icon = Icons.Default.TableChart,
+                            color = AppTheme.colors.success,
+                            onClick = { /* Export to Excel */ }
+                        )
 
-                        OutlinedButton(
-                            onClick = { /* Export to PDF */ },
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = AppTheme.colors.error
-                            ),
-                            border = BorderStroke(1.dp, AppTheme.colors.error.copy(alpha = 0.5f)),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.PictureAsPdf,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("PDF", style = MaterialTheme.typography.labelMedium)
-                        }
+                        EnhancedExportButton(
+                            text = "PDF",
+                            icon = Icons.Default.PictureAsPdf,
+                            color = AppTheme.colors.error,
+                            onClick = { /* Export to PDF */ }
+                        )
                     }
                 }
 
@@ -909,4 +865,116 @@ private fun ReportsTaxContent() {
         title = "التقرير الضريبي",
         description = "سيتم عرض الضرائب والرسوم المحصلة والتفاصيل الضريبية هنا"
     )
+}
+
+// Enhanced Navigation Button Component with complete hover coverage
+@Composable
+private fun EnhancedNavigationButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                color = when {
+                    isHovered -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                    else -> MaterialTheme.colorScheme.surface
+                },
+                shape = RoundedCornerShape(12.dp)
+            )
+            .border(
+                width = if (isHovered) 1.5.dp else 1.dp,
+                color = when {
+                    isHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                    else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                },
+                shape = RoundedCornerShape(12.dp)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            icon,
+            contentDescription = contentDescription,
+            modifier = Modifier.size(18.dp),
+            tint = when {
+                isHovered -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
+        )
+    }
+}
+
+// Enhanced Export Button Component with complete hover coverage
+@Composable
+private fun EnhancedExportButton(
+    text: String,
+    icon: ImageVector,
+    color: Color,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
+        modifier = Modifier
+            .height(56.dp) // Match dropdown height for consistency
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                color = when {
+                    isHovered -> color.copy(alpha = 0.1f)
+                    else -> MaterialTheme.colorScheme.surface
+                },
+                shape = RoundedCornerShape(12.dp)
+            )
+            .border(
+                width = if (isHovered) 1.5.dp else 1.dp,
+                color = when {
+                    isHovered -> color.copy(alpha = 0.6f)
+                    else -> color.copy(alpha = 0.3f)
+                },
+                shape = RoundedCornerShape(12.dp)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = when {
+                    isHovered -> color
+                    else -> color.copy(alpha = 0.8f)
+                }
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Medium,
+                color = when {
+                    isHovered -> color
+                    else -> color.copy(alpha = 0.8f)
+                }
+            )
+        }
+    }
 }

@@ -50,7 +50,8 @@ class CustomerApiService(private val httpClient: HttpClient) {
     
     suspend fun updateCustomer(id: Long, customer: CustomerDTO): NetworkResult<CustomerDTO> {
         return safeApiCall {
-            val response = httpClient.put(ApiConfig.Endpoints.customerById(id)) {
+            val fullUrl = "${ApiConfig.BASE_URL}${ApiConfig.Endpoints.customerById(id)}"
+            val response = httpClient.put(fullUrl) {
                 contentType(ContentType.Application.Json)
                 setBody(customer)
             }
@@ -60,7 +61,8 @@ class CustomerApiService(private val httpClient: HttpClient) {
     
     suspend fun deleteCustomer(id: Long): NetworkResult<Unit> {
         return safeApiCall {
-            httpClient.delete(ApiConfig.Endpoints.customerById(id))
+            val fullUrl = "${ApiConfig.BASE_URL}${ApiConfig.Endpoints.customerById(id)}"
+            httpClient.delete(fullUrl)
         }
     }
     
@@ -70,7 +72,8 @@ class CustomerApiService(private val httpClient: HttpClient) {
         size: Int = ApiConfig.Pagination.DEFAULT_SIZE
     ): NetworkResult<PageResponse<CustomerDTO>> {
         return safeApiCall {
-            val response = httpClient.get(ApiConfig.Endpoints.CUSTOMERS_SEARCH) {
+            val fullUrl = "${ApiConfig.BASE_URL}${ApiConfig.Endpoints.CUSTOMERS_SEARCH}"
+            val response = httpClient.get(fullUrl) {
                 parameter("query", query)
                 parameter("page", page)
                 parameter("size", size.coerceAtMost(ApiConfig.Pagination.MAX_SIZE))

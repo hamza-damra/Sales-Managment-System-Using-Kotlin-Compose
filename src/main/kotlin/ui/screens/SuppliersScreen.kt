@@ -34,10 +34,15 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import data.*
+import data.api.SupplierDTO
 import ui.components.*
 import ui.theme.AppTheme
 import ui.theme.CardStyles
 import ui.utils.ResponsiveUtils
+import ui.viewmodels.SupplierViewModel
+import ui.viewmodels.SupplierData
+import utils.SupplierMapper
+import utils.SupplierMapper.toSupplier
 
 // Supplier Tab Enum
 enum class SupplierTab(val title: String) {
@@ -48,35 +53,81 @@ enum class SupplierTab(val title: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SuppliersScreen(salesDataManager: SalesDataManager) {
+fun SuppliersScreen(
+    supplierViewModel: SupplierViewModel,
+    salesDataManager: SalesDataManager? = null // Keep for backward compatibility
+) {
     RTLProvider {
-        // Enhanced state management
+        // ViewModel state
+        val suppliers by supplierViewModel.filteredSuppliers.collectAsState()
+        val isLoading by supplierViewModel.isLoading.collectAsState()
+        val error by supplierViewModel.error.collectAsState()
+        val searchQuery by supplierViewModel.searchQuery.collectAsState()
+        val selectedStatus by supplierViewModel.selectedStatus.collectAsState()
+        val selectedLocation by supplierViewModel.selectedLocation.collectAsState()
+        val sortBy by supplierViewModel.sortBy.collectAsState()
+        val showActiveOnly by supplierViewModel.showActiveOnly.collectAsState()
+        val showWithOrdersOnly by supplierViewModel.showWithOrdersOnly.collectAsState()
+
+        // Operation states
+        val isCreating by supplierViewModel.isCreating.collectAsState()
+        val isUpdating by supplierViewModel.isUpdating.collectAsState()
+        val isDeleting by supplierViewModel.isDeleting.collectAsState()
+        val lastCreatedSupplier by supplierViewModel.lastCreatedSupplier.collectAsState()
+        val lastUpdatedSupplier by supplierViewModel.lastUpdatedSupplier.collectAsState()
+
+        // UI state
         var selectedTab by remember { mutableStateOf(SupplierTab.SUPPLIERS) }
-        var searchQuery by remember { mutableStateOf("") }
-        var selectedStatus by remember { mutableStateOf("الكل") }
-        var selectedLocation by remember { mutableStateOf("الكل") }
         var selectedRating by remember { mutableStateOf("الكل") }
-        var sortBy by remember { mutableStateOf("name") }
-        var showActiveOnly by remember { mutableStateOf(false) }
-        var showWithOrdersOnly by remember { mutableStateOf(false) }
         var isExporting by remember { mutableStateOf(false) }
         var exportMessage by remember { mutableStateOf<String?>(null) }
 
         // Dialog states
         var showAddSupplierDialog by remember { mutableStateOf(false) }
-        var editingSupplier by remember { mutableStateOf<Supplier?>(null) }
-        var selectedSupplier by remember { mutableStateOf<Supplier?>(null) }
+        var editingSupplier by remember { mutableStateOf<SupplierDTO?>(null) }
+        var selectedSupplier by remember { mutableStateOf<SupplierDTO?>(null) }
         var showSupplierDetails by remember { mutableStateOf(false) }
         var showDeleteConfirmation by remember { mutableStateOf(false) }
-        var supplierToDelete by remember { mutableStateOf<Supplier?>(null) }
-
-        // For desktop application, we'll use window size detection
-        val isTablet = true // Assume tablet/desktop for now
-        val isDesktop = true // Desktop application
+        var supplierToDelete by remember { mutableStateOf<SupplierDTO?>(null) }
 
         // Snackbar state
         val snackbarHostState = remember { SnackbarHostState() }
         val coroutineScope = rememberCoroutineScope()
+
+        // Load suppliers on first composition
+        LaunchedEffect(Unit) {
+            supplierViewModel.loadSuppliers(refresh = true)
+        }
+
+        // Handle search query changes
+        LaunchedEffect(searchQuery) {
+            if (searchQuery.isNotBlank()) {
+                supplierViewModel.searchSuppliers(searchQuery)
+            }
+        }
+
+        // Handle success states
+        LaunchedEffect(lastCreatedSupplier) {
+            lastCreatedSupplier?.let {
+                snackbarHostState.showSnackbar("تم إضافة المورد بنجاح")
+                supplierViewModel.clearLastCreatedSupplier()
+            }
+        }
+
+        LaunchedEffect(lastUpdatedSupplier) {
+            lastUpdatedSupplier?.let {
+                snackbarHostState.showSnackbar("تم تحديث المورد بنجاح")
+                supplierViewModel.clearLastUpdatedSupplier()
+            }
+        }
+
+        // Handle error states
+        LaunchedEffect(error) {
+            error?.let {
+                snackbarHostState.showSnackbar("خطأ: $it")
+                supplierViewModel.clearError()
+            }
+        }
 
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             RTLRow(
@@ -154,7 +205,7 @@ fun SuppliersScreen(salesDataManager: SalesDataManager) {
                             // Search Field
                             OutlinedTextField(
                                 value = searchQuery,
-                                onValueChange = { searchQuery = it },
+                                onValueChange = { supplierViewModel.updateSearchQuery(it) },
                                 label = { Text("البحث في الموردين") },
                                 leadingIcon = {
                                     Icon(
@@ -176,7 +227,7 @@ fun SuppliersScreen(salesDataManager: SalesDataManager) {
                                 label = "الحالة",
                                 value = selectedStatus,
                                 options = listOf("الكل", "نشط", "غير نشط", "معلق"),
-                                onValueChange = { selectedStatus = it },
+                                onValueChange = { supplierViewModel.updateSelectedStatus(it) },
                                 modifier = Modifier.weight(0.7f)
                             )
 
@@ -185,7 +236,7 @@ fun SuppliersScreen(salesDataManager: SalesDataManager) {
                                 label = "الموقع",
                                 value = selectedLocation,
                                 options = listOf("الكل", "الرياض", "جدة", "الدمام", "مكة"),
-                                onValueChange = { selectedLocation = it },
+                                onValueChange = { supplierViewModel.updateSelectedLocation(it) },
                                 modifier = Modifier.weight(0.7f)
                             )
                         }
@@ -202,19 +253,20 @@ fun SuppliersScreen(salesDataManager: SalesDataManager) {
                                 value = when(sortBy) {
                                     "name" -> "الاسم"
                                     "rating" -> "التقييم"
-                                    "orders" -> "عدد الطلبات"
-                                    "amount" -> "قيمة المشتريات"
+                                    "totalOrders" -> "عدد الطلبات"
+                                    "totalAmount" -> "قيمة المشتريات"
                                     else -> "الاسم"
                                 },
                                 options = listOf("الاسم", "التقييم", "عدد الطلبات", "قيمة المشتريات"),
                                 onValueChange = {
-                                    sortBy = when(it) {
+                                    val newSortBy = when(it) {
                                         "الاسم" -> "name"
                                         "التقييم" -> "rating"
-                                        "عدد الطلبات" -> "orders"
-                                        "قيمة المشتريات" -> "amount"
+                                        "عدد الطلبات" -> "totalOrders"
+                                        "قيمة المشتريات" -> "totalAmount"
                                         else -> "name"
                                     }
+                                    supplierViewModel.updateSortBy(newSortBy)
                                 },
                                 modifier = Modifier.weight(1f)
                             )
@@ -247,7 +299,7 @@ fun SuppliersScreen(salesDataManager: SalesDataManager) {
                                     .clickable(
                                         interactionSource = activeOnlyInteractionSource,
                                         indication = null
-                                    ) { showActiveOnly = !showActiveOnly },
+                                    ) { supplierViewModel.toggleActiveOnly() },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Row(
@@ -302,7 +354,7 @@ fun SuppliersScreen(salesDataManager: SalesDataManager) {
                                     .clickable(
                                         interactionSource = withOrdersInteractionSource,
                                         indication = null
-                                    ) { showWithOrdersOnly = !showWithOrdersOnly },
+                                    ) { supplierViewModel.toggleWithOrdersOnly() },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Row(
@@ -401,12 +453,8 @@ fun SuppliersScreen(salesDataManager: SalesDataManager) {
                         // Content based on selected tab
                         when (selectedTab) {
                             SupplierTab.SUPPLIERS -> EnhancedSuppliersContent(
-                                searchQuery = searchQuery,
-                                selectedStatus = selectedStatus,
-                                selectedLocation = selectedLocation,
-                                showActiveOnly = showActiveOnly,
-                                showWithOrdersOnly = showWithOrdersOnly,
-                                sortBy = sortBy,
+                                suppliers = suppliers,
+                                isLoading = isLoading,
                                 onSupplierClick = { supplier ->
                                     selectedSupplier = supplier
                                     showSupplierDetails = true
@@ -417,6 +465,11 @@ fun SuppliersScreen(salesDataManager: SalesDataManager) {
                                 onDeleteSupplier = { supplier ->
                                     supplierToDelete = supplier
                                     showDeleteConfirmation = true
+                                },
+                                onRefresh = {
+                                    coroutineScope.launch {
+                                        supplierViewModel.refreshSuppliers()
+                                    }
                                 }
                             )
                             SupplierTab.ORDERS -> EnhancedPurchaseOrdersContent(
@@ -530,12 +583,16 @@ fun SuppliersScreen(salesDataManager: SalesDataManager) {
         // Dialogs
         if (showAddSupplierDialog) {
             EnhancedAddSupplierDialog(
+                isLoading = isCreating,
                 onDismiss = { showAddSupplierDialog = false },
-                onSave = { supplier ->
-                    // Handle adding new supplier
-                    showAddSupplierDialog = false
+                onSave = { supplierData ->
                     coroutineScope.launch {
-                        snackbarHostState.showSnackbar("تم إضافة المورد بنجاح")
+                        val result = supplierViewModel.createSupplier(supplierData)
+                        result.onSuccess {
+                            showAddSupplierDialog = false
+                        }.onError { exception ->
+                            snackbarHostState.showSnackbar("خطأ في إضافة المورد: ${exception.message}")
+                        }
                     }
                 }
             )
@@ -544,12 +601,16 @@ fun SuppliersScreen(salesDataManager: SalesDataManager) {
         if (editingSupplier != null) {
             EnhancedEditSupplierDialog(
                 supplier = editingSupplier!!,
+                isLoading = isUpdating,
                 onDismiss = { editingSupplier = null },
-                onSave = { supplier ->
-                    // Handle updating supplier
-                    editingSupplier = null
+                onSave = { supplierData ->
                     coroutineScope.launch {
-                        snackbarHostState.showSnackbar("تم تحديث المورد بنجاح")
+                        val result = supplierViewModel.updateSupplier(editingSupplier!!.id!!, supplierData)
+                        result.onSuccess {
+                            editingSupplier = null
+                        }.onError { exception ->
+                            snackbarHostState.showSnackbar("خطأ في تحديث المورد: ${exception.message}")
+                        }
                     }
                 }
             )
@@ -562,22 +623,35 @@ fun SuppliersScreen(salesDataManager: SalesDataManager) {
                     supplierToDelete = null
                 },
                 title = { Text("تأكيد الحذف") },
-                text = { Text("هل أنت متأكد من حذف هذا المورد؟") },
+                text = { Text("هل أنت متأكد من حذف هذا المورد؟ لا يمكن التراجع عن هذا الإجراء.") },
                 confirmButton = {
                     Button(
                         onClick = {
-                            // Handle deleting supplier
-                            showDeleteConfirmation = false
-                            supplierToDelete = null
                             coroutineScope.launch {
-                                snackbarHostState.showSnackbar("تم حذف المورد بنجاح")
+                                val result = supplierViewModel.deleteSupplier(supplierToDelete!!.id!!)
+                                result.onSuccess {
+                                    showDeleteConfirmation = false
+                                    supplierToDelete = null
+                                    snackbarHostState.showSnackbar("تم حذف المورد بنجاح")
+                                }.onError { exception ->
+                                    snackbarHostState.showSnackbar("خطأ في حذف المورد: ${exception.message}")
+                                }
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.error
-                        )
+                        ),
+                        enabled = !isDeleting
                     ) {
-                        Text("حذف")
+                        if (isDeleting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            )
+                        } else {
+                            Text("حذف")
+                        }
                     }
                 },
                 dismissButton = {
@@ -585,7 +659,8 @@ fun SuppliersScreen(salesDataManager: SalesDataManager) {
                         onClick = {
                             showDeleteConfirmation = false
                             supplierToDelete = null
-                        }
+                        },
+                        enabled = !isDeleting
                     ) {
                         Text("إلغاء")
                     }
@@ -702,15 +777,12 @@ private fun EnhancedSupplierFilterDropdown(
 // Enhanced Suppliers Content
 @Composable
 private fun EnhancedSuppliersContent(
-    searchQuery: String,
-    selectedStatus: String,
-    selectedLocation: String,
-    showActiveOnly: Boolean,
-    showWithOrdersOnly: Boolean,
-    sortBy: String,
-    onSupplierClick: (Supplier) -> Unit,
-    onEditSupplier: (Supplier) -> Unit,
-    onDeleteSupplier: (Supplier) -> Unit
+    suppliers: List<SupplierDTO>,
+    isLoading: Boolean,
+    onSupplierClick: (SupplierDTO) -> Unit,
+    onEditSupplier: (SupplierDTO) -> Unit,
+    onDeleteSupplier: (SupplierDTO) -> Unit,
+    onRefresh: () -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -724,7 +796,7 @@ private fun EnhancedSuppliersContent(
             ) {
                 EnhancedSupplierStatCard(
                     title = "إجمالي الموردين",
-                    value = "25",
+                    value = suppliers.size.toString(),
                     subtitle = "مورد مسجل",
                     icon = Icons.Default.Business,
                     iconColor = MaterialTheme.colorScheme.primary,
@@ -733,7 +805,7 @@ private fun EnhancedSuppliersContent(
 
                 EnhancedSupplierStatCard(
                     title = "موردين نشطين",
-                    value = "23",
+                    value = suppliers.count { it.status == "ACTIVE" }.toString(),
                     subtitle = "مورد نشط",
                     icon = Icons.Default.Verified,
                     iconColor = AppTheme.colors.success,
@@ -749,8 +821,8 @@ private fun EnhancedSuppliersContent(
             ) {
                 EnhancedSupplierStatCard(
                     title = "طلبات الشراء",
-                    value = "12",
-                    subtitle = "طلب هذا الشهر",
+                    value = suppliers.sumOf { it.totalOrders ?: 0 }.toString(),
+                    subtitle = "إجمالي الطلبات",
                     icon = Icons.Default.ShoppingCart,
                     iconColor = AppTheme.colors.warning,
                     modifier = Modifier.weight(1f)
@@ -758,8 +830,8 @@ private fun EnhancedSuppliersContent(
 
                 EnhancedSupplierStatCard(
                     title = "قيمة المشتريات",
-                    value = "45,680 ر.س",
-                    subtitle = "إجمالي الشهر",
+                    value = SupplierMapper.formatTotalAmount(suppliers.sumOf { it.totalAmount ?: 0.0 }),
+                    subtitle = "إجمالي المبلغ",
                     icon = Icons.Default.AttachMoney,
                     iconColor = AppTheme.colors.info,
                     modifier = Modifier.weight(1f)
@@ -767,33 +839,94 @@ private fun EnhancedSuppliersContent(
             }
         }
 
-        // Recent Suppliers
+        // Header with refresh button
         item {
-            Text(
-                text = "قائمة الموردين",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "قائمة الموردين",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                IconButton(
+                    onClick = onRefresh,
+                    enabled = !isLoading
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "تحديث",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
         }
 
-        // Sample suppliers
-        items(15) { index ->
+        // Loading state
+        if (isLoading && suppliers.isEmpty()) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+        }
+
+        // Empty state
+        if (!isLoading && suppliers.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Business,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "لا توجد موردين",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "ابدأ بإضافة مورد جديد",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        // Suppliers list
+        items(suppliers) { supplier ->
             EnhancedSupplierCard(
-                supplier = Supplier(
-                    id = index,
-                    name = "شركة المورد ${index + 1}",
-                    contactPerson = "أحمد محمد",
-                    phone = "+966-50-123-45${index + 10}",
-                    email = "supplier${index + 1}@company.com",
-                    address = "الرياض، المملكة العربية السعودية",
-                    paymentTerms = "NET_30",
-                    deliveryTerms = "FOB_DESTINATION",
-                    rating = 4.0 + (index % 5) * 0.2
-                ),
-                totalOrders = 5 + index * 2,
-                totalAmount = (10000 + index * 5000).toDouble(),
-                status = if (index % 3 == 0) "معلق" else "نشط",
+                supplier = supplier,
                 onClick = onSupplierClick,
                 onEdit = onEditSupplier,
                 onDelete = onDeleteSupplier
@@ -972,13 +1105,10 @@ private fun EnhancedSupplierStatCard(
 // Enhanced Supplier Card Component
 @Composable
 private fun EnhancedSupplierCard(
-    supplier: Supplier,
-    totalOrders: Int,
-    totalAmount: Double,
-    status: String,
-    onClick: (Supplier) -> Unit,
-    onEdit: (Supplier) -> Unit,
-    onDelete: (Supplier) -> Unit,
+    supplier: SupplierDTO,
+    onClick: (SupplierDTO) -> Unit,
+    onEdit: (SupplierDTO) -> Unit,
+    onDelete: (SupplierDTO) -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Enhanced hover effect with complete coverage
@@ -1030,7 +1160,7 @@ private fun EnhancedSupplierCard(
                     )
 
                     Text(
-                        text = "الشخص المسؤول: ${supplier.contactPerson}",
+                        text = "الشخص المسؤول: ${supplier.contactPerson ?: "غير محدد"}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1073,10 +1203,11 @@ private fun EnhancedSupplierCard(
             ) {
                 Card(
                     colors = CardDefaults.cardColors(
-                        containerColor = if (status == "نشط")
-                            AppTheme.colors.success.copy(alpha = 0.2f)
-                        else
-                            AppTheme.colors.warning.copy(alpha = 0.2f)
+                        containerColor = when (supplier.status) {
+                            "ACTIVE" -> AppTheme.colors.success.copy(alpha = 0.2f)
+                            "SUSPENDED" -> AppTheme.colors.warning.copy(alpha = 0.2f)
+                            else -> AppTheme.colors.error.copy(alpha = 0.2f)
+                        }
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
@@ -1086,16 +1217,28 @@ private fun EnhancedSupplierCard(
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Icon(
-                            if (status == "نشط") Icons.Default.CheckCircle else Icons.Default.Warning,
+                            when (supplier.status) {
+                                "ACTIVE" -> Icons.Default.CheckCircle
+                                "SUSPENDED" -> Icons.Default.Warning
+                                else -> Icons.Default.Error
+                            },
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
-                            tint = if (status == "نشط") AppTheme.colors.success else AppTheme.colors.warning
+                            tint = when (supplier.status) {
+                                "ACTIVE" -> AppTheme.colors.success
+                                "SUSPENDED" -> AppTheme.colors.warning
+                                else -> AppTheme.colors.error
+                            }
                         )
                         Text(
-                            text = status,
+                            text = SupplierMapper.getStatusDisplayName(supplier.status),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Medium,
-                            color = if (status == "نشط") AppTheme.colors.success else AppTheme.colors.warning
+                            color = when (supplier.status) {
+                                "ACTIVE" -> AppTheme.colors.success
+                                "SUSPENDED" -> AppTheme.colors.warning
+                                else -> AppTheme.colors.error
+                            }
                         )
                     }
                 }
@@ -1112,7 +1255,7 @@ private fun EnhancedSupplierCard(
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = String.format("%.1f", supplier.rating),
+                        text = SupplierMapper.formatRating(supplier.rating),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface
@@ -1132,7 +1275,7 @@ private fun EnhancedSupplierCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "$totalOrders طلب",
+                        text = SupplierMapper.formatTotalOrders(supplier.totalOrders),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -1146,7 +1289,7 @@ private fun EnhancedSupplierCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "${totalAmount.toInt()} ر.س",
+                        text = SupplierMapper.formatTotalAmount(supplier.totalAmount),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -1166,7 +1309,7 @@ private fun EnhancedSupplierCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = supplier.phone,
+                        text = supplier.phone ?: "غير محدد",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -1179,7 +1322,7 @@ private fun EnhancedSupplierCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = supplier.email,
+                        text = supplier.email ?: "غير محدد",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
@@ -1316,7 +1459,7 @@ private fun EnhancedPurchaseOrderCard(
 // Enhanced Supplier Details Panel Component
 @Composable
 private fun EnhancedSupplierDetailsPanel(
-    supplier: Supplier,
+    supplier: SupplierDTO,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onClose: () -> Unit,
@@ -1380,7 +1523,7 @@ private fun EnhancedSupplierDetailsPanel(
                         modifier = Modifier.size(20.dp)
                     )
                     Text(
-                        text = String.format("%.1f", supplier.rating),
+                        text = SupplierMapper.formatRating(supplier.rating),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -1396,12 +1539,14 @@ private fun EnhancedSupplierDetailsPanel(
 
                 // Contact Information
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DetailRow("الشخص المسؤول", supplier.contactPerson)
-                    DetailRow("الهاتف", supplier.phone)
-                    DetailRow("البريد الإلكتروني", supplier.email)
-                    DetailRow("العنوان", supplier.address)
-                    DetailRow("شروط الدفع", supplier.paymentTerms)
-                    DetailRow("شروط التسليم", supplier.deliveryTerms)
+                    DetailRow("الشخص المسؤول", supplier.contactPerson ?: "غير محدد")
+                    DetailRow("الهاتف", supplier.phone ?: "غير محدد")
+                    DetailRow("البريد الإلكتروني", supplier.email ?: "غير محدد")
+                    DetailRow("العنوان", supplier.address ?: "غير محدد")
+                    DetailRow("شروط الدفع", SupplierMapper.getPaymentTermsDisplayName(supplier.paymentTerms))
+                    DetailRow("شروط التسليم", SupplierMapper.getDeliveryTermsDisplayName(supplier.deliveryTerms))
+                    DetailRow("إجمالي الطلبات", SupplierMapper.formatTotalOrders(supplier.totalOrders))
+                    DetailRow("إجمالي المبلغ", SupplierMapper.formatTotalAmount(supplier.totalAmount))
                 }
             }
         }
@@ -1473,17 +1618,18 @@ private fun DetailRow(
 // Enhanced Edit Supplier Dialog
 @Composable
 private fun EnhancedEditSupplierDialog(
-    supplier: Supplier,
+    supplier: SupplierDTO,
+    isLoading: Boolean = false,
     onDismiss: () -> Unit,
-    onSave: (Supplier) -> Unit
+    onSave: (SupplierData) -> Unit
 ) {
     var name by remember { mutableStateOf(supplier.name) }
-    var contactPerson by remember { mutableStateOf(supplier.contactPerson) }
-    var phone by remember { mutableStateOf(supplier.phone) }
-    var email by remember { mutableStateOf(supplier.email) }
-    var address by remember { mutableStateOf(supplier.address) }
-    var paymentTerms by remember { mutableStateOf(supplier.paymentTerms) }
-    var deliveryTerms by remember { mutableStateOf(supplier.deliveryTerms) }
+    var contactPerson by remember { mutableStateOf(supplier.contactPerson ?: "") }
+    var phone by remember { mutableStateOf(supplier.phone ?: "") }
+    var email by remember { mutableStateOf(supplier.email ?: "") }
+    var address by remember { mutableStateOf(supplier.address ?: "") }
+    var paymentTerms by remember { mutableStateOf(supplier.paymentTerms ?: "NET_30") }
+    var deliveryTerms by remember { mutableStateOf(supplier.deliveryTerms ?: "FOB_DESTINATION") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1603,7 +1749,7 @@ private fun EnhancedEditSupplierDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val updatedSupplier = supplier.copy(
+                    val supplierData = SupplierData(
                         name = name,
                         contactPerson = contactPerson,
                         phone = phone,
@@ -1612,22 +1758,33 @@ private fun EnhancedEditSupplierDialog(
                         paymentTerms = paymentTerms,
                         deliveryTerms = deliveryTerms
                     )
-                    onSave(updatedSupplier)
+                    onSave(supplierData)
                 },
+                enabled = !isLoading && name.isNotBlank() && contactPerson.isNotBlank() &&
+                         phone.isNotBlank() && email.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
                 ),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text(
-                    "حفظ التغييرات",
-                    fontWeight = FontWeight.Medium
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Text(
+                        "حفظ التغييرات",
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         },
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
+                enabled = !isLoading,
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text(
@@ -1643,6 +1800,7 @@ private fun EnhancedEditSupplierDialog(
 
 @Composable
 private fun EnhancedAddSupplierDialog(
+    isLoading: Boolean = false,
     onDismiss: () -> Unit,
     onSave: (SupplierData) -> Unit
 ) {
@@ -1783,22 +1941,31 @@ private fun EnhancedAddSupplierDialog(
                     )
                     onSave(supplier)
                 },
-                enabled = name.isNotBlank() && contactPerson.isNotBlank() &&
+                enabled = !isLoading && name.isNotBlank() && contactPerson.isNotBlank() &&
                          phone.isNotBlank() && email.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
                 ),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text(
-                    "حفظ",
-                    fontWeight = FontWeight.Medium
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Text(
+                        "حفظ",
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         },
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
+                enabled = !isLoading,
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text(
