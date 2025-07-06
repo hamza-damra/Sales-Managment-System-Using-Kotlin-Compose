@@ -19,7 +19,7 @@ class ProductApiService(private val httpClient: HttpClient) {
         category: String? = null
     ): NetworkResult<PageResponse<ProductDTO>> {
         return safeApiCall {
-            val response = httpClient.get(ApiConfig.Endpoints.PRODUCTS) {
+            val response = httpClient.get("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.PRODUCTS}") {
                 parameter("page", page)
                 parameter("size", size.coerceAtMost(ApiConfig.Pagination.MAX_SIZE))
                 parameter("sortBy", sortBy)
@@ -32,14 +32,14 @@ class ProductApiService(private val httpClient: HttpClient) {
     
     suspend fun getProductById(id: Long): NetworkResult<ProductDTO> {
         return safeApiCall {
-            val response = httpClient.get(ApiConfig.Endpoints.productById(id))
+            val response = httpClient.get("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.productById(id)}")
             response.body<ProductDTO>()
         }
     }
     
     suspend fun createProduct(product: ProductDTO): NetworkResult<ProductDTO> {
         return safeApiCall {
-            val response = httpClient.post(ApiConfig.Endpoints.PRODUCTS) {
+            val response = httpClient.post("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.PRODUCTS}") {
                 contentType(ContentType.Application.Json)
                 setBody(product)
             }
@@ -49,7 +49,7 @@ class ProductApiService(private val httpClient: HttpClient) {
     
     suspend fun updateProduct(id: Long, product: ProductDTO): NetworkResult<ProductDTO> {
         return safeApiCall {
-            val response = httpClient.put(ApiConfig.Endpoints.productById(id)) {
+            val response = httpClient.put("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.productById(id)}") {
                 contentType(ContentType.Application.Json)
                 setBody(product)
             }
@@ -59,7 +59,7 @@ class ProductApiService(private val httpClient: HttpClient) {
     
     suspend fun deleteProduct(id: Long): NetworkResult<Unit> {
         return safeApiCall {
-            httpClient.delete(ApiConfig.Endpoints.productById(id))
+            httpClient.delete("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.productById(id)}")
         }
     }
     
@@ -69,7 +69,7 @@ class ProductApiService(private val httpClient: HttpClient) {
         size: Int = ApiConfig.Pagination.DEFAULT_SIZE
     ): NetworkResult<PageResponse<ProductDTO>> {
         return safeApiCall {
-            val response = httpClient.get(ApiConfig.Endpoints.PRODUCTS_SEARCH) {
+            val response = httpClient.get("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.PRODUCTS_SEARCH}") {
                 parameter("query", query)
                 parameter("page", page)
                 parameter("size", size.coerceAtMost(ApiConfig.Pagination.MAX_SIZE))
@@ -80,27 +80,27 @@ class ProductApiService(private val httpClient: HttpClient) {
     
     suspend fun updateStock(id: Long, stockQuantity: Int): NetworkResult<ProductDTO> {
         return safeApiCall {
-            val response = httpClient.put(ApiConfig.Endpoints.productStock(id)) {
+            val response = httpClient.put("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.productStock(id)}") {
                 contentType(ContentType.Application.Json)
                 setBody(StockUpdateRequest(stockQuantity))
             }
             response.body<ProductDTO>()
         }
     }
-    
+
     suspend fun increaseStock(id: Long, quantity: Int): NetworkResult<ProductDTO> {
         return safeApiCall {
-            val response = httpClient.post(ApiConfig.Endpoints.productStockIncrease(id)) {
+            val response = httpClient.post("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.productStockIncrease(id)}") {
                 contentType(ContentType.Application.Json)
                 setBody(StockAdjustmentRequest(quantity))
             }
             response.body<ProductDTO>()
         }
     }
-    
+
     suspend fun decreaseStock(id: Long, quantity: Int): NetworkResult<ProductDTO> {
         return safeApiCall {
-            val response = httpClient.post(ApiConfig.Endpoints.productStockDecrease(id)) {
+            val response = httpClient.post("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.productStockDecrease(id)}") {
                 contentType(ContentType.Application.Json)
                 setBody(StockAdjustmentRequest(quantity))
             }

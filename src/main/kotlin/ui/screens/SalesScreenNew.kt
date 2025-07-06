@@ -1,6 +1,10 @@
 package ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import data.api.CustomerDTO
@@ -282,12 +287,33 @@ fun SaleCardNew(
     onCancel: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardStyles.defaultCardElevation(),
-        onClick = onClick
+    // Enhanced hover effect with complete coverage
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                color = if (isHovered)
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+                else
+                    MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(16.dp)
+            )
+            .border(
+                width = if (isHovered) 1.5.dp else 1.dp,
+                color = if (isHovered)
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                else
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(16.dp)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { onClick() }
     ) {
         Column(
             modifier = Modifier.padding(16.dp),

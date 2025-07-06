@@ -1,6 +1,10 @@
 package ui.screens
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,6 +14,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.AssignmentReturn
@@ -18,6 +23,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,9 +32,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import data.*
 import kotlinx.datetime.LocalDateTime
+import kotlinx.coroutines.launch
 import UiUtils
 import ui.components.*
 import ui.theme.AppTheme
@@ -36,95 +45,483 @@ import ui.theme.CardStyles
 import ui.utils.ResponsiveUtils.getResponsivePadding
 import ui.utils.ResponsiveUtils.getScreenInfo
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReturnsScreen() {
     RTLProvider {
-        val responsivePadding = getResponsivePadding()
-        val screenInfo = getScreenInfo()
-        val isDesktop = screenInfo.isDesktop
-
-        var showNewReturnDialog by remember { mutableStateOf(false) }
+        // Enhanced state management
+        var selectedTab by remember { mutableStateOf(ReturnTab.RETURNS) }
         var searchQuery by remember { mutableStateOf("") }
         var selectedStatus by remember { mutableStateOf("الكل") }
-        var selectedTab by remember { mutableStateOf(ReturnTab.RETURNS) }
-        var showQuickActions by remember { mutableStateOf(false) }
+        var selectedReason by remember { mutableStateOf("الكل") }
+        var selectedDateRange by remember { mutableStateOf("الكل") }
+        var sortBy by remember { mutableStateOf("date") }
+        var showPendingOnly by remember { mutableStateOf(false) }
+        var showRefundableOnly by remember { mutableStateOf(false) }
+        var isExporting by remember { mutableStateOf(false) }
+        var exportMessage by remember { mutableStateOf<String?>(null) }
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-        ) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(responsivePadding.screen),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
+        // Dialog states
+        var showNewReturnDialog by remember { mutableStateOf(false) }
+        var editingReturn by remember { mutableStateOf<Return?>(null) }
+        var selectedReturn by remember { mutableStateOf<Return?>(null) }
+        var showReturnDetails by remember { mutableStateOf(false) }
+        var showDeleteConfirmation by remember { mutableStateOf(false) }
+        var returnToDelete by remember { mutableStateOf<Return?>(null) }
+
+        // For desktop application, we'll use window size detection
+        val isTablet = true // Assume tablet/desktop for now
+        val isDesktop = true // Desktop application
+
+        // Snackbar state
+        val snackbarHostState = remember { SnackbarHostState() }
+        val coroutineScope = rememberCoroutineScope()
+
+        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            RTLRow(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Enhanced Header Section with Tabs
-                item {
-                    EnhancedReturnsHeaderWithTabs(
-                        selectedTab = selectedTab,
-                        onTabSelected = { selectedTab = it },
-                        onNewReturn = { showNewReturnDialog = true },
-                        isDesktop = isDesktop
-                    )
-                }
-
-                // Tab Content
-                when (selectedTab) {
-                    ReturnTab.RETURNS -> {
-                        // Search and Filters Section
-                        item {
-                            EnhancedSearchAndFilters(
-                                searchQuery = searchQuery,
-                                onSearchQueryChange = { searchQuery = it },
-                                selectedStatus = selectedStatus,
-                                onStatusChange = { selectedStatus = it }
-                            )
-                        }
-
-                        // Enhanced Statistics Dashboard
-                        item {
-                            EnhancedReturnsStatistics(isDesktop = isDesktop)
-                        }
-
-                        // Enhanced Returns List
-                        item {
-                            EnhancedReturnsList(
-                                searchQuery = searchQuery,
-                                selectedStatus = selectedStatus
-                            )
-                        }
-                    }
-                    ReturnTab.ANALYTICS -> {
-                        item {
-                            ReturnsAnalyticsContent(isDesktop = isDesktop)
-                        }
-                    }
-                    ReturnTab.POLICIES -> {
-                        item {
-                            ReturnsPoliciesContent(isDesktop = isDesktop)
-                        }
-                    }
-                }
-            }
-
-            // Floating Action Button
-            if (!isDesktop) {
-                FloatingActionButton(
-                    onClick = { showNewReturnDialog = true },
+                // Left Panel - Returns Management
+                Card(
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(16.dp),
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                ) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = "إرجاع جديد",
-                        modifier = Modifier.size(24.dp)
+                        .weight(2f)
+                        .fillMaxHeight(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    shape = RoundedCornerShape(24.dp),
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = 0.dp
+                    ),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
                     )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp)
+                    ) {
+                        // Header
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "إدارة المرتجعات والإلغاءات",
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+
+                            Button(
+                                onClick = { showNewReturnDialog = true },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                ),
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = ButtonDefaults.buttonElevation(
+                                    defaultElevation = 2.dp
+                                )
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("إرجاع جديد")
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // Enhanced Tabs
+                        EnhancedReturnsTabRow(
+                            selectedTab = selectedTab,
+                            onTabSelected = { selectedTab = it }
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Search and Filter Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            // Search Field
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                label = { Text("البحث في المرتجعات") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Search,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                                )
+                            )
+
+                            // Status Filter
+                            EnhancedReturnsFilterDropdown(
+                                label = "الحالة",
+                                value = selectedStatus,
+                                options = listOf("الكل", "في الانتظار", "موافق عليه", "مرفوض", "تم الاسترداد", "تم الاستبدال"),
+                                onValueChange = { selectedStatus = it },
+                                modifier = Modifier.weight(0.7f)
+                            )
+
+                            // Reason Filter
+                            EnhancedReturnsFilterDropdown(
+                                label = "السبب",
+                                value = selectedReason,
+                                options = listOf("الكل", "معيب", "منتج خاطئ", "تغيير رأي العميل", "منتهي الصلاحية", "تضرر أثناء الشحن", "أخرى"),
+                                onValueChange = { selectedReason = it },
+                                modifier = Modifier.weight(0.7f)
+                            )
+                        }
+
+                        // Sort and Action Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Sort Dropdown
+                            EnhancedReturnsFilterDropdown(
+                                label = "ترتيب حسب",
+                                value = when(sortBy) {
+                                    "date" -> "التاريخ"
+                                    "amount" -> "المبلغ"
+                                    "status" -> "الحالة"
+                                    "customer" -> "العميل"
+                                    else -> "التاريخ"
+                                },
+                                options = listOf("التاريخ", "المبلغ", "الحالة", "العميل"),
+                                onValueChange = {
+                                    sortBy = when(it) {
+                                        "التاريخ" -> "date"
+                                        "المبلغ" -> "amount"
+                                        "الحالة" -> "status"
+                                        "العميل" -> "customer"
+                                        else -> "date"
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            // Enhanced Quick Filters with complete hover coverage
+                            val pendingOnlyInteractionSource = remember { MutableInteractionSource() }
+                            val isPendingOnlyHovered by pendingOnlyInteractionSource.collectIsHoveredAsState()
+
+                            Box(
+                                modifier = Modifier
+                                    .height(56.dp) // Match dropdown height
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        color = when {
+                                            showPendingOnly -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            isPendingOnlyHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                                            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                        },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .border(
+                                        width = if (showPendingOnly) 1.5.dp else if (isPendingOnlyHovered) 1.dp else 0.5.dp,
+                                        color = when {
+                                            showPendingOnly -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                            isPendingOnlyHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                            else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                        },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable(
+                                        interactionSource = pendingOnlyInteractionSource,
+                                        indication = null
+                                    ) { showPendingOnly = !showPendingOnly },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 12.dp)
+                                ) {
+                                    if (showPendingOnly) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Text(
+                                        "في الانتظار فقط",
+                                        color = when {
+                                            showPendingOnly -> MaterialTheme.colorScheme.primary
+                                            isPendingOnlyHovered -> MaterialTheme.colorScheme.onSurface
+                                            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                                        },
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+
+                            val refundableOnlyInteractionSource = remember { MutableInteractionSource() }
+                            val isRefundableOnlyHovered by refundableOnlyInteractionSource.collectIsHoveredAsState()
+
+                            Box(
+                                modifier = Modifier
+                                    .height(56.dp) // Match dropdown height
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        color = when {
+                                            showRefundableOnly -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            isRefundableOnlyHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                                            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                        },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .border(
+                                        width = if (showRefundableOnly) 1.5.dp else if (isRefundableOnlyHovered) 1.dp else 0.5.dp,
+                                        color = when {
+                                            showRefundableOnly -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                            isRefundableOnlyHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                            else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                        },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable(
+                                        interactionSource = refundableOnlyInteractionSource,
+                                        indication = null
+                                    ) { showRefundableOnly = !showRefundableOnly },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 12.dp)
+                                ) {
+                                    if (showRefundableOnly) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Text(
+                                        "قابل للاسترداد",
+                                        color = when {
+                                            showRefundableOnly -> MaterialTheme.colorScheme.primary
+                                            isRefundableOnlyHovered -> MaterialTheme.colorScheme.onSurface
+                                            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                                        },
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+
+                            // Enhanced Export Button with complete hover coverage
+                            val exportInteractionSource = remember { MutableInteractionSource() }
+                            val isExportHovered by exportInteractionSource.collectIsHoveredAsState()
+
+                            Box(
+                                modifier = Modifier
+                                    .height(56.dp) // Match dropdown height
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        color = if (isExportHovered && !isExporting)
+                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                        else
+                                            MaterialTheme.colorScheme.surface,
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .border(
+                                        width = if (isExportHovered && !isExporting) 1.5.dp else 1.dp,
+                                        color = if (isExportHovered && !isExporting)
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                                        else
+                                            MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable(
+                                        interactionSource = exportInteractionSource,
+                                        indication = null,
+                                        enabled = !isExporting
+                                    ) { if (!isExporting) { /* handleExportExcel() */ } },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                ) {
+                                    if (isExporting) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(18.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    } else {
+                                        Icon(
+                                            Icons.Default.FileDownload,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = if (isExportHovered)
+                                                MaterialTheme.colorScheme.primary
+                                            else
+                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                                        )
+                                    }
+                                    Text(
+                                        "تصدير",
+                                        color = if (isExporting)
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        else if (isExportHovered)
+                                            MaterialTheme.colorScheme.primary
+                                        else
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Content based on selected tab
+                        when (selectedTab) {
+                            ReturnTab.RETURNS -> EnhancedReturnsContent(
+                                searchQuery = searchQuery,
+                                selectedStatus = selectedStatus,
+                                selectedReason = selectedReason,
+                                showPendingOnly = showPendingOnly,
+                                showRefundableOnly = showRefundableOnly,
+                                sortBy = sortBy,
+                                onReturnClick = { returnItem ->
+                                    selectedReturn = returnItem
+                                    showReturnDetails = true
+                                },
+                                onEditReturn = { returnItem ->
+                                    editingReturn = returnItem
+                                },
+                                onDeleteReturn = { returnItem ->
+                                    returnToDelete = returnItem
+                                    showDeleteConfirmation = true
+                                }
+                            )
+                            ReturnTab.ANALYTICS -> EnhancedReturnsAnalyticsContent()
+                            ReturnTab.POLICIES -> EnhancedReturnsPoliciesContent()
+                        }
+                    }
+                }
+
+                // Right Panel - Details and Statistics (when return selected)
+                AnimatedVisibility(
+                    visible = showReturnDetails && selectedReturn != null,
+                    enter = slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(300)
+                    ) + fadeIn(),
+                    exit = slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(300)
+                    ) + fadeOut()
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        shape = RoundedCornerShape(24.dp),
+                        elevation = CardDefaults.cardElevation(
+                            defaultElevation = 0.dp
+                        ),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                        )
+                    ) {
+                        selectedReturn?.let { returnItem ->
+                            EnhancedReturnDetailsPanel(
+                                returnItem = returnItem,
+                                onEdit = {
+                                    editingReturn = returnItem
+                                    showReturnDetails = false
+                                },
+                                onDelete = {
+                                    returnToDelete = returnItem
+                                    showDeleteConfirmation = true
+                                    showReturnDetails = false
+                                },
+                                onClose = {
+                                    showReturnDetails = false
+                                    selectedReturn = null
+                                }
+                            )
+                        }
+                    }
                 }
             }
+
+            // Export status message
+            exportMessage?.let { message ->
+                Card(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (message.contains("نجاح"))
+                            AppTheme.colors.success.copy(alpha = 0.9f)
+                        else
+                            AppTheme.colors.error.copy(alpha = 0.9f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            if (message.contains("نجاح")) Icons.Default.CheckCircle else Icons.Default.Error,
+                            contentDescription = null,
+                            tint = Color.White
+                        )
+                        Text(
+                            text = message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.Medium
+                        )
+                        IconButton(
+                            onClick = { exportMessage = null }
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "إغلاق",
+                                tint = Color.White
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Snackbar
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
         }
 
         // Dialogs
@@ -134,50 +531,1029 @@ fun ReturnsScreen() {
                 onConfirm = { returnData ->
                     // Handle new return creation
                     showNewReturnDialog = false
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar("تم إضافة المرتجع بنجاح")
+                    }
+                }
+            )
+        }
+
+        if (editingReturn != null) {
+            EnhancedEditReturnDialog(
+                returnItem = editingReturn!!,
+                onDismiss = { editingReturn = null },
+                onSave = { returnItem ->
+                    // Handle updating return
+                    editingReturn = null
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar("تم تحديث المرتجع بنجاح")
+                    }
+                }
+            )
+        }
+
+        if (showDeleteConfirmation && returnToDelete != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    showDeleteConfirmation = false
+                    returnToDelete = null
+                },
+                title = { Text("تأكيد الحذف") },
+                text = { Text("هل أنت متأكد من حذف هذا المرتجع؟") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            // Handle deleting return
+                            showDeleteConfirmation = false
+                            returnToDelete = null
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar("تم حذف المرتجع بنجاح")
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text("حذف")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(
+                        onClick = {
+                            showDeleteConfirmation = false
+                            returnToDelete = null
+                        }
+                    ) {
+                        Text("إلغاء")
+                    }
                 }
             )
         }
     }
 }
 
-// Old ReturnCard function removed - replaced with EnhancedReturnCard
+// Enhanced Tab Row Component
+@Composable
+private fun EnhancedReturnsTabRow(
+    selectedTab: ReturnTab,
+    onTabSelected: (ReturnTab) -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        TabRow(
+            selectedTabIndex = selectedTab.ordinal,
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.primary,
+            indicator = { tabPositions ->
+                TabRowDefaults.Indicator(
+                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab.ordinal]),
+                    color = MaterialTheme.colorScheme.primary,
+                    height = 3.dp
+                )
+            }
+        ) {
+            ReturnTab.values().forEach { tab ->
+                Tab(
+                    selected = selectedTab == tab,
+                    onClick = { onTabSelected(tab) },
+                    text = {
+                        Text(
+                            text = tab.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = if (selectedTab == tab) FontWeight.Bold else FontWeight.Normal
+                        )
+                    },
+                    icon = {
+                        Icon(
+                            when (tab) {
+                                ReturnTab.RETURNS -> Icons.AutoMirrored.Filled.AssignmentReturn
+                                ReturnTab.ANALYTICS -> Icons.Default.Analytics
+                                ReturnTab.POLICIES -> Icons.Default.Policy
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                )
+            }
+        }
+    }
+}
+
+// Enhanced Filter Dropdown Component
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EnhancedReturnsFilterDropdown(
+    label: String,
+    value: String,
+    options: List<String>,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = { },
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = {
+                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+            },
+            modifier = Modifier
+                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+            )
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option) },
+                    onClick = {
+                        onValueChange(option)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+// Enhanced Returns Content
+@Composable
+private fun EnhancedReturnsContent(
+    searchQuery: String,
+    selectedStatus: String,
+    selectedReason: String,
+    showPendingOnly: Boolean,
+    showRefundableOnly: Boolean,
+    sortBy: String,
+    onReturnClick: (Return) -> Unit,
+    onEditReturn: (Return) -> Unit,
+    onDeleteReturn: (Return) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Statistics Cards
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                EnhancedReturnsStatCard(
+                    title = "إجمالي المرتجعات",
+                    value = "156",
+                    subtitle = "مرتجع مسجل",
+                    icon = Icons.AutoMirrored.Filled.AssignmentReturn,
+                    iconColor = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f)
+                )
+
+                EnhancedReturnsStatCard(
+                    title = "في الانتظار",
+                    value = "23",
+                    subtitle = "يحتاج معالجة",
+                    icon = Icons.Default.Schedule,
+                    iconColor = AppTheme.colors.warning,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                EnhancedReturnsStatCard(
+                    title = "تم الاسترداد",
+                    value = "12,500 ر.س",
+                    subtitle = "إجمالي المبلغ",
+                    icon = Icons.Default.AccountBalance,
+                    iconColor = AppTheme.colors.success,
+                    modifier = Modifier.weight(1f)
+                )
+
+                EnhancedReturnsStatCard(
+                    title = "معدل المرتجعات",
+                    value = "3.2%",
+                    subtitle = "من إجمالي المبيعات",
+                    icon = Icons.AutoMirrored.Filled.TrendingDown,
+                    iconColor = AppTheme.colors.info,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        // Recent Returns
+        item {
+            Text(
+                text = "قائمة المرتجعات",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+
+        // Sample returns
+        items(15) { index ->
+            EnhancedReturnCard(
+                returnItem = Return(
+                    id = index,
+                    originalSaleId = 100 + index,
+                    date = LocalDateTime(2024, 1, (index % 28) + 1, 10, 0),
+                    items = listOf(
+                        ReturnItem(
+                            productId = index,
+                            quantity = 1 + index % 3,
+                            unitPrice = 50.0 + index * 10,
+                            condition = when (index % 4) {
+                                0 -> ItemCondition.DEFECTIVE
+                                1 -> ItemCondition.DAMAGED
+                                2 -> ItemCondition.GOOD
+                                else -> ItemCondition.NEW
+                            }
+                        )
+                    ),
+                    reason = when (index % 5) {
+                        0 -> ReturnReason.DEFECTIVE
+                        1 -> ReturnReason.DAMAGED_SHIPPING
+                        2 -> ReturnReason.CUSTOMER_CHANGE_MIND
+                        3 -> ReturnReason.WRONG_ITEM
+                        else -> ReturnReason.EXPIRED
+                    },
+                    status = when (index % 5) {
+                        0 -> ReturnStatus.PENDING
+                        1 -> ReturnStatus.APPROVED
+                        2 -> ReturnStatus.REJECTED
+                        3 -> ReturnStatus.REFUNDED
+                        else -> ReturnStatus.EXCHANGED
+                    },
+                    refundAmount = (50.0 + index * 10) * (1 + index % 3),
+                    notes = "ملاحظة حول المرتجع $index"
+                ),
+                customerName = "عميل ${index + 1}",
+                productName = "منتج ${index + 1}",
+                onClick = onReturnClick,
+                onEdit = onEditReturn,
+                onDelete = onDeleteReturn
+            )
+        }
+    }
+}
+
+// Enhanced Returns Analytics Content
+@Composable
+private fun EnhancedReturnsAnalyticsContent() {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Analytics Cards
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                EnhancedReturnsStatCard(
+                    title = "معدل الإرجاع الشهري",
+                    value = "2.8%",
+                    subtitle = "انخفاض 0.5%",
+                    icon = Icons.AutoMirrored.Filled.TrendingDown,
+                    iconColor = AppTheme.colors.success,
+                    modifier = Modifier.weight(1f)
+                )
+
+                EnhancedReturnsStatCard(
+                    title = "متوسط وقت المعالجة",
+                    value = "1.5 يوم",
+                    subtitle = "تحسن 12 ساعة",
+                    icon = Icons.Default.Schedule,
+                    iconColor = AppTheme.colors.info,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                EnhancedReturnsStatCard(
+                    title = "رضا العملاء",
+                    value = "4.6/5",
+                    subtitle = "زيادة 0.2",
+                    icon = Icons.Default.Star,
+                    iconColor = AppTheme.colors.warning,
+                    modifier = Modifier.weight(1f)
+                )
+
+                EnhancedReturnsStatCard(
+                    title = "أكثر الأسباب",
+                    value = "معيب",
+                    subtitle = "45% من المرتجعات",
+                    icon = Icons.Default.BugReport,
+                    iconColor = AppTheme.colors.error,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        item {
+            Text(
+                text = "تحليل الأداء",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+
+        // Performance metrics would go here
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "تقرير الأداء الشهري",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "سيتم إضافة الرسوم البيانية والتحليلات هنا",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Enhanced Returns Policies Content
+@Composable
+private fun EnhancedReturnsPoliciesContent() {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Text(
+                text = "سياسات الإرجاع والاستبدال",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+
+        // Policy Cards
+        item {
+            EnhancedPolicyCard(
+                title = "فترة الإرجاع",
+                description = "يمكن إرجاع المنتجات خلال 30 يوماً من تاريخ الشراء",
+                icon = Icons.Default.Schedule,
+                iconColor = AppTheme.colors.info
+            )
+        }
+
+        item {
+            EnhancedPolicyCard(
+                title = "شروط الإرجاع",
+                description = "يجب أن يكون المنتج في حالته الأصلية مع العبوة والفاتورة",
+                icon = Icons.Default.CheckCircle,
+                iconColor = AppTheme.colors.success
+            )
+        }
+
+        item {
+            EnhancedPolicyCard(
+                title = "رسوم الإرجاع",
+                description = "لا توجد رسوم إضافية للإرجاع في حالة عيب المنتج",
+                icon = Icons.Default.AttachMoney,
+                iconColor = AppTheme.colors.warning
+            )
+        }
+
+        item {
+            EnhancedPolicyCard(
+                title = "طريقة الاسترداد",
+                description = "يتم الاسترداد بنفس طريقة الدفع الأصلية خلال 3-5 أيام عمل",
+                icon = Icons.Default.AccountBalance,
+                iconColor = AppTheme.colors.purple
+            )
+        }
+    }
+}
+
+// Enhanced Returns Stat Card Component
+@Composable
+private fun EnhancedReturnsStatCard(
+    title: String,
+    value: String,
+    subtitle: String,
+    icon: ImageVector,
+    iconColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 1.dp
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = iconColor,
+                    modifier = Modifier.size(24.dp)
+                )
+
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+// Enhanced Return Card Component
+@Composable
+private fun EnhancedReturnCard(
+    returnItem: Return,
+    customerName: String,
+    productName: String,
+    onClick: (Return) -> Unit,
+    onEdit: (Return) -> Unit,
+    onDelete: (Return) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Enhanced hover effect with complete coverage
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                color = if (isHovered)
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+                else
+                    MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(20.dp)
+            )
+            .border(
+                width = if (isHovered) 1.5.dp else 1.dp,
+                color = if (isHovered)
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                else
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(20.dp)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { onClick(returnItem) }
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Header with actions
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "مرتجع #${returnItem.id}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Text(
+                        text = "العميل: $customerName",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    IconButton(
+                        onClick = { onEdit(returnItem) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "تعديل",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { onDelete(returnItem) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "حذف",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
+            // Status and Reason
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = when (returnItem.status) {
+                            ReturnStatus.PENDING -> AppTheme.colors.warning.copy(alpha = 0.2f)
+                            ReturnStatus.APPROVED -> AppTheme.colors.success.copy(alpha = 0.2f)
+                            ReturnStatus.REJECTED -> MaterialTheme.colorScheme.errorContainer
+                            ReturnStatus.REFUNDED -> AppTheme.colors.info.copy(alpha = 0.2f)
+                            ReturnStatus.EXCHANGED -> AppTheme.colors.purple.copy(alpha = 0.2f)
+                        }
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            when (returnItem.status) {
+                                ReturnStatus.PENDING -> Icons.Default.Schedule
+                                ReturnStatus.APPROVED -> Icons.Default.CheckCircle
+                                ReturnStatus.REJECTED -> Icons.Default.Cancel
+                                ReturnStatus.REFUNDED -> Icons.Default.AccountBalance
+                                ReturnStatus.EXCHANGED -> Icons.Default.SwapHoriz
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = when (returnItem.status) {
+                                ReturnStatus.PENDING -> AppTheme.colors.warning
+                                ReturnStatus.APPROVED -> AppTheme.colors.success
+                                ReturnStatus.REJECTED -> MaterialTheme.colorScheme.onErrorContainer
+                                ReturnStatus.REFUNDED -> AppTheme.colors.info
+                                ReturnStatus.EXCHANGED -> AppTheme.colors.purple
+                            }
+                        )
+                        Text(
+                            text = returnItem.status.displayName,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = when (returnItem.status) {
+                                ReturnStatus.PENDING -> AppTheme.colors.warning
+                                ReturnStatus.APPROVED -> AppTheme.colors.success
+                                ReturnStatus.REJECTED -> MaterialTheme.colorScheme.onErrorContainer
+                                ReturnStatus.REFUNDED -> AppTheme.colors.info
+                                ReturnStatus.EXCHANGED -> AppTheme.colors.purple
+                            }
+                        )
+                    }
+                }
+
+                // Reason
+                Text(
+                    text = returnItem.reason.displayName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Product and Amount Information
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = "المنتج",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = productName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Column {
+                    Text(
+                        text = "الكمية",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${returnItem.items.sumOf { it.quantity }}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Column {
+                    Text(
+                        text = "المبلغ",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${returnItem.refundAmount.toInt()} ر.س",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            // Date and Notes
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = "تاريخ الإرجاع",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${returnItem.date.date}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                if (returnItem.notes.isNotBlank()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "ملاحظات",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = returnItem.notes,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Enhanced Policy Card Component
+@Composable
+private fun EnhancedPolicyCard(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    iconColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 1.dp
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(20.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Surface(
+                color = iconColor.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = iconColor,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .padding(12.dp)
+                )
+            }
+
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+// Enhanced Return Details Panel Component
+@Composable
+private fun EnhancedReturnDetailsPanel(
+    returnItem: Return,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "تفاصيل المرتجع",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            IconButton(onClick = onClose) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "إغلاق",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // Return Information
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "مرتجع #${returnItem.id}",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        when (returnItem.status) {
+                            ReturnStatus.PENDING -> Icons.Default.Schedule
+                            ReturnStatus.APPROVED -> Icons.Default.CheckCircle
+                            ReturnStatus.REJECTED -> Icons.Default.Cancel
+                            ReturnStatus.REFUNDED -> Icons.Default.AccountBalance
+                            ReturnStatus.EXCHANGED -> Icons.Default.SwapHoriz
+                        },
+                        contentDescription = null,
+                        tint = when (returnItem.status) {
+                            ReturnStatus.PENDING -> AppTheme.colors.warning
+                            ReturnStatus.APPROVED -> AppTheme.colors.success
+                            ReturnStatus.REJECTED -> AppTheme.colors.error
+                            ReturnStatus.REFUNDED -> AppTheme.colors.info
+                            ReturnStatus.EXCHANGED -> AppTheme.colors.purple
+                        },
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = returnItem.status.displayName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+
+                // Return Details
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DetailRow("رقم البيع الأصلي", "#${returnItem.originalSaleId}")
+                    DetailRow("تاريخ الإرجاع", "${returnItem.date.date}")
+                    DetailRow("سبب الإرجاع", returnItem.reason.displayName)
+                    DetailRow("المبلغ الإجمالي", "${returnItem.refundAmount.toInt()} ر.س")
+                    if (returnItem.notes.isNotBlank()) {
+                        DetailRow("ملاحظات", returnItem.notes)
+                    }
+                }
+            }
+        }
+
+        // Items List
+        Text(
+            text = "العناصر المرتجعة",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            items(returnItem.items) { item ->
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "منتج #${item.productId}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "${item.quantity} × ${item.unitPrice.toInt()} ر.س",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        Text(
+                            text = "الحالة: ${item.condition.displayName}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        // Action Buttons
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Button(
+                onClick = onEdit,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.Edit, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("تعديل")
+            }
+
+            OutlinedButton(
+                onClick = onDelete,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.Delete, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("حذف")
+            }
+        }
+    }
+}
 
 @Composable
-fun ReturnsStatsCards() {
+private fun DetailRow(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        StatCard(
-            title = "إجمالي المرتجعات",
-            value = "156",
-            icon = Icons.AutoMirrored.Filled.AssignmentReturn,
-            iconColor = MaterialTheme.colorScheme.primary,
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f)
         )
-
-        StatCard(
-            title = "في الانتظار",
-            value = "23",
-            icon = Icons.Default.Schedule,
-            iconColor = AppTheme.colors.warning,
-            modifier = Modifier.weight(1f)
-        )
-
-        StatCard(
-            title = "تم الاسترداد",
-            value = UiUtils.formatCurrency(12500.0),
-            icon = Icons.Default.AccountBalance,
-            iconColor = AppTheme.colors.success,
-            modifier = Modifier.weight(1f)
-        )
-
-        StatCard(
-            title = "معدل المرتجعات",
-            value = "3.2%",
-            icon = Icons.AutoMirrored.Filled.TrendingDown,
-            iconColor = AppTheme.colors.info,
-            modifier = Modifier.weight(1f)
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(2f),
+            textAlign = TextAlign.End
         )
     }
 }
@@ -229,14 +1605,33 @@ fun ReturnCard(
     returnItem: Return,
     onClick: () -> Unit
 ) {
-    Card(
+    // Enhanced hover effect with complete coverage
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                color = if (isHovered)
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+                else
+                    MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(16.dp)
+            )
+            .border(
+                width = if (isHovered) 1.5.dp else 1.dp,
+                color = if (isHovered)
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                else
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(16.dp)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { onClick() }
     ) {
         Column(
             modifier = Modifier.padding(20.dp)
@@ -571,6 +1966,220 @@ fun EnhancedNewReturnDialog(
                     "إلغاء",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Medium
+                )
+            }
+        },
+        shape = RoundedCornerShape(20.dp),
+        containerColor = MaterialTheme.colorScheme.surface
+    )
+}
+
+// Enhanced Edit Return Dialog
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EnhancedEditReturnDialog(
+    returnItem: Return,
+    onDismiss: () -> Unit,
+    onSave: (Return) -> Unit
+) {
+    var selectedReason by remember { mutableStateOf(returnItem.reason) }
+    var selectedStatus by remember { mutableStateOf(returnItem.status) }
+    var notes by remember { mutableStateOf(returnItem.notes) }
+    var refundAmount by remember { mutableStateOf(returnItem.refundAmount.toString()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "تعديل المرتجع #${returnItem.id}",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.height(400.dp)
+            ) {
+                item {
+                    Text(
+                        text = "معلومات المرتجع",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "رقم البيع الأصلي: #${returnItem.originalSaleId}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "تاريخ الإرجاع: ${returnItem.date.date}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    var reasonExpanded by remember { mutableStateOf(false) }
+
+                    ExposedDropdownMenuBox(
+                        expanded = reasonExpanded,
+                        onExpandedChange = { reasonExpanded = !reasonExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = selectedReason.displayName,
+                            onValueChange = { },
+                            readOnly = true,
+                            label = { Text("سبب الإرجاع") },
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = reasonExpanded)
+                            },
+                            modifier = Modifier
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                                .fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                focusedLabelColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+
+                        ExposedDropdownMenu(
+                            expanded = reasonExpanded,
+                            onDismissRequest = { reasonExpanded = false }
+                        ) {
+                            ReturnReason.values().forEach { reason ->
+                                DropdownMenuItem(
+                                    text = { Text(reason.displayName) },
+                                    onClick = {
+                                        selectedReason = reason
+                                        reasonExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    var statusExpanded by remember { mutableStateOf(false) }
+
+                    ExposedDropdownMenuBox(
+                        expanded = statusExpanded,
+                        onExpandedChange = { statusExpanded = !statusExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = selectedStatus.displayName,
+                            onValueChange = { },
+                            readOnly = true,
+                            label = { Text("حالة المرتجع") },
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = statusExpanded)
+                            },
+                            modifier = Modifier
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                                .fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                focusedLabelColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+
+                        ExposedDropdownMenu(
+                            expanded = statusExpanded,
+                            onDismissRequest = { statusExpanded = false }
+                        ) {
+                            ReturnStatus.values().forEach { status ->
+                                DropdownMenuItem(
+                                    text = { Text(status.displayName) },
+                                    onClick = {
+                                        selectedStatus = status
+                                        statusExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    OutlinedTextField(
+                        value = refundAmount,
+                        onValueChange = { refundAmount = it },
+                        label = { Text("مبلغ الاسترداد") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+
+                item {
+                    OutlinedTextField(
+                        value = notes,
+                        onValueChange = { notes = it },
+                        label = { Text("ملاحظات") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val updatedReturn = returnItem.copy(
+                        reason = selectedReason,
+                        status = selectedStatus,
+                        notes = notes,
+                        refundAmount = refundAmount.toDoubleOrNull() ?: returnItem.refundAmount
+                    )
+                    onSave(updatedReturn)
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    "حفظ التغييرات",
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    "إلغاء",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         },
@@ -1680,23 +3289,33 @@ private fun EnhancedReturnCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    // Enhanced hover effect with complete coverage
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onClick() },
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 1.dp,
-            hoveredElevation = 4.dp,
-            pressedElevation = 0.dp
-        ),
-        border = BorderStroke(
-            width = 1.dp,
-            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
-        )
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                color = if (isHovered)
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+                else
+                    MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(16.dp)
+            )
+            .border(
+                width = if (isHovered) 1.5.dp else 1.dp,
+                color = if (isHovered)
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                else
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(16.dp)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { onClick() }
     ) {
         Column(
             modifier = Modifier

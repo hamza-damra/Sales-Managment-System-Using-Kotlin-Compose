@@ -2,15 +2,7 @@ package data.api
 
 import kotlinx.serialization.Serializable
 
-// Dashboard Summary
-@Serializable
-data class DashboardSummaryDTO(
-    val period: String,
-    val sales: SalesSummaryDTO,
-    val customers: CustomersSummaryDTO,
-    val inventory: InventorySummaryDTO,
-    val generatedAt: String
-)
+// Note: DashboardSummaryDTO is now defined in ApiModels.kt
 
 @Serializable
 data class SalesSummaryDTO(

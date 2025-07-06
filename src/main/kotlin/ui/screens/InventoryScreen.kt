@@ -1,6 +1,10 @@
 package ui.screens
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -8,6 +12,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
@@ -21,19 +26,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.window.Dialog
 import data.*
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import UiUtils
 import ui.components.*
+import ui.components.RTLProvider
+import ui.components.RTLRow
 import ui.theme.CardStyles
 import ui.theme.AppTheme
+import ui.utils.ColorUtils
 
 // Inventory Tab Enum
 enum class InventoryTab(val title: String) {
@@ -43,25 +54,39 @@ enum class InventoryTab(val title: String) {
     WAREHOUSES("المستودعات")
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InventoryScreen(
     salesDataManager: SalesDataManager,
     inventoryExportService: InventoryExportService? = null
 ) {
-    // For desktop application, we'll use window size detection
-    // In a real desktop app, you would get this from the window state
-    val isTablet = true // Assume tablet/desktop for now
-    val isDesktop = true // Desktop application
-
     RTLProvider {
+        // Enhanced state management
         var selectedTab by remember { mutableStateOf(InventoryTab.OVERVIEW) }
         var searchQuery by remember { mutableStateOf("") }
         var selectedCategory by remember { mutableStateOf("الكل") }
         var selectedWarehouse by remember { mutableStateOf("الكل") }
+        var selectedStatus by remember { mutableStateOf("الكل") }
+        var sortBy by remember { mutableStateOf("name") }
         var showLowStockOnly by remember { mutableStateOf(false) }
         var showExpiringOnly by remember { mutableStateOf(false) }
         var isExporting by remember { mutableStateOf(false) }
         var exportMessage by remember { mutableStateOf<String?>(null) }
+
+        // Dialog states
+        var showAddItemDialog by remember { mutableStateOf(false) }
+        var editingItem by remember { mutableStateOf<InventoryItem?>(null) }
+        var selectedItem by remember { mutableStateOf<InventoryItem?>(null) }
+        var showItemDetails by remember { mutableStateOf(false) }
+        var showDeleteConfirmation by remember { mutableStateOf(false) }
+        var itemToDelete by remember { mutableStateOf<InventoryItem?>(null) }
+
+        // For desktop application, we'll use window size detection
+        val isTablet = true // Assume tablet/desktop for now
+        val isDesktop = true // Desktop application
+
+        // Snackbar state
+        val snackbarHostState = remember { SnackbarHostState() }
 
         val coroutineScope = rememberCoroutineScope()
 
@@ -126,759 +151,600 @@ fun InventoryScreen(
             }
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(
-                    horizontal = when {
-                        isDesktop -> 32.dp
-                        isTablet -> 24.dp
-                        else -> 16.dp
+        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            RTLRow(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Left Panel - Inventory Management
+                Card(
+                    modifier = Modifier
+                        .weight(2f)
+                        .fillMaxHeight(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    shape = RoundedCornerShape(24.dp),
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = 0.dp
+                    ),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp)
+                    ) {
+                        // Header
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "إدارة المخزون",
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+
+                            Button(
+                                onClick = { showAddItemDialog = true },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                ),
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = ButtonDefaults.buttonElevation(
+                                    defaultElevation = 2.dp
+                                )
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("إضافة عنصر جديد")
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // Enhanced Tabs
+                        EnhancedTabRow(
+                            selectedTab = selectedTab,
+                            onTabSelected = { selectedTab = it }
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Search and Filter Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            // Search Field
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                label = { Text("البحث في المخزون") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Search,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                                )
+                            )
+
+                            // Category Filter
+                            EnhancedFilterDropdown(
+                                label = "الفئة",
+                                value = selectedCategory,
+                                options = listOf("الكل", "إلكترونيات", "ملابس", "مواد غذائية", "أدوات"),
+                                onValueChange = { selectedCategory = it },
+                                modifier = Modifier.weight(0.7f)
+                            )
+
+                            // Warehouse Filter
+                            EnhancedFilterDropdown(
+                                label = "المستودع",
+                                value = selectedWarehouse,
+                                options = listOf("الكل", "المستودع الرئيسي", "مستودع فرعي 1", "مستودع فرعي 2"),
+                                onValueChange = { selectedWarehouse = it },
+                                modifier = Modifier.weight(0.7f)
+                            )
+                        }
+
+                        // Sort and Action Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Sort Dropdown
+                            EnhancedFilterDropdown(
+                                label = "ترتيب حسب",
+                                value = when(sortBy) {
+                                    "name" -> "الاسم"
+                                    "stock" -> "المخزون"
+                                    "category" -> "الفئة"
+                                    "warehouse" -> "المستودع"
+                                    else -> "الاسم"
+                                },
+                                options = listOf("الاسم", "المخزون", "الفئة", "المستودع"),
+                                onValueChange = {
+                                    sortBy = when(it) {
+                                        "الاسم" -> "name"
+                                        "المخزون" -> "stock"
+                                        "الفئة" -> "category"
+                                        "المستودع" -> "warehouse"
+                                        else -> "name"
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            // Enhanced Quick Filters with complete hover coverage
+                            val lowStockInteractionSource = remember { MutableInteractionSource() }
+                            val isLowStockHovered by lowStockInteractionSource.collectIsHoveredAsState()
+
+                            Box(
+                                modifier = Modifier
+                                    .height(56.dp) // Match dropdown height
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        color = when {
+                                            showLowStockOnly -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            isLowStockHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                                            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                        },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .border(
+                                        width = if (showLowStockOnly) 1.5.dp else if (isLowStockHovered) 1.dp else 0.5.dp,
+                                        color = when {
+                                            showLowStockOnly -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                            isLowStockHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                            else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                        },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable(
+                                        interactionSource = lowStockInteractionSource,
+                                        indication = null
+                                    ) { showLowStockOnly = !showLowStockOnly },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 12.dp)
+                                ) {
+                                    if (showLowStockOnly) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Text(
+                                        "مخزون منخفض",
+                                        color = when {
+                                            showLowStockOnly -> MaterialTheme.colorScheme.primary
+                                            isLowStockHovered -> MaterialTheme.colorScheme.onSurface
+                                            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                                        },
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+
+                            val expiringInteractionSource = remember { MutableInteractionSource() }
+                            val isExpiringHovered by expiringInteractionSource.collectIsHoveredAsState()
+
+                            Box(
+                                modifier = Modifier
+                                    .height(56.dp) // Match dropdown height
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        color = when {
+                                            showExpiringOnly -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            isExpiringHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                                            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                        },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .border(
+                                        width = if (showExpiringOnly) 1.5.dp else if (isExpiringHovered) 1.dp else 0.5.dp,
+                                        color = when {
+                                            showExpiringOnly -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                            isExpiringHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                            else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                        },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable(
+                                        interactionSource = expiringInteractionSource,
+                                        indication = null
+                                    ) { showExpiringOnly = !showExpiringOnly },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 12.dp)
+                                ) {
+                                    if (showExpiringOnly) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Text(
+                                        "قارب على الانتهاء",
+                                        color = when {
+                                            showExpiringOnly -> MaterialTheme.colorScheme.primary
+                                            isExpiringHovered -> MaterialTheme.colorScheme.onSurface
+                                            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                                        },
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+
+                            // Enhanced Export Button with complete hover coverage
+                            val exportInteractionSource = remember { MutableInteractionSource() }
+                            val isExportHovered by exportInteractionSource.collectIsHoveredAsState()
+
+                            Box(
+                                modifier = Modifier
+                                    .height(56.dp) // Match dropdown height
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        color = if (isExportHovered && !isExporting)
+                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                        else
+                                            MaterialTheme.colorScheme.surface,
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .border(
+                                        width = if (isExportHovered && !isExporting) 1.5.dp else 1.dp,
+                                        color = if (isExportHovered && !isExporting)
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                                        else
+                                            MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable(
+                                        interactionSource = exportInteractionSource,
+                                        indication = null,
+                                        enabled = !isExporting
+                                    ) { if (!isExporting) handleExportExcel() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                ) {
+                                    if (isExporting) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(18.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    } else {
+                                        Icon(
+                                            Icons.Default.FileDownload,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = if (isExportHovered)
+                                                MaterialTheme.colorScheme.primary
+                                            else
+                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                                        )
+                                    }
+                                    Text(
+                                        "تصدير",
+                                        color = if (isExporting)
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        else if (isExportHovered)
+                                            MaterialTheme.colorScheme.primary
+                                        else
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Content based on selected tab
+                        when (selectedTab) {
+                            InventoryTab.OVERVIEW -> EnhancedInventoryOverviewContent(
+                                salesDataManager = salesDataManager,
+                                searchQuery = searchQuery,
+                                selectedCategory = selectedCategory,
+                                selectedWarehouse = selectedWarehouse,
+                                showLowStockOnly = showLowStockOnly,
+                                showExpiringOnly = showExpiringOnly,
+                                sortBy = sortBy,
+                                onItemClick = { item ->
+                                    selectedItem = item
+                                    showItemDetails = true
+                                }
+                            )
+                            InventoryTab.PRODUCTS -> EnhancedInventoryProductsContent(
+                                searchQuery = searchQuery,
+                                selectedCategory = selectedCategory,
+                                selectedWarehouse = selectedWarehouse,
+                                showLowStockOnly = showLowStockOnly,
+                                sortBy = sortBy,
+                                onItemClick = { item ->
+                                    selectedItem = item
+                                    showItemDetails = true
+                                },
+                                onEditItem = { item ->
+                                    editingItem = item
+                                },
+                                onDeleteItem = { item ->
+                                    itemToDelete = item
+                                    showDeleteConfirmation = true
+                                }
+                            )
+                            InventoryTab.MOVEMENTS -> EnhancedStockMovementsContent(
+                                searchQuery = searchQuery,
+                                selectedWarehouse = selectedWarehouse
+                            )
+                            InventoryTab.WAREHOUSES -> EnhancedWarehousesContent(
+                                searchQuery = searchQuery,
+                                onWarehouseClick = { warehouse ->
+                                    selectedWarehouse = warehouse
+                                    selectedTab = InventoryTab.PRODUCTS
+                                }
+                            )
+                        }
                     }
-                ),
-            verticalArrangement = Arrangement.spacedBy(
-                when {
-                    isDesktop -> 24.dp
-                    isTablet -> 20.dp
-                    else -> 16.dp
                 }
-            )
-        ) {
-            // Header with responsive design
-            ModernInventoryHeader(
-                isTablet = isTablet,
-                isDesktop = isDesktop,
-                onExportExcel = handleExportExcel,
-                onExportPdf = handleExportPdf
-            )
+
+                // Right Panel - Details and Statistics (when item selected)
+                AnimatedVisibility(
+                    visible = showItemDetails && selectedItem != null,
+                    enter = slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(300)
+                    ) + fadeIn(),
+                    exit = slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(300)
+                    ) + fadeOut()
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        shape = RoundedCornerShape(24.dp),
+                        elevation = CardDefaults.cardElevation(
+                            defaultElevation = 0.dp
+                        ),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                        )
+                    ) {
+                        selectedItem?.let { item ->
+                            EnhancedInventoryItemDetailsPanel(
+                                item = item,
+                                onEdit = {
+                                    editingItem = item
+                                    showItemDetails = false
+                                },
+                                onDelete = {
+                                    itemToDelete = item
+                                    showDeleteConfirmation = true
+                                    showItemDetails = false
+                                },
+                                onClose = {
+                                    showItemDetails = false
+                                    selectedItem = null
+                                }
+                            )
+                        }
+                    }
+                }
+            }
 
             // Export status message
             exportMessage?.let { message ->
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(16.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = if (message.contains("نجاح"))
-                            AppTheme.colors.success.copy(alpha = 0.1f)
+                            AppTheme.colors.success.copy(alpha = 0.9f)
                         else
-                            AppTheme.colors.error.copy(alpha = 0.1f)
+                            AppTheme.colors.error.copy(alpha = 0.9f)
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    RTLRow(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Icon(
+                            if (message.contains("نجاح")) Icons.Default.CheckCircle else Icons.Default.Error,
+                            contentDescription = null,
+                            tint = Color.White
+                        )
+                        Text(
+                            text = message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.Medium
+                        )
                         IconButton(
                             onClick = { exportMessage = null }
                         ) {
                             Icon(
                                 Icons.Default.Close,
                                 contentDescription = "إغلاق",
-                                tint = if (message.contains("نجاح"))
-                                    AppTheme.colors.success
-                                else
-                                    AppTheme.colors.error
-                            )
-                        }
-
-                        Text(
-                            text = message,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (message.contains("نجاح"))
-                                AppTheme.colors.success
-                            else
-                                AppTheme.colors.error,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-
-            // Loading indicator during export
-            if (isExporting) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = AppTheme.colors.info.copy(alpha = 0.1f)
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    RTLRow(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = AppTheme.colors.info,
-                            strokeWidth = 2.dp
-                        )
-                        RTLSpacer(12.dp)
-                        Text(
-                            text = "جاري تصدير البيانات...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = AppTheme.colors.info,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-
-            // Modern Alerts Cards with responsive grid
-            ModernInventoryAlertsCards(
-                isTablet = isTablet,
-                isDesktop = isDesktop
-            )
-
-            // Modern Tabs with enhanced styling
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                TabRow(
-                    selectedTabIndex = selectedTab.ordinal,
-                    containerColor = Color.Transparent,
-                    contentColor = MaterialTheme.colorScheme.primary,
-                    indicator = { tabPositions ->
-                        TabRowDefaults.Indicator(
-                            modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab.ordinal]),
-                            color = MaterialTheme.colorScheme.primary,
-                            height = 3.dp
-                        )
-                    }
-                ) {
-                    InventoryTab.values().forEach { tab ->
-                        Tab(
-                            selected = selectedTab == tab,
-                            onClick = { selectedTab = tab },
-                            text = {
-                                Text(
-                                    text = tab.title,
-                                    fontWeight = if (selectedTab == tab) FontWeight.Bold else FontWeight.Medium,
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                            },
-                            modifier = Modifier.padding(vertical = 12.dp)
-                        )
-                    }
-                }
-            }
-
-            // Modern Responsive Filters
-            ModernFiltersSection(
-                searchQuery = searchQuery,
-                onSearchQueryChange = { searchQuery = it },
-                selectedCategory = selectedCategory,
-                onCategoryChange = { selectedCategory = it },
-                selectedWarehouse = selectedWarehouse,
-                onWarehouseChange = { selectedWarehouse = it },
-                isTablet = isTablet,
-                isDesktop = isDesktop
-            )
-
-            // Modern Quick Filters with enhanced styling
-            ModernQuickFilters(
-                showLowStockOnly = showLowStockOnly,
-                onLowStockToggle = { showLowStockOnly = !showLowStockOnly },
-                showExpiringOnly = showExpiringOnly,
-                onExpiringToggle = { showExpiringOnly = !showExpiringOnly },
-                isTablet = isTablet
-            )
-
-            // Content based on selected tab with responsive design
-            when (selectedTab) {
-                InventoryTab.OVERVIEW -> ModernInventoryOverviewContent(
-                    salesDataManager = salesDataManager,
-                    isTablet = isTablet,
-                    isDesktop = isDesktop
-                )
-                InventoryTab.PRODUCTS -> ModernInventoryProductsContent(
-                    searchQuery = searchQuery,
-                    selectedCategory = selectedCategory,
-                    selectedWarehouse = selectedWarehouse,
-                    showLowStockOnly = showLowStockOnly,
-                    isTablet = isTablet,
-                    isDesktop = isDesktop
-                )
-                InventoryTab.MOVEMENTS -> ModernStockMovementsContent(
-                    isTablet = isTablet,
-                    isDesktop = isDesktop
-                )
-                InventoryTab.WAREHOUSES -> ModernWarehousesContent(
-                    isTablet = isTablet,
-                    isDesktop = isDesktop
-                )
-            }
-        }
-    }
-}
-
-// Modern Header Component
-@Composable
-fun ModernInventoryHeader(
-    isTablet: Boolean,
-    isDesktop: Boolean,
-    onExportExcel: () -> Unit = {},
-    onExportPdf: () -> Unit = {}
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        RTLRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    horizontal = when {
-                        isDesktop -> 32.dp
-                        isTablet -> 24.dp
-                        else -> 20.dp
-                    },
-                    vertical = when {
-                        isDesktop -> 24.dp
-                        isTablet -> 20.dp
-                        else -> 16.dp
-                    }
-                ),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Left side - Action buttons
-            RTLRow(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Add Product Button
-                Button(
-                    onClick = { /* إضافة منتج جديد */ },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
-                    modifier = Modifier.height(48.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    RTLSpacer(8.dp)
-                    Text(
-                        "إضافة منتج",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-
-                // Export Buttons
-                if (isTablet || isDesktop) {
-                    // Excel Export Button
-                    OutlinedButton(
-                        onClick = onExportExcel,
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = AppTheme.colors.success
-                        ),
-                        border = BorderStroke(1.dp, AppTheme.colors.success),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.height(48.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.TableChart,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        RTLSpacer(6.dp)
-                        Text(
-                            "تصدير Excel",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-
-                    // PDF Export Button
-                    OutlinedButton(
-                        onClick = onExportPdf,
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = AppTheme.colors.error
-                        ),
-                        border = BorderStroke(1.dp, AppTheme.colors.error),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.height(48.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.PictureAsPdf,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        RTLSpacer(6.dp)
-                        Text(
-                            "تصدير PDF",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                } else {
-                    // Mobile - Export Menu Button
-                    var showExportMenu by remember { mutableStateOf(false) }
-
-                    Box {
-                        OutlinedButton(
-                            onClick = { showExportMenu = true },
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.primary
-                            ),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.height(48.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.FileDownload,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            RTLSpacer(6.dp)
-                            Text(
-                                "تصدير",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = showExportMenu,
-                            onDismissRequest = { showExportMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = {
-                                    RTLRow(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Text("تصدير Excel")
-                                        Icon(
-                                            Icons.Default.TableChart,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp),
-                                            tint = AppTheme.colors.success
-                                        )
-                                    }
-                                },
-                                onClick = {
-                                    showExportMenu = false
-                                    onExportExcel()
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = {
-                                    RTLRow(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Text("تصدير PDF")
-                                        Icon(
-                                            Icons.Default.PictureAsPdf,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp),
-                                            tint = AppTheme.colors.error
-                                        )
-                                    }
-                                },
-                                onClick = {
-                                    showExportMenu = false
-                                    onExportPdf()
-                                }
+                                tint = Color.White
                             )
                         }
                     }
                 }
             }
 
-            // Right side - Title
-            Column(
-                horizontalAlignment = Alignment.End
-            ) {
-                Text(
-                    text = "إدارة المخزون",
-                    style = when {
-                        isDesktop -> MaterialTheme.typography.headlineLarge
-                        isTablet -> MaterialTheme.typography.headlineMedium
-                        else -> MaterialTheme.typography.headlineSmall
-                    },
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "نظام إدارة شامل للمخزون والمنتجات",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-// Modern Alerts Cards with responsive grid
-@Composable
-fun ModernInventoryAlertsCards(
-    isTablet: Boolean,
-    isDesktop: Boolean
-) {
-    val columns = when {
-        isDesktop -> 4
-        isTablet -> 2
-        else -> 1
-    }
-
-    // Access theme colors in composable context first
-    val warningColor = AppTheme.colors.warning
-    val errorColor = AppTheme.colors.error
-    val infoColor = AppTheme.colors.info
-
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        modifier = Modifier.height(
-            when {
-                isDesktop -> 140.dp
-                isTablet -> 280.dp
-                else -> 560.dp
-            }
-        )
-    ) {
-        items(4) { index ->
-            val alertData = when (index) {
-                0 -> AlertData("مخزون منخفض", 12, Icons.Default.Warning, warningColor)
-                1 -> AlertData("نفاد المخزون", 3, Icons.Default.Error, errorColor)
-                2 -> AlertData("قارب على الانتهاء", 8, Icons.Default.Schedule, infoColor)
-                else -> AlertData("منتهي الصلاحية", 2, Icons.Default.Block, errorColor)
-            }
-
-            ModernAlertCard(
-                title = alertData.title,
-                count = alertData.count,
-                icon = alertData.icon,
-                color = alertData.color,
-                isTablet = isTablet,
-                isDesktop = isDesktop
+            // Snackbar
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
-    }
-}
 
-data class AlertData(
-    val title: String,
-    val count: Int,
-    val icon: androidx.compose.ui.graphics.vector.ImageVector,
-    val color: Color
-)
-
-data class SummaryData(
-    val title: String,
-    val value: String,
-    val icon: androidx.compose.ui.graphics.vector.ImageVector,
-    val color: Color,
-    val trend: String? = null,
-    val trendPositive: Boolean = true
-)
-
-// Modern Alert Card with enhanced design
-@Composable
-fun ModernAlertCard(
-    title: String,
-    count: Int,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    color: Color,
-    isTablet: Boolean,
-    isDesktop: Boolean,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(
-                when {
-                    isDesktop -> 140.dp
-                    isTablet -> 130.dp
-                    else -> 120.dp
-                }
-            ),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(20.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(
-                    when {
-                        isDesktop -> 24.dp
-                        isTablet -> 20.dp
-                        else -> 16.dp
+        // Dialogs
+        if (showAddItemDialog) {
+            InventoryItemDialog(
+                item = null,
+                onDismiss = { showAddItemDialog = false },
+                onSave = { item ->
+                    // Handle adding new inventory item
+                    showAddItemDialog = false
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar("تم إضافة العنصر بنجاح")
                     }
-                ),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceEvenly
-        ) {
-            // Icon with modern background
-            Box(
-                modifier = Modifier
-                    .size(
-                        when {
-                            isDesktop -> 56.dp
-                            isTablet -> 48.dp
-                            else -> 40.dp
-                        }
-                    )
-                    .background(
-                        color.copy(alpha = 0.15f),
-                        RoundedCornerShape(
-                            when {
-                                isDesktop -> 28.dp
-                                isTablet -> 24.dp
-                                else -> 20.dp
+                }
+            )
+        }
+
+        if (editingItem != null) {
+            InventoryItemDialog(
+                item = editingItem,
+                onDismiss = { editingItem = null },
+                onSave = { item ->
+                    // Handle updating inventory item
+                    editingItem = null
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar("تم تحديث العنصر بنجاح")
+                    }
+                }
+            )
+        }
+
+        if (showDeleteConfirmation && itemToDelete != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    showDeleteConfirmation = false
+                    itemToDelete = null
+                },
+                title = { Text("تأكيد الحذف") },
+                text = { Text("هل أنت متأكد من حذف هذا العنصر من المخزون؟") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            // Handle deleting inventory item
+                            showDeleteConfirmation = false
+                            itemToDelete = null
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar("تم حذف العنصر بنجاح")
                             }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
                         )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = color,
-                    modifier = Modifier.size(
-                        when {
-                            isDesktop -> 28.dp
-                            isTablet -> 24.dp
-                            else -> 20.dp
+                    ) {
+                        Text("حذف")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(
+                        onClick = {
+                            showDeleteConfirmation = false
+                            itemToDelete = null
                         }
-                    )
-                )
-            }
-
-            // Title with responsive typography
-            Text(
-                text = title,
-                style = when {
-                    isDesktop -> MaterialTheme.typography.titleMedium
-                    isTablet -> MaterialTheme.typography.titleSmall
-                    else -> MaterialTheme.typography.bodyLarge
-                },
-                fontWeight = FontWeight.SemiBold,
-                color = AppTheme.colors.onSurface,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            // Count with enhanced styling
-            Text(
-                text = count.toString(),
-                style = when {
-                    isDesktop -> MaterialTheme.typography.headlineMedium
-                    isTablet -> MaterialTheme.typography.headlineSmall
-                    else -> MaterialTheme.typography.titleLarge
-                },
-                fontWeight = FontWeight.Bold,
-                color = color
+                    ) {
+                        Text("إلغاء")
+                    }
+                }
             )
         }
     }
 }
 
-// Modern Filters Section
+// Enhanced Tab Row Component
 @Composable
-fun ModernFiltersSection(
-    searchQuery: String,
-    onSearchQueryChange: (String) -> Unit,
-    selectedCategory: String,
-    onCategoryChange: (String) -> Unit,
-    selectedWarehouse: String,
-    onWarehouseChange: (String) -> Unit,
-    isTablet: Boolean,
-    isDesktop: Boolean
+private fun EnhancedTabRow(
+    selectedTab: InventoryTab,
+    onTabSelected: (InventoryTab) -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         ),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(16.dp)
     ) {
-        if (isTablet || isDesktop) {
-            // Horizontal layout for larger screens
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                SearchBar(
-                    query = searchQuery,
-                    onQueryChange = onSearchQueryChange,
-                    placeholder = "البحث في المنتجات...",
-                    modifier = Modifier.weight(2f)
-                )
-
-                ModernFilterDropdown(
-                    label = "الفئة",
-                    value = selectedCategory,
-                    options = listOf("الكل", "إلكترونيات", "ملابس", "مواد غذائية"),
-                    onValueChange = onCategoryChange,
-                    modifier = Modifier.weight(1f)
-                )
-
-                ModernFilterDropdown(
-                    label = "المستودع",
-                    value = selectedWarehouse,
-                    options = listOf("الكل", "المستودع الرئيسي", "المستودع الفرعي"),
-                    onValueChange = onWarehouseChange,
-                    modifier = Modifier.weight(1f)
+        TabRow(
+            selectedTabIndex = selectedTab.ordinal,
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.primary,
+            indicator = { tabPositions ->
+                TabRowDefaults.Indicator(
+                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab.ordinal]),
+                    color = MaterialTheme.colorScheme.primary,
+                    height = 3.dp
                 )
             }
-        } else {
-            // Vertical layout for mobile
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                SearchBar(
-                    query = searchQuery,
-                    onQueryChange = onSearchQueryChange,
-                    placeholder = "البحث في المنتجات...",
-                    modifier = Modifier.fillMaxWidth()
+        ) {
+            InventoryTab.values().forEach { tab ->
+                Tab(
+                    selected = selectedTab == tab,
+                    onClick = { onTabSelected(tab) },
+                    text = {
+                        Text(
+                            text = tab.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = if (selectedTab == tab) FontWeight.Bold else FontWeight.Normal
+                        )
+                    },
+                    icon = {
+                        Icon(
+                            when (tab) {
+                                InventoryTab.OVERVIEW -> Icons.Default.Dashboard
+                                InventoryTab.PRODUCTS -> Icons.Default.Inventory
+                                InventoryTab.MOVEMENTS -> Icons.Default.SwapHoriz
+                                InventoryTab.WAREHOUSES -> Icons.Default.Warehouse
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    ModernFilterDropdown(
-                        label = "الفئة",
-                        value = selectedCategory,
-                        options = listOf("الكل", "إلكترونيات", "ملابس", "مواد غذائية"),
-                        onValueChange = onCategoryChange,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    ModernFilterDropdown(
-                        label = "المستودع",
-                        value = selectedWarehouse,
-                        options = listOf("الكل", "المستودع الرئيسي", "المستودع الفرعي"),
-                        onValueChange = onWarehouseChange,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
             }
         }
     }
 }
 
-// Modern Quick Filters
-@Composable
-fun ModernQuickFilters(
-    showLowStockOnly: Boolean,
-    onLowStockToggle: () -> Unit,
-    showExpiringOnly: Boolean,
-    onExpiringToggle: () -> Unit,
-    isTablet: Boolean
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(
-            if (isTablet) 16.dp else 12.dp
-        )
-    ) {
-        ModernFilterChip(
-            selected = showLowStockOnly,
-            onClick = onLowStockToggle,
-            label = "مخزون منخفض",
-            icon = Icons.Default.Warning,
-            selectedColor = AppTheme.colors.warning,
-            isTablet = isTablet
-        )
-
-        ModernFilterChip(
-            selected = showExpiringOnly,
-            onClick = onExpiringToggle,
-            label = "قارب على الانتهاء",
-            icon = Icons.Default.Schedule,
-            selectedColor = AppTheme.colors.info,
-            isTablet = isTablet
-        )
-    }
-}
-
-// Modern Filter Chip
-@Composable
-fun ModernFilterChip(
-    selected: Boolean,
-    onClick: () -> Unit,
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    selectedColor: Color,
-    isTablet: Boolean
-) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        enabled = true,
-        label = {
-            Text(
-                text = label,
-                style = if (isTablet) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.bodyMedium,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
-            )
-        },
-        leadingIcon = {
-            Icon(
-                icon,
-                contentDescription = null,
-                modifier = Modifier.size(if (isTablet) 20.dp else 16.dp),
-                tint = if (selected) selectedColor else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        },
-        colors = FilterChipDefaults.filterChipColors(
-            containerColor = if (selected) selectedColor.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
-            labelColor = if (selected) selectedColor else MaterialTheme.colorScheme.onSurfaceVariant,
-            selectedContainerColor = selectedColor.copy(alpha = 0.15f),
-            selectedLabelColor = selectedColor
-        ),
-        border = FilterChipDefaults.filterChipBorder(
-            enabled = true,
-            selected = selected,
-            borderColor = if (selected) selectedColor else MaterialTheme.colorScheme.outline,
-            selectedBorderColor = selectedColor
-        ),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.height(if (isTablet) 48.dp else 40.dp)
-    )
-}
-
-// Modern Filter Dropdown Component
+// Enhanced Filter Dropdown Component
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ModernFilterDropdown(
+private fun EnhancedFilterDropdown(
     label: String,
     value: String,
     options: List<String>,
@@ -896,1787 +762,1082 @@ fun ModernFilterDropdown(
             value = value,
             onValueChange = { },
             readOnly = true,
-            label = {
-                Text(
-                    label,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
-            },
+            label = { Text(label) },
             trailingIcon = {
                 ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
             },
+            modifier = Modifier
+                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                focusedLabelColor = MaterialTheme.colorScheme.primary,
-                unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
-            ),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier
-                .menuAnchor()
-                .fillMaxWidth()
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+            )
         )
 
         ExposedDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.background(
-                MaterialTheme.colorScheme.surface,
-                RoundedCornerShape(12.dp)
-            )
+            onDismissRequest = { expanded = false }
         ) {
             options.forEach { option ->
                 DropdownMenuItem(
-                    text = {
-                        Text(
-                            option,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (option == value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                        )
-                    },
+                    text = { Text(option) },
                     onClick = {
                         onValueChange(option)
                         expanded = false
-                    },
-                    colors = MenuDefaults.itemColors(
-                        textColor = MaterialTheme.colorScheme.onSurface
-                    )
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun ModernInventoryOverviewContent(
-    salesDataManager: SalesDataManager,
-    isTablet: Boolean,
-    isDesktop: Boolean
-) {
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(
-            when {
-                isDesktop -> 24.dp
-                isTablet -> 20.dp
-                else -> 16.dp
-            }
-        )
-    ) {
-        item {
-            // Modern Inventory Summary Cards with responsive grid
-            val summaryColumns = when {
-                isDesktop -> 3
-                isTablet -> 2
-                else -> 1
-            }
-
-            // Access theme colors in composable context first
-            val primaryColor = AppTheme.colors.primary
-            val infoColor = AppTheme.colors.info
-            val successColor = AppTheme.colors.success
-
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(summaryColumns),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.height(
-                    when {
-                        isDesktop -> 180.dp
-                        isTablet -> 360.dp
-                        else -> 540.dp
                     }
                 )
-            ) {
-                // Create the summary data list using the pre-accessed colors
-                val summaryDataList = listOf(
-                    SummaryData(
-                        title = "إجمالي قيمة المخزون",
-                        value = UiUtils.formatCurrency(125000.0),
-                        icon = Icons.Default.AccountBalance,
-                        color = primaryColor,
-                        trend = "+12.5%",
-                        trendPositive = true
-                    ),
-                    SummaryData(
-                        title = "عدد المنتجات",
-                        value = "1,234",
-                        icon = Icons.Default.Inventory,
-                        color = infoColor,
-                        trend = "+45",
-                        trendPositive = true
-                    ),
-                    SummaryData(
-                        title = "معدل دوران المخزون",
-                        value = "4.2x",
-                        icon = Icons.Default.TrendingUp,
-                        color = successColor,
-                        trend = "+0.3x",
-                        trendPositive = true
-                    )
-                )
-
-                items(summaryDataList) { summaryData ->
-                    ModernSummaryCard(
-                        title = summaryData.title,
-                        value = summaryData.value,
-                        icon = summaryData.icon,
-                        color = summaryData.color,
-                        trend = summaryData.trend,
-                        trendPositive = summaryData.trendPositive,
-                        isTablet = isTablet,
-                        isDesktop = isDesktop
-                    )
-                }
             }
-        }
-
-        item {
-            // Modern Low Stock Products Section
-            ModernLowStockSection(
-                isTablet = isTablet,
-                isDesktop = isDesktop
-            )
-        }
-
-        item {
-            // Modern Expiring Products Section
-            ModernExpiringProductsSection(
-                isTablet = isTablet,
-                isDesktop = isDesktop
-            )
         }
     }
 }
-
-// Modern Low Stock Section
+// Enhanced Inventory Overview Content
 @Composable
-fun ModernLowStockSection(
-    isTablet: Boolean,
-    isDesktop: Boolean
+private fun EnhancedInventoryOverviewContent(
+    salesDataManager: SalesDataManager,
+    searchQuery: String,
+    selectedCategory: String,
+    selectedWarehouse: String,
+    showLowStockOnly: Boolean,
+    showExpiringOnly: Boolean,
+    sortBy: String,
+    onItemClick: (InventoryItem) -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = AppTheme.colors.surface
-        ),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(
-                when {
-                    isDesktop -> 24.dp
-                    isTablet -> 20.dp
-                    else -> 16.dp
-                }
-            )
-        ) {
-            // Section Header
+        // Statistics Cards
+        item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                TextButton(
-                    onClick = { /* عرض الكل */ },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = AppTheme.colors.primary
-                    )
-                ) {
-                    Text(
-                        "عرض الكل",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        Icons.Default.ArrowBack,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
+                EnhancedStatCard(
+                    title = "إجمالي المنتجات",
+                    value = "1,234",
+                    subtitle = "منتج متاح",
+                    icon = Icons.Default.Inventory,
+                    iconColor = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f)
+                )
 
-                Text(
-                    text = "المنتجات ذات المخزون المنخفض",
-                    style = when {
-                        isDesktop -> MaterialTheme.typography.titleLarge
-                        isTablet -> MaterialTheme.typography.titleMedium
-                        else -> MaterialTheme.typography.titleMedium
-                    },
-                    fontWeight = FontWeight.Bold,
-                    color = AppTheme.colors.onSurface
+                EnhancedStatCard(
+                    title = "مخزون منخفض",
+                    value = "23",
+                    subtitle = "منتج يحتاج تجديد",
+                    icon = Icons.Default.Warning,
+                    iconColor = AppTheme.colors.warning,
+                    modifier = Modifier.weight(1f)
                 )
             }
+        }
 
-            Spacer(modifier = Modifier.height(
-                when {
-                    isDesktop -> 20.dp
-                    isTablet -> 16.dp
-                    else -> 12.dp
-                }
-            ))
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                EnhancedStatCard(
+                    title = "قارب على الانتهاء",
+                    value = "8",
+                    subtitle = "منتج ينتهي قريباً",
+                    icon = Icons.Default.Schedule,
+                    iconColor = AppTheme.colors.error,
+                    modifier = Modifier.weight(1f)
+                )
 
-            // Low Stock Items
-            repeat(5) { index ->
-                ModernLowStockProductItem(
-                    productName = "منتج ${index + 1}",
-                    currentStock = (index + 1) * 2,
+                EnhancedStatCard(
+                    title = "المستودعات",
+                    value = "4",
+                    subtitle = "مستودع نشط",
+                    icon = Icons.Default.Warehouse,
+                    iconColor = AppTheme.colors.info,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        // Recent Inventory Items
+        item {
+            Text(
+                text = "العناصر الحديثة",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+
+        // Sample inventory items
+        items(10) { index ->
+            EnhancedInventoryItemCard(
+                item = InventoryItem(
+                    productId = index,
+                    warehouseId = 1,
+                    currentStock = if (index % 5 == 0) 5 else 50 + index,
+                    reservedStock = index % 3,
                     minimumStock = 10,
-                    category = "إلكترونيات",
-                    isTablet = isTablet,
-                    isDesktop = isDesktop
-                )
-                if (index < 4) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(
-                            vertical = when {
-                                isDesktop -> 12.dp
-                                isTablet -> 10.dp
-                                else -> 8.dp
-                            }
-                        ),
-                        color = AppTheme.colors.cardBorder
-                    )
-                }
-            }
-        }
-    }
-}
-
-// Modern Expiring Products Section
-@Composable
-fun ModernExpiringProductsSection(
-    isTablet: Boolean,
-    isDesktop: Boolean
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = AppTheme.colors.surface
-        ),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(
-                when {
-                    isDesktop -> 24.dp
-                    isTablet -> 20.dp
-                    else -> 16.dp
-                }
+                    maximumStock = 100,
+                    reorderPoint = 15,
+                    lastUpdated = LocalDateTime(2024, 1, 1, 10, 0),
+                    expiryDate = if (index % 7 == 0) LocalDate(2024, 12, 15) else null
+                ),
+                productName = "منتج $index",
+                categoryName = if (index % 3 == 0) "إلكترونيات" else "ملابس",
+                warehouseName = "المستودع الرئيسي",
+                onClick = onItemClick
             )
-        ) {
-            // Section Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TextButton(
-                    onClick = { /* عرض الكل */ },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = AppTheme.colors.primary
-                    )
-                ) {
-                    Text(
-                        "عرض الكل",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        Icons.Default.ArrowBack,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
+        }
+    }
+}
+// Enhanced Inventory Products Content
+@Composable
+private fun EnhancedInventoryProductsContent(
+    searchQuery: String,
+    selectedCategory: String,
+    selectedWarehouse: String,
+    showLowStockOnly: Boolean,
+    sortBy: String,
+    onItemClick: (InventoryItem) -> Unit,
+    onEditItem: (InventoryItem) -> Unit,
+    onDeleteItem: (InventoryItem) -> Unit
+) {
+    // Filter and sort inventory items
+    val filteredItems = remember(searchQuery, selectedCategory, selectedWarehouse, showLowStockOnly, sortBy) {
+        // Sample data - in real app, this would come from ViewModel
+        val sampleItems = (0..20).map { index ->
+            InventoryItem(
+                productId = index,
+                warehouseId = 1,
+                currentStock = if (index % 5 == 0) 5 else 50 + index,
+                reservedStock = index % 3,
+                minimumStock = 10,
+                maximumStock = 100,
+                reorderPoint = 15,
+                lastUpdated = LocalDateTime(2024, 1, 1, 10, 0),
+                expiryDate = if (index % 7 == 0) LocalDate(2024, 12, 15) else null
+            )
+        }
 
-                Text(
-                    text = "المنتجات القاربة على الانتهاء",
-                    style = when {
-                        isDesktop -> MaterialTheme.typography.titleLarge
-                        isTablet -> MaterialTheme.typography.titleMedium
-                        else -> MaterialTheme.typography.titleMedium
+        var filtered = sampleItems
+
+        // Apply filters
+        if (showLowStockOnly) {
+            filtered = filtered.filter { it.currentStock <= it.minimumStock }
+        }
+
+        // Apply sorting
+        when (sortBy) {
+            "stock" -> filtered.sortedBy { it.currentStock }
+            "warehouse" -> filtered.sortedBy { it.warehouseId }
+            else -> filtered.sortedBy { it.productId }
+        }
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(filteredItems) { item ->
+            EnhancedInventoryItemCard(
+                item = item,
+                productName = "منتج ${item.productId}",
+                categoryName = if (item.productId % 3 == 0) "إلكترونيات" else "ملابس",
+                warehouseName = "المستودع الرئيسي",
+                onClick = onItemClick,
+                onEdit = onEditItem,
+                onDelete = onDeleteItem,
+                showActions = true
+            )
+        }
+    }
+}
+// Enhanced Stock Movements Content
+@Composable
+private fun EnhancedStockMovementsContent(
+    searchQuery: String,
+    selectedWarehouse: String
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Sample stock movements
+        items(15) { index ->
+            EnhancedStockMovementCard(
+                movement = StockMovement(
+                    id = index,
+                    productId = index,
+                    warehouseId = 1,
+                    movementType = when (index % 4) {
+                        0 -> MovementType.PURCHASE
+                        1 -> MovementType.SALE
+                        2 -> MovementType.RETURN
+                        else -> MovementType.ADJUSTMENT
                     },
-                    fontWeight = FontWeight.Bold,
-                    color = AppTheme.colors.onSurface
-                )
-            }
-
-            Spacer(modifier = Modifier.height(
-                when {
-                    isDesktop -> 20.dp
-                    isTablet -> 16.dp
-                    else -> 12.dp
-                }
-            ))
-
-            // Expiring Items
-            repeat(3) { index ->
-                ModernExpiringProductItem(
-                    productName = "منتج صالح ${index + 1}",
-                    expiryDate = LocalDate(2024, 12, 15 + index),
-                    daysRemaining = 15 - index * 5,
-                    quantity = (index + 1) * 50,
-                    isTablet = isTablet,
-                    isDesktop = isDesktop
-                )
-                if (index < 2) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(
-                            vertical = when {
-                                isDesktop -> 12.dp
-                                isTablet -> 10.dp
-                                else -> 8.dp
-                            }
-                        ),
-                        color = AppTheme.colors.cardBorder
-                    )
-                }
-            }
+                    quantity = (index + 1) * 5,
+                    date = LocalDateTime(2024, 1, index + 1, 10, 0),
+                    reference = "REF-${1000 + index}",
+                    notes = "ملاحظة حول الحركة $index"
+                ),
+                productName = "منتج $index",
+                warehouseName = "المستودع الرئيسي"
+            )
         }
     }
 }
 
+// Enhanced Warehouses Content
 @Composable
-fun SummaryCard(
+private fun EnhancedWarehousesContent(
+    searchQuery: String,
+    onWarehouseClick: (String) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Sample warehouses
+        items(4) { index ->
+            EnhancedWarehouseCard(
+                warehouse = Warehouse(
+                    id = index,
+                    name = "المستودع ${if (index == 0) "الرئيسي" else "الفرعي $index"}",
+                    location = "الموقع $index",
+                    manager = "مدير المستودع $index"
+                ),
+                totalProducts = 100 + index * 50,
+                lowStockItems = index * 2,
+                onClick = { onWarehouseClick("المستودع ${if (index == 0) "الرئيسي" else "الفرعي $index"}") }
+            )
+        }
+    }
+}
+
+// Enhanced Stat Card Component
+@Composable
+private fun EnhancedStatCard(
     title: String,
     value: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    color: Color,
+    subtitle: String,
+    icon: ImageVector,
+    iconColor: Color,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(
-            containerColor = color.copy(alpha = 0.1f)
+            containerColor = MaterialTheme.colorScheme.surface
         ),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 1.dp
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+        )
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = color,
-                modifier = Modifier.size(40.dp)
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = value,
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = color
-            )
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
-// Modern Low Stock Product Item
-@Composable
-fun ModernLowStockProductItem(
-    productName: String,
-    currentStock: Int,
-    minimumStock: Int,
-    category: String,
-    isTablet: Boolean,
-    isDesktop: Boolean
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { /* Handle click */ },
-        colors = CardDefaults.cardColors(
-            containerColor = AppTheme.colors.warning.copy(alpha = 0.05f)
-        ),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, AppTheme.colors.warning.copy(alpha = 0.2f))
-    ) {
-        RTLRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    when {
-                        isDesktop -> 20.dp
-                        isTablet -> 16.dp
-                        else -> 12.dp
-                    }
-                ),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Action Button
-            Button(
-                onClick = { /* إعادة طلب */ },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = AppTheme.colors.primary
-                ),
-                shape = RoundedCornerShape(12.dp),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
-                modifier = Modifier.height(
-                    when {
-                        isDesktop -> 44.dp
-                        isTablet -> 40.dp
-                        else -> 36.dp
-                    }
-                )
-            ) {
-                Text(
-                    "إعادة طلب",
-                    style = when {
-                        isDesktop -> MaterialTheme.typography.labelLarge
-                        isTablet -> MaterialTheme.typography.labelMedium
-                        else -> MaterialTheme.typography.labelSmall
-                    },
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
-            // Stock Info
-            Column(
-                horizontalAlignment = Alignment.Start
-            ) {
-                Text(
-                    text = "$currentStock / $minimumStock",
-                    style = when {
-                        isDesktop -> MaterialTheme.typography.titleMedium
-                        isTablet -> MaterialTheme.typography.titleSmall
-                        else -> MaterialTheme.typography.bodyLarge
-                    },
-                    color = AppTheme.colors.warning,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = category,
-                    style = when {
-                        isDesktop -> MaterialTheme.typography.bodyMedium
-                        isTablet -> MaterialTheme.typography.bodySmall
-                        else -> MaterialTheme.typography.bodySmall
-                    },
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // Product Info
-            Column(
-                horizontalAlignment = Alignment.End
-            ) {
-                Text(
-                    text = productName,
-                    style = when {
-                        isDesktop -> MaterialTheme.typography.titleMedium
-                        isTablet -> MaterialTheme.typography.titleSmall
-                        else -> MaterialTheme.typography.bodyLarge
-                    },
-                    fontWeight = FontWeight.SemiBold,
-                    color = AppTheme.colors.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "المخزون المتبقي",
-                    style = when {
-                        isDesktop -> MaterialTheme.typography.bodyMedium
-                        isTablet -> MaterialTheme.typography.bodySmall
-                        else -> MaterialTheme.typography.bodySmall
-                    },
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-// Modern Expiring Product Item
-@Composable
-fun ModernExpiringProductItem(
-    productName: String,
-    expiryDate: LocalDate,
-    daysRemaining: Int,
-    quantity: Int,
-    isTablet: Boolean,
-    isDesktop: Boolean
-) {
-    val urgencyColor = when {
-        daysRemaining <= 5 -> AppTheme.colors.error
-        daysRemaining <= 15 -> AppTheme.colors.warning
-        else -> AppTheme.colors.info
-    }
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Days remaining badge
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = urgencyColor.copy(alpha = 0.15f)
-            ),
-            shape = RoundedCornerShape(12.dp),
-            border = BorderStroke(1.dp, urgencyColor.copy(alpha = 0.3f))
-        ) {
-            Text(
-                text = "${daysRemaining} يوم",
-                style = when {
-                    isDesktop -> MaterialTheme.typography.labelLarge
-                    isTablet -> MaterialTheme.typography.labelMedium
-                    else -> MaterialTheme.typography.labelSmall
-                },
-                color = urgencyColor,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(
-                    horizontal = when {
-                        isDesktop -> 12.dp
-                        isTablet -> 10.dp
-                        else -> 8.dp
-                    },
-                    vertical = when {
-                        isDesktop -> 8.dp
-                        isTablet -> 6.dp
-                        else -> 4.dp
-                    }
-                )
-            )
-        }
-
-        // Quantity and date info
-        Column(
-            horizontalAlignment = Alignment.Start
-        ) {
-            Text(
-                text = "$quantity قطعة",
-                style = when {
-                    isDesktop -> MaterialTheme.typography.titleSmall
-                    isTablet -> MaterialTheme.typography.bodyLarge
-                    else -> MaterialTheme.typography.bodyMedium
-                },
-                fontWeight = FontWeight.SemiBold,
-                color = AppTheme.colors.onSurface
-            )
-            Text(
-                text = expiryDate.toString(),
-                style = when {
-                    isDesktop -> MaterialTheme.typography.bodyMedium
-                    isTablet -> MaterialTheme.typography.bodySmall
-                    else -> MaterialTheme.typography.bodySmall
-                },
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        // Product name
-        Text(
-            text = productName,
-            style = when {
-                isDesktop -> MaterialTheme.typography.titleMedium
-                isTablet -> MaterialTheme.typography.titleSmall
-                else -> MaterialTheme.typography.bodyLarge
-            },
-            fontWeight = FontWeight.SemiBold,
-            color = AppTheme.colors.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
-fun LowStockProductItem(
-    productName: String,
-    currentStock: Int,
-    minimumStock: Int,
-    category: String
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { /* Handle click */ }
-            .padding(vertical = 4.dp),
-        colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        RTLRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            RTLRow(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Button(
-                    onClick = { /* إعادة طلب */ },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Text("إعادة طلب", style = MaterialTheme.typography.bodySmall)
-                }
-
-                Column(
-                    horizontalAlignment = Alignment.Start
-                ) {
-                    Text(
-                        text = "$currentStock / $minimumStock",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = AppTheme.colors.error,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = category,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            Column(
-                horizontalAlignment = Alignment.End
-            ) {
-                Text(
-                    text = productName,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = iconColor,
+                    modifier = Modifier.size(24.dp)
                 )
-                Text(
-                    text = "المخزون المتبقي",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
 
-@Composable
-fun ExpiringProductItem(
-    productName: String,
-    expiryDate: LocalDate,
-    daysRemaining: Int,
-    quantity: Int
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            val urgencyColor = when {
-                daysRemaining <= 5 -> AppTheme.colors.error
-                daysRemaining <= 15 -> AppTheme.colors.warning
-                else -> AppTheme.colors.info
-            }
-
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = urgencyColor.copy(alpha = 0.1f)
-                ),
-                shape = RoundedCornerShape(8.dp)
-            ) {
                 Text(
-                    text = "${daysRemaining} يوم",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = urgencyColor,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    text = value,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
             Column {
                 Text(
-                    text = "$quantity قطعة",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = expiryDate.toString(),
-                    style = MaterialTheme.typography.bodySmall,
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
-
-        Text(
-            text = productName,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium
-        )
     }
 }
-
-// Modern Products Content with responsive grid
+// Enhanced Inventory Item Card Component
 @Composable
-fun ModernInventoryProductsContent(
-    searchQuery: String,
-    selectedCategory: String,
-    selectedWarehouse: String,
-    showLowStockOnly: Boolean,
-    isTablet: Boolean,
-    isDesktop: Boolean
+private fun EnhancedInventoryItemCard(
+    item: InventoryItem,
+    productName: String,
+    categoryName: String,
+    warehouseName: String,
+    onClick: (InventoryItem) -> Unit,
+    onEdit: ((InventoryItem) -> Unit)? = null,
+    onDelete: ((InventoryItem) -> Unit)? = null,
+    showActions: Boolean = false,
+    modifier: Modifier = Modifier
 ) {
-    val columns = when {
-        isDesktop -> 2
-        isTablet -> 1
-        else -> 1
-    }
+    // Enhanced hover effect with complete coverage
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
 
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Sample products data
-        items(20) { index ->
-            ModernProductInventoryCard(
-                product = Product(
-                    id = index,
-                    name = "منتج $index",
-                    barcode = "123456789$index",
-                    price = 100.0 + index * 10,
-                    cost = 80.0 + index * 8,
-                    stock = if (index % 5 == 0) 5 else 50 + index,
-                    category = if (index % 3 == 0) "إلكترونيات" else "ملابس"
-                ),
-                inventoryItem = InventoryItem(
-                    productId = index,
-                    warehouseId = 1,
-                    currentStock = if (index % 5 == 0) 5 else 50 + index,
-                    reservedStock = index % 3,
-                    minimumStock = 10,
-                    maximumStock = 100,
-                    reorderPoint = 15,
-                    lastUpdated = LocalDateTime(2024, 1, 1, 10, 0),
-                    expiryDate = if (index % 7 == 0) LocalDate(2024, 12, 15) else null
-                ),
-                isTablet = isTablet,
-                isDesktop = isDesktop
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                color = if (isHovered)
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+                else
+                    MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(20.dp)
             )
-        }
-    }
-}
-
-// Modern Stock Movements Content
-@Composable
-fun ModernStockMovementsContent(
-    isTablet: Boolean,
-    isDesktop: Boolean
-) {
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(
-            when {
-                isDesktop -> 16.dp
-                isTablet -> 12.dp
-                else -> 8.dp
-            }
-        )
-    ) {
-        items(15) { index ->
-            ModernStockMovementCard(
-                movement = StockMovement(
-                    id = index,
-                    productId = index,
-                    warehouseId = 1,
-                    movementType = MovementType.values()[index % MovementType.values().size],
-                    quantity = (index + 1) * 5,
-                    date = LocalDateTime(2024, 1, 1 + index, 10, 0),
-                    reference = "REF-${1000 + index}",
-                    notes = "ملاحظة حول الحركة رقم $index"
-                ),
-                productName = "منتج $index",
-                isTablet = isTablet,
-                isDesktop = isDesktop
+            .border(
+                width = if (isHovered) 1.5.dp else 1.dp,
+                color = if (isHovered)
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                else
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(20.dp)
             )
-        }
-    }
-}
-
-// Modern Warehouses Content
-@Composable
-fun ModernWarehousesContent(
-    isTablet: Boolean,
-    isDesktop: Boolean
-) {
-    val columns = when {
-        isDesktop -> 2
-        isTablet -> 1
-        else -> 1
-    }
-
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        items(3) { index ->
-            ModernWarehouseCard(
-                warehouse = Warehouse(
-                    id = index,
-                    name = "المستودع ${if (index == 0) "الرئيسي" else "الفرعي $index"}",
-                    location = "الرياض - حي النخيل",
-                    manager = "أحمد محمد"
-                ),
-                totalProducts = 500 + index * 100,
-                totalValue = 125000.0 + index * 50000,
-                isTablet = isTablet,
-                isDesktop = isDesktop
-            )
-        }
-    }
-}
-
-@Composable
-fun InventoryProductsContent(
-    searchQuery: String,
-    selectedCategory: String,
-    selectedWarehouse: String,
-    showLowStockOnly: Boolean
-) {
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        // Sample products data
-        items(20) { index ->
-            ProductInventoryCard(
-                product = Product(
-                    id = index,
-                    name = "منتج $index",
-                    barcode = "123456789$index",
-                    price = 100.0 + index * 10,
-                    cost = 80.0 + index * 8,
-                    stock = if (index % 5 == 0) 5 else 50 + index,
-                    category = if (index % 3 == 0) "إلكترونيات" else "ملابس"
-                ),
-                inventoryItem = InventoryItem(
-                    productId = index,
-                    warehouseId = 1,
-                    currentStock = if (index % 5 == 0) 5 else 50 + index,
-                    reservedStock = index % 3,
-                    minimumStock = 10,
-                    maximumStock = 100,
-                    reorderPoint = 15,
-                    lastUpdated = LocalDateTime(2024, 1, 1, 10, 0),
-                    expiryDate = if (index % 7 == 0) LocalDate(2024, 12, 15) else null
-                )
-            )
-        }
-    }
-}
-
-// Modern Product Inventory Card
-@Composable
-fun ModernProductInventoryCard(
-    product: Product,
-    inventoryItem: InventoryItem,
-    isTablet: Boolean,
-    isDesktop: Boolean
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = AppTheme.colors.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-        border = BorderStroke(1.dp, AppTheme.colors.cardBorder)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { onClick(item) }
     ) {
         Column(
-            modifier = Modifier.padding(
-                when {
-                    isDesktop -> 24.dp
-                    isTablet -> 20.dp
-                    else -> 16.dp
-                }
-            )
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Header with actions and product info
+            // Header with actions
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
-                // Action buttons
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    IconButton(
-                        onClick = { /* تعديل */ },
-                        modifier = Modifier.size(
-                            when {
-                                isDesktop -> 40.dp
-                                isTablet -> 36.dp
-                                else -> 32.dp
-                            }
-                        ),
-                        colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = AppTheme.colors.primary.copy(alpha = 0.1f),
-                            contentColor = AppTheme.colors.primary
-                        )
-                    ) {
-                        Icon(
-                            Icons.Default.Edit,
-                            contentDescription = "تعديل",
-                            modifier = Modifier.size(
-                                when {
-                                    isDesktop -> 20.dp
-                                    isTablet -> 18.dp
-                                    else -> 16.dp
-                                }
-                            )
-                        )
-                    }
-
-                    IconButton(
-                        onClick = { /* عرض التفاصيل */ },
-                        modifier = Modifier.size(
-                            when {
-                                isDesktop -> 40.dp
-                                isTablet -> 36.dp
-                                else -> 32.dp
-                            }
-                        ),
-                        colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = AppTheme.colors.info.copy(alpha = 0.1f),
-                            contentColor = AppTheme.colors.info
-                        )
-                    ) {
-                        Icon(
-                            Icons.Default.Visibility,
-                            contentDescription = "عرض",
-                            modifier = Modifier.size(
-                                when {
-                                    isDesktop -> 20.dp
-                                    isTablet -> 18.dp
-                                    else -> 16.dp
-                                }
-                            )
-                        )
-                    }
-                }
-
-                // Product info
-                Column(
-                    horizontalAlignment = Alignment.End
-                ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = product.name,
-                        style = when {
-                            isDesktop -> MaterialTheme.typography.titleLarge
-                            isTablet -> MaterialTheme.typography.titleMedium
-                            else -> MaterialTheme.typography.titleSmall
-                        },
+                        text = productName,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = AppTheme.colors.onSurface,
-                        maxLines = 1,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
+
                     Text(
-                        text = product.category,
-                        style = when {
-                            isDesktop -> MaterialTheme.typography.bodyLarge
-                            isTablet -> MaterialTheme.typography.bodyMedium
-                            else -> MaterialTheme.typography.bodySmall
-                        },
-                        color = AppTheme.colors.onSurfaceVariant
-                    )
-                    Text(
-                        text = "الباركود: ${product.barcode}",
-                        style = when {
-                            isDesktop -> MaterialTheme.typography.bodyMedium
-                            isTablet -> MaterialTheme.typography.bodySmall
-                            else -> MaterialTheme.typography.bodySmall
-                        },
-                        color = AppTheme.colors.onSurfaceVariant
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(
-                when {
-                    isDesktop -> 20.dp
-                    isTablet -> 16.dp
-                    else -> 12.dp
-                }
-            ))
-
-            // Stock information grid
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                ModernStockInfoItem(
-                    label = "المتوفر",
-                    value = inventoryItem.currentStock.toString(),
-                    color = UiUtils.getStockStatusColor(inventoryItem.currentStock),
-                    isTablet = isTablet,
-                    isDesktop = isDesktop
-                )
-
-                ModernStockInfoItem(
-                    label = "المحجوز",
-                    value = inventoryItem.reservedStock.toString(),
-                    color = AppTheme.colors.warning,
-                    isTablet = isTablet,
-                    isDesktop = isDesktop
-                )
-
-                ModernStockInfoItem(
-                    label = "الحد الأدنى",
-                    value = inventoryItem.minimumStock.toString(),
-                    color = AppTheme.colors.error,
-                    isTablet = isTablet,
-                    isDesktop = isDesktop
-                )
-
-                ModernStockInfoItem(
-                    label = "نقطة الطلب",
-                    value = inventoryItem.reorderPoint.toString(),
-                    color = AppTheme.colors.warning,
-                    isTablet = isTablet,
-                    isDesktop = isDesktop
-                )
-
-                ModernStockInfoItem(
-                    label = "الحد الأقصى",
-                    value = inventoryItem.maximumStock.toString(),
-                    color = AppTheme.colors.info,
-                    isTablet = isTablet,
-                    isDesktop = isDesktop
-                )
-            }
-
-            Spacer(modifier = Modifier.height(
-                when {
-                    isDesktop -> 16.dp
-                    isTablet -> 12.dp
-                    else -> 8.dp
-                }
-            ))
-
-            // Price information
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "هامش الربح: ${UiUtils.formatPercentage(((product.price - product.cost) / product.cost) * 100)}",
-                    style = when {
-                        isDesktop -> MaterialTheme.typography.bodyMedium
-                        isTablet -> MaterialTheme.typography.bodySmall
-                        else -> MaterialTheme.typography.bodySmall
-                    },
-                    color = AppTheme.colors.success,
-                    fontWeight = FontWeight.Medium
-                )
-
-                Text(
-                    text = "السعر: ${UiUtils.formatCurrency(product.price)}",
-                    style = when {
-                        isDesktop -> MaterialTheme.typography.titleMedium
-                        isTablet -> MaterialTheme.typography.titleSmall
-                        else -> MaterialTheme.typography.bodyLarge
-                    },
-                    fontWeight = FontWeight.Bold,
-                    color = AppTheme.colors.onSurface
-                )
-            }
-
-            // Expiry date if applicable
-            inventoryItem.expiryDate?.let { expiryDate ->
-                Spacer(modifier = Modifier.height(12.dp))
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = AppTheme.colors.warning.copy(alpha = 0.15f)
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, AppTheme.colors.warning.copy(alpha = 0.3f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Schedule,
-                            contentDescription = null,
-                            tint = AppTheme.colors.warning,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = "تاريخ الانتهاء: $expiryDate",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = AppTheme.colors.warning,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ProductInventoryCard(
-    product: Product,
-    inventoryItem: InventoryItem
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardStyles.defaultCardColors(),
-        elevation = CardStyles.defaultCardElevation()
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                // Actions
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    IconButton(
-                        onClick = { /* تعديل */ },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Edit,
-                            contentDescription = "تعديل",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-
-                    IconButton(
-                        onClick = { /* عرض التفاصيل */ },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Visibility,
-                            contentDescription = "عرض",
-                            tint = AppTheme.colors.info,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-
-                // Product Info
-                Column(
-                    horizontalAlignment = Alignment.End
-                ) {
-                    Text(
-                        text = product.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = product.category,
+                        text = categoryName,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Text(
-                        text = "الباركود: ${product.barcode}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                }
+
+                if (showActions && (onEdit != null || onDelete != null)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        onEdit?.let { editAction ->
+                            IconButton(
+                                onClick = { editAction(item) },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Edit,
+                                    contentDescription = "تعديل",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
+                        onDelete?.let { deleteAction ->
+                            IconButton(
+                                onClick = { deleteAction(item) },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "حذف",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
-
-            Spacer(modifier = Modifier.height(12.dp))
 
             // Stock Information
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                StockInfoItem(
-                    label = "الحد الأقصى",
-                    value = inventoryItem.maximumStock.toString(),
-                    color = AppTheme.colors.info
-                )
-
-                StockInfoItem(
-                    label = "نقطة الطلب",
-                    value = inventoryItem.reorderPoint.toString(),
-                    color = AppTheme.colors.warning
-                )
-
-                StockInfoItem(
-                    label = "الحد الأدنى",
-                    value = inventoryItem.minimumStock.toString(),
-                    color = AppTheme.colors.error
-                )
-
-                StockInfoItem(
-                    label = "المحجوز",
-                    value = inventoryItem.reservedStock.toString(),
-                    color = AppTheme.colors.purple
-                )
-
-                StockInfoItem(
-                    label = "المتوفر",
-                    value = inventoryItem.currentStock.toString(),
-                    color = UiUtils.getStockStatusColor(inventoryItem.currentStock)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Price Information
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "هامش الربح: ${UiUtils.formatPercentage(((product.price - product.cost) / product.cost) * 100)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = AppTheme.colors.success
-                )
-
-                Text(
-                    text = "السعر: ${UiUtils.formatCurrency(product.price)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
-            // Expiry Date if applicable
-            inventoryItem.expiryDate?.let { expiryDate ->
-                Spacer(modifier = Modifier.height(8.dp))
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = AppTheme.colors.warning.copy(alpha = 0.1f)
-                    ),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "تاريخ الانتهاء: $expiryDate",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = AppTheme.colors.warning
-                        )
-                        Icon(
-                            Icons.Default.Schedule,
-                            contentDescription = null,
-                            tint = AppTheme.colors.warning,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Modern Stock Info Item
-@Composable
-fun ModernStockInfoItem(
-    label: String,
-    value: String,
-    color: Color,
-    isTablet: Boolean,
-    isDesktop: Boolean
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = value,
-            style = when {
-                isDesktop -> MaterialTheme.typography.titleMedium
-                isTablet -> MaterialTheme.typography.titleSmall
-                else -> MaterialTheme.typography.bodyLarge
-            },
-            fontWeight = FontWeight.Bold,
-            color = color
-        )
-        Text(
-            text = label,
-            style = when {
-                isDesktop -> MaterialTheme.typography.bodyMedium
-                isTablet -> MaterialTheme.typography.bodySmall
-                else -> MaterialTheme.typography.bodySmall
-            },
-            color = AppTheme.colors.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-// Modern Stock Movement Card
-@Composable
-fun ModernStockMovementCard(
-    movement: StockMovement,
-    productName: String,
-    isTablet: Boolean,
-    isDesktop: Boolean
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = AppTheme.colors.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        border = BorderStroke(1.dp, AppTheme.colors.cardBorder)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    when {
-                        isDesktop -> 20.dp
-                        isTablet -> 16.dp
-                        else -> 12.dp
-                    }
-                ),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Reference and date
-            Column {
-                Text(
-                    text = movement.reference,
-                    style = when {
-                        isDesktop -> MaterialTheme.typography.bodyLarge
-                        isTablet -> MaterialTheme.typography.bodyMedium
-                        else -> MaterialTheme.typography.bodySmall
-                    },
-                    color = AppTheme.colors.onSurfaceVariant,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = movement.date.toString(),
-                    style = when {
-                        isDesktop -> MaterialTheme.typography.bodyMedium
-                        isTablet -> MaterialTheme.typography.bodySmall
-                        else -> MaterialTheme.typography.bodySmall
-                    },
-                    color = AppTheme.colors.onSurfaceVariant
-                )
-            }
-
-            // Quantity badge
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = getMovementTypeColor(movement.movementType).copy(alpha = 0.15f)
-                ),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, getMovementTypeColor(movement.movementType).copy(alpha = 0.3f))
-            ) {
-                Text(
-                    text = "${if (movement.movementType == MovementType.SALE) "-" else "+"}${movement.quantity}",
-                    style = when {
-                        isDesktop -> MaterialTheme.typography.titleMedium
-                        isTablet -> MaterialTheme.typography.titleSmall
-                        else -> MaterialTheme.typography.bodyLarge
-                    },
-                    fontWeight = FontWeight.Bold,
-                    color = getMovementTypeColor(movement.movementType),
-                    modifier = Modifier.padding(
-                        horizontal = when {
-                            isDesktop -> 16.dp
-                            isTablet -> 12.dp
-                            else -> 8.dp
-                        },
-                        vertical = when {
-                            isDesktop -> 8.dp
-                            isTablet -> 6.dp
-                            else -> 4.dp
+                Column {
+                    Text(
+                        text = "المخزون الحالي",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${item.currentStock}",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = when {
+                            item.currentStock <= item.minimumStock -> MaterialTheme.colorScheme.error
+                            item.currentStock <= item.reorderPoint -> AppTheme.colors.warning
+                            else -> MaterialTheme.colorScheme.primary
                         }
                     )
-                )
-            }
-
-            // Product name and movement type
-            Column(
-                horizontalAlignment = Alignment.End
-            ) {
-                Text(
-                    text = productName,
-                    style = when {
-                        isDesktop -> MaterialTheme.typography.titleMedium
-                        isTablet -> MaterialTheme.typography.titleSmall
-                        else -> MaterialTheme.typography.bodyLarge
-                    },
-                    fontWeight = FontWeight.SemiBold,
-                    color = AppTheme.colors.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = movement.movementType.displayName,
-                    style = when {
-                        isDesktop -> MaterialTheme.typography.bodyLarge
-                        isTablet -> MaterialTheme.typography.bodyMedium
-                        else -> MaterialTheme.typography.bodySmall
-                    },
-                    color = getMovementTypeColor(movement.movementType),
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
-    }
-}
-
-// Modern Warehouse Card
-@Composable
-fun ModernWarehouseCard(
-    warehouse: Warehouse,
-    totalProducts: Int,
-    totalValue: Double,
-    isTablet: Boolean,
-    isDesktop: Boolean
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = AppTheme.colors.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-        border = BorderStroke(1.dp, AppTheme.colors.cardBorder)
-    ) {
-        Column(
-            modifier = Modifier.padding(
-                when {
-                    isDesktop -> 24.dp
-                    isTablet -> 20.dp
-                    else -> 16.dp
                 }
-            )
-        ) {
-            // Header with settings and warehouse info
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                IconButton(
-                    onClick = { /* إدارة المستودع */ },
-                    colors = IconButtonDefaults.iconButtonColors(
-                        containerColor = AppTheme.colors.primary.copy(alpha = 0.1f),
-                        contentColor = AppTheme.colors.primary
-                    )
+
+                // Stock Status Indicator
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = when {
+                            item.currentStock <= item.minimumStock -> MaterialTheme.colorScheme.errorContainer
+                            item.currentStock <= item.reorderPoint -> AppTheme.colors.warning.copy(alpha = 0.2f)
+                            else -> MaterialTheme.colorScheme.primaryContainer
+                        }
+                    ),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(
-                        Icons.Default.Settings,
-                        contentDescription = "إدارة",
-                        modifier = Modifier.size(
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
                             when {
-                                isDesktop -> 24.dp
-                                isTablet -> 20.dp
-                                else -> 18.dp
+                                item.currentStock <= item.minimumStock -> Icons.Default.Warning
+                                item.currentStock <= item.reorderPoint -> Icons.Default.Info
+                                else -> Icons.Default.CheckCircle
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = when {
+                                item.currentStock <= item.minimumStock -> MaterialTheme.colorScheme.onErrorContainer
+                                item.currentStock <= item.reorderPoint -> AppTheme.colors.warning
+                                else -> MaterialTheme.colorScheme.onPrimaryContainer
                             }
                         )
-                    )
-                }
-
-                Column(
-                    horizontalAlignment = Alignment.End
-                ) {
-                    Text(
-                        text = warehouse.name,
-                        style = when {
-                            isDesktop -> MaterialTheme.typography.headlineSmall
-                            isTablet -> MaterialTheme.typography.titleLarge
-                            else -> MaterialTheme.typography.titleMedium
-                        },
-                        fontWeight = FontWeight.Bold,
-                        color = AppTheme.colors.onSurface
-                    )
-                    Text(
-                        text = warehouse.location,
-                        style = when {
-                            isDesktop -> MaterialTheme.typography.bodyLarge
-                            isTablet -> MaterialTheme.typography.bodyMedium
-                            else -> MaterialTheme.typography.bodySmall
-                        },
-                        color = AppTheme.colors.onSurfaceVariant
-                    )
-                    Text(
-                        text = "المدير: ${warehouse.manager}",
-                        style = when {
-                            isDesktop -> MaterialTheme.typography.bodyMedium
-                            isTablet -> MaterialTheme.typography.bodySmall
-                            else -> MaterialTheme.typography.bodySmall
-                        },
-                        color = AppTheme.colors.onSurfaceVariant
-                    )
+                        Text(
+                            text = when {
+                                item.currentStock <= item.minimumStock -> "مخزون منخفض"
+                                item.currentStock <= item.reorderPoint -> "يحتاج إعادة طلب"
+                                else -> "متوفر"
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = when {
+                                item.currentStock <= item.minimumStock -> MaterialTheme.colorScheme.onErrorContainer
+                                item.currentStock <= item.reorderPoint -> AppTheme.colors.warning
+                                else -> MaterialTheme.colorScheme.onPrimaryContainer
+                            }
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(
-                when {
-                    isDesktop -> 24.dp
-                    isTablet -> 20.dp
-                    else -> 16.dp
-                }
-            ))
-
-            // Statistics
+            // Additional Information
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+                Column {
                     Text(
-                        text = totalProducts.toString(),
-                        style = when {
-                            isDesktop -> MaterialTheme.typography.headlineMedium
-                            isTablet -> MaterialTheme.typography.headlineSmall
-                            else -> MaterialTheme.typography.titleLarge
-                        },
-                        fontWeight = FontWeight.Bold,
-                        color = AppTheme.colors.info
+                        text = "المستودع",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "عدد المنتجات",
-                        style = when {
-                            isDesktop -> MaterialTheme.typography.bodyLarge
-                            isTablet -> MaterialTheme.typography.bodyMedium
-                            else -> MaterialTheme.typography.bodySmall
-                        },
-                        color = AppTheme.colors.onSurfaceVariant,
-                        textAlign = TextAlign.Center
+                        text = warehouseName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+                Column {
                     Text(
-                        text = UiUtils.formatCurrency(totalValue),
-                        style = when {
-                            isDesktop -> MaterialTheme.typography.headlineMedium
-                            isTablet -> MaterialTheme.typography.headlineSmall
-                            else -> MaterialTheme.typography.titleLarge
-                        },
-                        fontWeight = FontWeight.Bold,
-                        color = AppTheme.colors.primary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        text = "الحد الأدنى",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "إجمالي القيمة",
-                        style = when {
-                            isDesktop -> MaterialTheme.typography.bodyLarge
-                            isTablet -> MaterialTheme.typography.bodyMedium
-                            else -> MaterialTheme.typography.bodySmall
-                        },
-                        color = AppTheme.colors.onSurfaceVariant,
-                        textAlign = TextAlign.Center
+                        text = "${item.minimumStock}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
         }
     }
 }
-
-
-// Modern Summary Card with enhanced design
+// Enhanced Stock Movement Card Component
 @Composable
-fun ModernSummaryCard(
-    title: String,
-    value: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    color: Color,
-    trend: String? = null,
-    trendPositive: Boolean = true,
-    isTablet: Boolean,
-    isDesktop: Boolean,
+private fun EnhancedStockMovementCard(
+    movement: StockMovement,
+    productName: String,
+    warehouseName: String,
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(
-                when {
-                    isDesktop -> 180.dp
-                    isTablet -> 160.dp
-                    else -> 140.dp
-                }
-            ),
+        modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 1.dp
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+        )
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(
-                    when {
-                        isDesktop -> 24.dp
-                        isTablet -> 20.dp
-                        else -> 16.dp
-                    }
-                ),
-            verticalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Header with icon
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Trend indicator
-                trend?.let {
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = (if (trendPositive) AppTheme.colors.success else AppTheme.colors.error).copy(alpha = 0.15f)
-                        ),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(
-                            text = trend,
-                            style = when {
-                                isDesktop -> MaterialTheme.typography.labelMedium
-                                isTablet -> MaterialTheme.typography.labelSmall
-                                else -> MaterialTheme.typography.labelSmall
-                            },
-                            color = if (trendPositive) AppTheme.colors.success else AppTheme.colors.error,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
+                Column {
+                    Text(
+                        text = productName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = movement.reference,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
 
-                // Icon with background
-                Box(
-                    modifier = Modifier
-                        .size(
-                            when {
-                                isDesktop -> 56.dp
-                                isTablet -> 48.dp
-                                else -> 40.dp
-                            }
-                        )
-                        .background(
-                            color.copy(alpha = 0.15f),
-                            RoundedCornerShape(
-                                when {
-                                    isDesktop -> 28.dp
-                                    isTablet -> 24.dp
-                                    else -> 20.dp
-                                }
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = when (movement.movementType) {
+                            MovementType.PURCHASE -> MaterialTheme.colorScheme.primaryContainer
+                            MovementType.SALE -> AppTheme.colors.success.copy(alpha = 0.2f)
+                            MovementType.RETURN -> AppTheme.colors.warning.copy(alpha = 0.2f)
+                            else -> MaterialTheme.colorScheme.surfaceVariant
+                        }
+                    ),
+                    shape = RoundedCornerShape(8.dp)
                 ) {
-                    Icon(
-                        icon,
-                        contentDescription = null,
-                        tint = color,
-                        modifier = Modifier.size(
-                            when {
-                                isDesktop -> 28.dp
-                                isTablet -> 24.dp
-                                else -> 20.dp
-                            }
-                        )
+                    Text(
+                        text = movement.movementType.displayName,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = when (movement.movementType) {
+                            MovementType.PURCHASE -> MaterialTheme.colorScheme.onPrimaryContainer
+                            MovementType.SALE -> AppTheme.colors.success
+                            MovementType.RETURN -> AppTheme.colors.warning
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
             }
 
-            // Title and Value
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = "الكمية",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${movement.quantity}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Column {
+                    Text(
+                        text = "المستودع",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = warehouseName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Column {
+                    Text(
+                        text = "التاريخ",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${movement.date.dayOfMonth}/${movement.date.monthNumber}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Enhanced Warehouse Card Component
+@Composable
+private fun EnhancedWarehouseCard(
+    warehouse: Warehouse,
+    totalProducts: Int,
+    lowStockItems: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Enhanced hover effect with complete coverage
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                color = if (isHovered)
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+                else
+                    MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(20.dp)
+            )
+            .border(
+                width = if (isHovered) 1.5.dp else 1.dp,
+                color = if (isHovered)
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                else
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(20.dp)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { onClick() }
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = warehouse.name,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = warehouse.location,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Icon(
+                    Icons.Default.Warehouse,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = "إجمالي المنتجات",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "$totalProducts",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Column {
+                    Text(
+                        text = "مخزون منخفض",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "$lowStockItems",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (lowStockItems > 0) MaterialTheme.colorScheme.error else AppTheme.colors.success
+                    )
+                }
+
+                Column {
+                    Text(
+                        text = "المدير",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = warehouse.manager,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Enhanced Inventory Item Details Panel
+@Composable
+private fun EnhancedInventoryItemDetailsPanel(
+    item: InventoryItem,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onClose: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "تفاصيل عنصر المخزون",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            IconButton(onClick = onClose) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "إغلاق",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // Stock Information Card
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
             Column(
-                horizontalAlignment = Alignment.End
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = title,
-                    style = when {
-                        isDesktop -> MaterialTheme.typography.bodyLarge
-                        isTablet -> MaterialTheme.typography.bodyMedium
-                        else -> MaterialTheme.typography.bodySmall
-                    },
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.End,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    text = "معلومات المخزون",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            text = "المخزون الحالي",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "${item.currentStock}",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
 
+                    Column {
+                        Text(
+                            text = "المحجوز",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "${item.reservedStock}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    Column {
+                        Text(
+                            text = "المتاح",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "${item.currentStock - item.reservedStock}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = AppTheme.colors.success
+                        )
+                    }
+                }
+            }
+        }
+
+        // Stock Levels
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Card(
+                modifier = Modifier.weight(1f),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        Icons.Default.TrendingDown,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text(
+                        text = "الحد الأدنى",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${item.minimumStock}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+
+            Card(
+                modifier = Modifier.weight(1f),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        Icons.Default.TrendingUp,
+                        contentDescription = null,
+                        tint = AppTheme.colors.success,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text(
+                        text = "الحد الأقصى",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${item.maximumStock}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = AppTheme.colors.success
+                    )
+                }
+            }
+        }
+
+        // Actions
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Button(
+                onClick = onEdit,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                ),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(Icons.Default.Edit, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("تعديل")
+            }
+
+            OutlinedButton(
+                onClick = onDelete,
+                modifier = Modifier.weight(1f),
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.error
+                ),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = value,
-                    style = when {
-                        isDesktop -> MaterialTheme.typography.headlineMedium
-                        isTablet -> MaterialTheme.typography.headlineSmall
-                        else -> MaterialTheme.typography.titleLarge
-                    },
-                    fontWeight = FontWeight.Bold,
-                    color = color,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    "حذف",
+                    color = MaterialTheme.colorScheme.error
                 )
             }
         }
     }
 }
 
-// Missing StockInfoItem Component
+// Inventory Item Dialog Component
 @Composable
-fun StockInfoItem(
-    label: String,
-    value: String,
-    color: Color
+private fun InventoryItemDialog(
+    item: InventoryItem?,
+    onDismiss: () -> Unit,
+    onSave: (InventoryItem) -> Unit
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = color
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
+    var currentStock by remember { mutableStateOf(item?.currentStock?.toString() ?: "") }
+    var minimumStock by remember { mutableStateOf(item?.minimumStock?.toString() ?: "") }
+    var maximumStock by remember { mutableStateOf(item?.maximumStock?.toString() ?: "") }
+    var reorderPoint by remember { mutableStateOf(item?.reorderPoint?.toString() ?: "") }
 
-// Movement Type Color Function
-@Composable
-fun getMovementTypeColor(movementType: MovementType): Color {
-    return when (movementType) {
-        MovementType.PURCHASE -> AppTheme.colors.success
-        MovementType.SALE -> AppTheme.colors.info
-        MovementType.RETURN -> AppTheme.colors.warning
-        MovementType.ADJUSTMENT -> AppTheme.colors.purple
-        MovementType.TRANSFER -> AppTheme.colors.teal
-        MovementType.DAMAGED -> AppTheme.colors.error
-        MovementType.EXPIRED -> AppTheme.colors.error
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = if (item == null) "إضافة عنصر جديد" else "تعديل عنصر المخزون",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+
+                OutlinedTextField(
+                    value = currentStock,
+                    onValueChange = { currentStock = it },
+                    label = { Text("المخزون الحالي") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = minimumStock,
+                    onValueChange = { minimumStock = it },
+                    label = { Text("الحد الأدنى") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = maximumStock,
+                    onValueChange = { maximumStock = it },
+                    label = { Text("الحد الأقصى") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = reorderPoint,
+                    onValueChange = { reorderPoint = it },
+                    label = { Text("نقطة إعادة الطلب") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("إلغاء")
+                    }
+
+                    Button(
+                        onClick = {
+                            val newItem = InventoryItem(
+                                productId = item?.productId ?: 0,
+                                warehouseId = item?.warehouseId ?: 1,
+                                currentStock = currentStock.toIntOrNull() ?: 0,
+                                reservedStock = item?.reservedStock ?: 0,
+                                minimumStock = minimumStock.toIntOrNull() ?: 0,
+                                maximumStock = maximumStock.toIntOrNull() ?: 100,
+                                reorderPoint = reorderPoint.toIntOrNull() ?: 10,
+                                lastUpdated = LocalDateTime(2024, 1, 1, 10, 0),
+                                expiryDate = item?.expiryDate
+                            )
+                            onSave(newItem)
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("حفظ")
+                    }
+                }
+            }
+        }
     }
 }
 

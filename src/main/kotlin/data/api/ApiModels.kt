@@ -1,6 +1,55 @@
 package data.api
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+
+// Authentication DTOs
+@Serializable
+data class LoginRequest(
+    val username: String,
+    val password: String
+)
+
+@Serializable
+data class SignupRequest(
+    @SerialName("username") val username: String,
+    @SerialName("email") val email: String,
+    @SerialName("password") val password: String,
+    @SerialName("firstName") val firstName: String,
+    @SerialName("lastName") val lastName: String,
+    @SerialName("role") val role: String
+)
+
+@Serializable
+data class RefreshTokenRequest(
+    val refreshToken: String
+)
+
+@Serializable
+data class AuthResponse(
+    val accessToken: String,
+    val refreshToken: String,
+    val tokenType: String = "Bearer",
+    val user: UserDTO? = null
+)
+
+@Serializable
+data class TokenResponse(
+    val accessToken: String,
+    val refreshToken: String,
+    val tokenType: String = "Bearer"
+)
+
+@Serializable
+data class UserDTO(
+    val id: Long,
+    val username: String,
+    val email: String,
+    val firstName: String,
+    val lastName: String,
+    val role: String,
+    val createdAt: String
+)
 
 // Customer DTOs
 @Serializable
@@ -34,6 +83,27 @@ data class CustomerDTO(
     val updatedAt: String? = null // ISO datetime
 )
 
+// Category DTOs
+@Serializable
+data class CategoryDTO(
+    val id: Long? = null,
+    val name: String,
+    val description: String? = null,
+    val displayOrder: Int? = null,
+    val status: String? = null, // ACTIVE, INACTIVE, ARCHIVED
+    val imageUrl: String? = null,
+    val icon: String? = null,
+    val colorCode: String? = null,
+    val createdAt: String? = null,
+    val updatedAt: String? = null,
+    val productCount: Int? = null
+)
+
+@Serializable
+data class CategoryStatusUpdateRequest(
+    val status: String
+)
+
 // Product DTOs
 @Serializable
 data class ProductDTO(
@@ -44,6 +114,8 @@ data class ProductDTO(
     val costPrice: Double? = null,
     val stockQuantity: Int? = null,
     val category: String? = null,
+    val categoryId: Long? = null,
+    val categoryName: String? = null,
     val sku: String? = null,
     val brand: String? = null,
     val modelNumber: String? = null,
@@ -189,4 +261,158 @@ data class StockUpdateRequest(
 @Serializable
 data class StockAdjustmentRequest(
     val quantity: Int
+)
+
+// Supplier DTOs
+@Serializable
+data class SupplierDTO(
+    val id: Long? = null,
+    val name: String,
+    val contactPerson: String? = null,
+    val phone: String? = null,
+    val email: String? = null,
+    val address: String? = null,
+    val city: String? = null,
+    val country: String? = null,
+    val taxNumber: String? = null,
+    val paymentTerms: String? = null, // NET_30, NET_15, etc.
+    val deliveryTerms: String? = null, // FOB_DESTINATION, FOB_ORIGIN, etc.
+    val rating: Double? = null,
+    val status: String? = null, // ACTIVE, INACTIVE, SUSPENDED
+    val totalOrders: Int? = null,
+    val totalAmount: Double? = null,
+    val lastOrderDate: String? = null, // ISO datetime
+    val notes: String? = null,
+    val createdAt: String? = null, // ISO datetime
+    val updatedAt: String? = null // ISO datetime
+)
+
+// Return DTOs
+@Serializable
+data class ReturnDTO(
+    val id: Long? = null,
+    val returnNumber: String? = null,
+    val originalSaleId: Long,
+    val originalSaleNumber: String? = null,
+    val customerId: Long,
+    val customerName: String? = null,
+    val returnDate: String? = null, // ISO datetime
+    val reason: String, // DEFECTIVE, WRONG_ITEM, CUSTOMER_CHANGE_MIND, etc.
+    val status: String? = null, // PENDING, APPROVED, REJECTED, REFUNDED, EXCHANGED
+    val totalRefundAmount: Double,
+    val notes: String? = null,
+    val processedBy: String? = null,
+    val processedDate: String? = null, // ISO datetime
+    val refundMethod: String? = null, // ORIGINAL_PAYMENT, STORE_CREDIT, CASH
+    val items: List<ReturnItemDTO>,
+    val createdAt: String? = null, // ISO datetime
+    val updatedAt: String? = null // ISO datetime
+)
+
+@Serializable
+data class ReturnItemDTO(
+    val id: Long? = null,
+    val productId: Long,
+    val productName: String? = null,
+    val quantity: Int,
+    val unitPrice: Double,
+    val totalRefundAmount: Double,
+    val reason: String,
+    val condition: String // NEW, USED, DAMAGED, DEFECTIVE
+)
+
+// Promotion DTOs
+@Serializable
+data class PromotionDTO(
+    val id: Long? = null,
+    val name: String,
+    val description: String? = null,
+    val type: String, // PERCENTAGE, FIXED_AMOUNT, BUY_X_GET_Y
+    val discountValue: Double,
+    val minimumOrderAmount: Double? = null,
+    val maximumDiscountAmount: Double? = null,
+    val startDate: String, // ISO datetime
+    val endDate: String, // ISO datetime
+    val isActive: Boolean,
+    val applicableProducts: List<Long>? = null, // Product IDs
+    val applicableCategories: List<String>? = null,
+    val usageLimit: Int? = null,
+    val usageCount: Int? = null,
+    val customerEligibility: String? = null, // ALL, VIP_ONLY, NEW_CUSTOMERS
+    val couponCode: String? = null,
+    val autoApply: Boolean? = null,
+    val stackable: Boolean? = null,
+    val statusDisplay: String? = null,
+    val typeDisplay: String? = null,
+    val eligibilityDisplay: String? = null,
+    val isCurrentlyActive: Boolean? = null,
+    val isExpired: Boolean? = null,
+    val isNotYetStarted: Boolean? = null,
+    val isUsageLimitReached: Boolean? = null,
+    val daysUntilExpiry: Int? = null,
+    val remainingUsage: Int? = null,
+    val usagePercentage: Double? = null,
+    val createdAt: String? = null, // ISO datetime
+    val updatedAt: String? = null // ISO datetime
+)
+
+// Dashboard and Report DTOs
+@Serializable
+data class DashboardSummaryDTO(
+    val period: String? = null,
+    val generatedAt: String? = null,
+    val sales: DashboardSalesDTO? = null,
+    val customers: DashboardCustomersDTO? = null,
+    val inventory: DashboardInventoryDTO? = null,
+    val revenue: DashboardRevenueDTO? = null
+)
+
+@Serializable
+data class DashboardSalesDTO(
+    val totalSales: Int? = null,
+    val totalRevenue: Double? = null,
+    val averageOrderValue: Double? = null,
+    val growthRate: Double? = null,
+    val completedSales: Int? = null,
+    val pendingSales: Int? = null,
+    val cancelledSales: Int? = null
+)
+
+@Serializable
+data class DashboardCustomersDTO(
+    val totalCustomers: Int? = null,
+    val newCustomers: Int? = null,
+    val activeCustomers: Int? = null,
+    val retentionRate: Double? = null
+)
+
+@Serializable
+data class DashboardInventoryDTO(
+    val totalProducts: Int? = null,
+    val lowStockAlerts: Int? = null,
+    val outOfStockProducts: Int? = null,
+    val totalStockValue: Double? = null,
+    val outOfStockAlerts: Int? = null,
+    val totalValue: Double? = null
+)
+
+@Serializable
+data class DashboardRevenueDTO(
+    val monthlyRevenue: Map<String, Double>? = null, // Changed to Map for monthly data
+    val yearlyRevenue: Double? = null,
+    val profitMargin: Double? = null,
+    val topCategory: String? = null,
+    val thisMonth: Double? = null,
+    val lastMonth: Double? = null,
+    val growthRate: Double? = null
+)
+
+// Error Response DTO
+@Serializable
+data class ErrorResponseDTO(
+    val message: String,
+    val timestamp: String,
+    val status: Int? = null,
+    val error: String? = null,
+    val path: String? = null
 )

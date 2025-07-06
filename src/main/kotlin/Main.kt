@@ -1,5 +1,9 @@
 import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.window.WindowDraggableArea
@@ -10,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -85,6 +90,7 @@ enum class Screen(val title: String, val icon: ImageVector) {
     DASHBOARD("لوحة التحكم", Icons.Default.Dashboard),
     SALES("المبيعات", Icons.Default.ShoppingCart),
     PRODUCTS("المنتجات", Icons.Default.Inventory),
+    CATEGORIES("الفئات", Icons.Default.Category),
     CUSTOMERS("العملاء", Icons.Default.People),
     INVENTORY("إدارة المخزون", Icons.Default.Warehouse),
     SUPPLIERS("إدارة الموردين", Icons.Default.Business),
@@ -106,19 +112,18 @@ fun App() {
     val authService = remember { appContainer.authService }
     val authState by authService.authState.collectAsState()
 
-    // Temporary: Skip authentication for testing
     // Show login screen if not authenticated
-    // if (!authState.isAuthenticated) {
-    //     LoginScreen(
-    //         authService = authService,
-    //         onLoginSuccess = {
-    //             // Authentication successful, main app will be shown
-    //         }
-    //     )
-    // } else {
+    if (!authState.isAuthenticated) {
+        LoginScreen(
+            authService = authService,
+            onLoginSuccess = {
+                // Authentication successful, main app will be shown
+            }
+        )
+    } else {
         // Main application content
         MainAppContent(appContainer)
-    // }
+    }
 }
 
 @Composable
@@ -139,16 +144,28 @@ fun MainAppContent(appContainer: AppContainer) {
                     .padding(28.dp)
             ) {
                 when (currentScreen) {
-                    Screen.DASHBOARD -> DashboardScreen(SalesDataManager()) // Temporary: Use mock data
-                    Screen.SALES -> SalesScreen(SalesDataManager()) // Temporary: Use mock data
-                    Screen.PRODUCTS -> ProductsScreen(SalesDataManager()) // Temporary: Use mock data
-                    Screen.CUSTOMERS -> CustomersScreen(SalesDataManager()) // Temporary: Use mock data
-                    Screen.INVENTORY -> InventoryScreen(SalesDataManager())
-                    Screen.SUPPLIERS -> SuppliersScreen(SalesDataManager())
-                    Screen.RETURNS -> ReturnsScreen()
-                    Screen.PROMOTIONS -> PromotionsScreen()
-                    Screen.REPORTS -> ReportsScreen() // Temporary: Use mock data
-                    Screen.SETTINGS -> SettingsScreen()
+                    Screen.DASHBOARD -> DashboardScreen(
+                        dashboardViewModel = appContainer.dashboardViewModel,
+                        onNavigateToSales = { currentScreen = Screen.SALES },
+                        onNavigateToProducts = { currentScreen = Screen.PRODUCTS },
+                        onNavigateToCustomers = { currentScreen = Screen.CUSTOMERS },
+                        onNavigateToInventory = { currentScreen = Screen.INVENTORY },
+                        onNavigateToReports = { currentScreen = Screen.REPORTS }
+                    )
+                    Screen.SALES -> SalesScreen(SalesDataManager()) // TODO: Replace with ViewModel
+                    Screen.PRODUCTS -> ProductsScreen(
+                        productViewModel = appContainer.productViewModel
+                    )
+                    Screen.CATEGORIES -> CategoriesScreen(
+                        categoryViewModel = appContainer.categoryViewModel
+                    )
+                    Screen.CUSTOMERS -> CustomersScreen(SalesDataManager()) // TODO: Replace with ViewModel
+                    Screen.INVENTORY -> InventoryScreen(SalesDataManager()) // TODO: Replace with ViewModel
+                    Screen.SUPPLIERS -> SuppliersScreen(SalesDataManager()) // TODO: Replace with ViewModel
+                    Screen.RETURNS -> ReturnsScreen() // TODO: Replace with ViewModel
+                    Screen.PROMOTIONS -> PromotionsScreen() // TODO: Replace with ViewModel
+                    Screen.REPORTS -> ReportsScreen() // TODO: Replace with ViewModel
+                    Screen.SETTINGS -> SettingsScreen() // TODO: Replace with ViewModel
                 }
             }
 
@@ -242,25 +259,47 @@ fun NavigationSidebar(
                         textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = {
-                            coroutineScope.launch {
-                                authService.logout()
+
+                    val logoutInteractionSource = remember { MutableInteractionSource() }
+                    val isLogoutHovered by logoutInteractionSource.collectIsHoveredAsState()
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                color = if (isLogoutHovered)
+                                    MaterialTheme.colorScheme.error.copy(alpha = 1f)
+                                else
+                                    MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .clickable(
+                                interactionSource = logoutInteractionSource,
+                                indication = null
+                            ) {
+                                coroutineScope.launch {
+                                    authService.logout()
+                                }
                             }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error
-                        ),
-                        shape = RoundedCornerShape(8.dp)
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            Icons.Default.Logout,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("تسجيل الخروج")
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Logout,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onError
+                            )
+                            Text(
+                                "تسجيل الخروج",
+                                color = MaterialTheme.colorScheme.onError
+                            )
+                        }
                     }
                 }
             }
@@ -300,18 +339,36 @@ fun NavigationSidebar(
 
 @Composable
 fun NavigationItem(item: NavigationItem) {
-    Card(
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(60.dp),
-        onClick = item.onClick,
-        colors = CardDefaults.cardColors(
-            containerColor = if (item.isSelected)
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-            else Color.Transparent
-        ),
-        shape = RoundedCornerShape(14.dp),
-        elevation = if (item.isSelected) CardDefaults.cardElevation(defaultElevation = 2.dp) else CardDefaults.cardElevation(defaultElevation = 0.dp)
+            .height(60.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(
+                color = when {
+                    item.isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                    isHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                    else -> Color.Transparent
+                },
+                shape = RoundedCornerShape(14.dp)
+            )
+            .border(
+                width = if (item.isSelected) 1.5.dp else if (isHovered) 1.dp else 0.dp,
+                color = if (item.isSelected)
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                else if (isHovered)
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                else Color.Transparent,
+                shape = RoundedCornerShape(14.dp)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { item.onClick() },
+        contentAlignment = Alignment.Center
     ) {
         Row(
             modifier = Modifier
@@ -324,7 +381,11 @@ fun NavigationItem(item: NavigationItem) {
                 text = item.screen.title,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = if (item.isSelected) FontWeight.Bold else FontWeight.Medium,
-                color = if (item.isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                color = when {
+                    item.isSelected -> MaterialTheme.colorScheme.primary
+                    isHovered -> MaterialTheme.colorScheme.onSurface
+                    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                },
                 textAlign = TextAlign.Right,
                 modifier = Modifier.weight(1f)
             )
@@ -332,7 +393,11 @@ fun NavigationItem(item: NavigationItem) {
             Icon(
                 item.screen.icon,
                 contentDescription = item.screen.title,
-                tint = if (item.isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = when {
+                    item.isSelected -> MaterialTheme.colorScheme.primary
+                    isHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
                 modifier = Modifier.size(26.dp)
             )
         }

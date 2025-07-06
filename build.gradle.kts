@@ -41,16 +41,20 @@ dependencies {
     // Preferences/Settings Storage
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
 
-    // Excel Export - Apache POI
+    // Excel Export - Apache POI (consistent versions)
     implementation("org.apache.poi:poi:5.2.4")
     implementation("org.apache.poi:poi-ooxml:5.2.4")
-    implementation("org.apache.poi:poi-ooxml-schemas:4.1.2")
+    // Removed poi-ooxml-schemas as it's included in poi-ooxml 5.2.4
 
     // PDF Generation - iText
     implementation("com.itextpdf:itext7-core:7.2.5")
     implementation("com.itextpdf:html2pdf:4.0.5")
 
     // File operations - Desktop integration for file dialogs
+
+    // Logging dependencies to fix warnings
+    implementation("org.slf4j:slf4j-simple:2.0.9")
+    implementation("org.apache.logging.log4j:log4j-core:2.21.1")
 }
 
 compose.desktop {

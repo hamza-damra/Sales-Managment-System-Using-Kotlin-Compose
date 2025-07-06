@@ -1,468 +1,771 @@
 package ui.screens
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import ui.components.*
 import ui.theme.AppTheme
 import ui.theme.CardStyles
 import ui.utils.ResponsiveUtils
+import ui.utils.ColorUtils
 import UiUtils
 
+// Promotions Tab Enum
+enum class PromotionsTab(val title: String) {
+    OVERVIEW("نظرة عامة"),
+    ACTIVE("العروض النشطة"),
+    EXPIRED("العروض المنتهية"),
+    ANALYTICS("التحليلات")
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PromotionsScreen() {
-    // State management
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedStatus by remember { mutableStateOf("الكل") }
-    var showNewPromotionDialog by remember { mutableStateOf(false) }
-    var showNewCouponDialog by remember { mutableStateOf(false) }
-
-    // Responsive design
-    val responsive = ResponsiveUtils.getResponsiveSpacing()
-    val responsivePadding = ResponsiveUtils.getResponsivePadding()
-    val isDesktop = ResponsiveUtils.isDesktop()
-
     RTLProvider {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-        ) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(responsivePadding.screen),
-                verticalArrangement = Arrangement.spacedBy(responsive.large)
-            ) {
-                // Enhanced Header Section
-                item {
-                    EnhancedPromotionsHeader(
-                        onAddPromotion = { showNewPromotionDialog = true },
-                        onAddCoupon = { showNewCouponDialog = true },
-                        isDesktop = isDesktop
-                    )
-                }
+        // Enhanced state management
+        var selectedTab by remember { mutableStateOf(PromotionsTab.OVERVIEW) }
+        var searchQuery by remember { mutableStateOf("") }
+        var selectedStatus by remember { mutableStateOf("الكل") }
+        var selectedType by remember { mutableStateOf("الكل") }
+        var sortBy by remember { mutableStateOf("name") }
+        var showActiveOnly by remember { mutableStateOf(false) }
+        var showExpiringOnly by remember { mutableStateOf(false) }
+        var isExporting by remember { mutableStateOf(false) }
+        var exportMessage by remember { mutableStateOf<String?>(null) }
 
-                // Search and Filters Section
-                item {
-                    EnhancedSearchAndFilters(
-                        searchQuery = searchQuery,
-                        onSearchQueryChange = { searchQuery = it },
-                        selectedStatus = selectedStatus,
-                        onStatusChange = { selectedStatus = it }
-                    )
-                }
+        // Dialog states
+        var showNewPromotionDialog by remember { mutableStateOf(false) }
+        var showNewCouponDialog by remember { mutableStateOf(false) }
+        var editingPromotion by remember { mutableStateOf<String?>(null) }
+        var selectedPromotion by remember { mutableStateOf<String?>(null) }
+        var showPromotionDetails by remember { mutableStateOf(false) }
+        var showDeleteConfirmation by remember { mutableStateOf(false) }
+        var promotionToDelete by remember { mutableStateOf<String?>(null) }
 
-                // Enhanced Statistics Dashboard
-                item {
-                    EnhancedPromotionsStatistics(isDesktop = isDesktop)
-                }
+        // For desktop application, we'll use window size detection
+        val isTablet = true // Assume tablet/desktop for now
+        val isDesktop = true // Desktop application
 
-                // Enhanced Active Promotions Section
-                item {
-                    EnhancedActivePromotions(
-                        searchQuery = searchQuery,
-                        selectedStatus = selectedStatus
-                    )
-                }
+        // Snackbar state
+        val snackbarHostState = remember { SnackbarHostState() }
+        val coroutineScope = rememberCoroutineScope()
 
-                // Enhanced Expired Promotions Section
-                item {
-                    EnhancedExpiredPromotions()
-                }
-
-                // Analytics Section
-                item {
-                    EnhancedPromotionAnalytics(isDesktop = isDesktop)
+        // Export functions
+        val handleExportExcel = {
+            if (!isExporting) {
+                isExporting = true
+                exportMessage = null
+                coroutineScope.launch {
+                    try {
+                        // Simulate export process
+                        kotlinx.coroutines.delay(2000)
+                        exportMessage = "تم تصدير الملف بنجاح!"
+                    } catch (e: Exception) {
+                        exportMessage = "خطأ في التصدير: ${e.message}"
+                    } finally {
+                        isExporting = false
+                    }
                 }
             }
         }
 
+        val handleExportPdf = {
+            if (!isExporting) {
+                isExporting = true
+                exportMessage = null
+                coroutineScope.launch {
+                    try {
+                        // Simulate export process
+                        kotlinx.coroutines.delay(2000)
+                        exportMessage = "تم تصدير الملف بنجاح!"
+                    } catch (e: Exception) {
+                        exportMessage = "خطأ في التصدير: ${e.message}"
+                    } finally {
+                        isExporting = false
+                    }
+                }
+            }
+        }
+
+        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            RTLRow(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Left Panel - Promotions Management
+                Card(
+                    modifier = Modifier
+                        .weight(2f)
+                        .fillMaxHeight(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    shape = RoundedCornerShape(24.dp),
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = 0.dp
+                    ),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp)
+                    ) {
+                        // Header
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "إدارة العروض والخصومات",
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+
+                            Button(
+                                onClick = { showNewPromotionDialog = true },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                ),
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = ButtonDefaults.buttonElevation(
+                                    defaultElevation = 2.dp
+                                )
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("إضافة عرض جديد")
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // Enhanced Tabs
+                        EnhancedPromotionsTabRow(
+                            selectedTab = selectedTab,
+                            onTabSelected = { selectedTab = it }
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Search and Filter Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            // Search Field
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                label = { Text("البحث في العروض") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Search,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                                )
+                            )
+
+                            // Status Filter
+                            EnhancedFilterDropdown(
+                                label = "الحالة",
+                                value = selectedStatus,
+                                options = listOf("الكل", "نشط", "منتهي", "مجدول", "متوقف"),
+                                onValueChange = { selectedStatus = it },
+                                modifier = Modifier.weight(0.7f)
+                            )
+
+                            // Type Filter
+                            EnhancedFilterDropdown(
+                                label = "النوع",
+                                value = selectedType,
+                                options = listOf("الكل", "نسبة مئوية", "مبلغ ثابت", "كوبون", "عرض خاص"),
+                                onValueChange = { selectedType = it },
+                                modifier = Modifier.weight(0.7f)
+                            )
+                        }
+
+                        // Sort and Action Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Sort Dropdown
+                            EnhancedFilterDropdown(
+                                label = "ترتيب حسب",
+                                value = when(sortBy) {
+                                    "name" -> "الاسم"
+                                    "discount" -> "قيمة الخصم"
+                                    "usage" -> "الاستخدام"
+                                    "expiry" -> "تاريخ الانتهاء"
+                                    else -> "الاسم"
+                                },
+                                options = listOf("الاسم", "قيمة الخصم", "الاستخدام", "تاريخ الانتهاء"),
+                                onValueChange = {
+                                    sortBy = when(it) {
+                                        "الاسم" -> "name"
+                                        "قيمة الخصم" -> "discount"
+                                        "الاستخدام" -> "usage"
+                                        "تاريخ الانتهاء" -> "expiry"
+                                        else -> "name"
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            // Enhanced Quick Filters with complete hover coverage
+                            val activeOnlyInteractionSource = remember { MutableInteractionSource() }
+                            val isActiveOnlyHovered by activeOnlyInteractionSource.collectIsHoveredAsState()
+
+                            Box(
+                                modifier = Modifier
+                                    .height(56.dp) // Match dropdown height
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        color = when {
+                                            showActiveOnly -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            isActiveOnlyHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                                            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                        },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .border(
+                                        width = if (showActiveOnly) 1.5.dp else if (isActiveOnlyHovered) 1.dp else 0.5.dp,
+                                        color = when {
+                                            showActiveOnly -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                            isActiveOnlyHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                            else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                        },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable(
+                                        interactionSource = activeOnlyInteractionSource,
+                                        indication = null
+                                    ) { showActiveOnly = !showActiveOnly },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 12.dp)
+                                ) {
+                                    if (showActiveOnly) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Text(
+                                        "نشط فقط",
+                                        color = when {
+                                            showActiveOnly -> MaterialTheme.colorScheme.primary
+                                            isActiveOnlyHovered -> MaterialTheme.colorScheme.onSurface
+                                            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                                        },
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+
+                            val expiringOnlyInteractionSource = remember { MutableInteractionSource() }
+                            val isExpiringOnlyHovered by expiringOnlyInteractionSource.collectIsHoveredAsState()
+
+                            Box(
+                                modifier = Modifier
+                                    .height(56.dp) // Match dropdown height
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        color = when {
+                                            showExpiringOnly -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            isExpiringOnlyHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                                            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                        },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .border(
+                                        width = if (showExpiringOnly) 1.5.dp else if (isExpiringOnlyHovered) 1.dp else 0.5.dp,
+                                        color = when {
+                                            showExpiringOnly -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                            isExpiringOnlyHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                            else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                        },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable(
+                                        interactionSource = expiringOnlyInteractionSource,
+                                        indication = null
+                                    ) { showExpiringOnly = !showExpiringOnly },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 12.dp)
+                                ) {
+                                    if (showExpiringOnly) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Text(
+                                        "قارب على الانتهاء",
+                                        color = when {
+                                            showExpiringOnly -> MaterialTheme.colorScheme.primary
+                                            isExpiringOnlyHovered -> MaterialTheme.colorScheme.onSurface
+                                            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                                        },
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+
+                            // Enhanced Export Button with complete hover coverage
+                            val exportInteractionSource = remember { MutableInteractionSource() }
+                            val isExportHovered by exportInteractionSource.collectIsHoveredAsState()
+
+                            Box(
+                                modifier = Modifier
+                                    .height(56.dp) // Match dropdown height
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        color = if (isExportHovered && !isExporting)
+                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                        else
+                                            MaterialTheme.colorScheme.surface,
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .border(
+                                        width = if (isExportHovered && !isExporting) 1.5.dp else 1.dp,
+                                        color = if (isExportHovered && !isExporting)
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                                        else
+                                            MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable(
+                                        interactionSource = exportInteractionSource,
+                                        indication = null,
+                                        enabled = !isExporting
+                                    ) { if (!isExporting) handleExportExcel() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                ) {
+                                    if (isExporting) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(18.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    } else {
+                                        Icon(
+                                            Icons.Default.FileDownload,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = if (isExportHovered)
+                                                MaterialTheme.colorScheme.primary
+                                            else
+                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                                        )
+                                    }
+                                    Text(
+                                        "تصدير",
+                                        color = if (isExporting)
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        else if (isExportHovered)
+                                            MaterialTheme.colorScheme.primary
+                                        else
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Content based on selected tab
+                        when (selectedTab) {
+                            PromotionsTab.OVERVIEW -> EnhancedPromotionsOverviewContent(
+                                searchQuery = searchQuery,
+                                selectedStatus = selectedStatus,
+                                selectedType = selectedType,
+                                showActiveOnly = showActiveOnly,
+                                showExpiringOnly = showExpiringOnly,
+                                sortBy = sortBy,
+                                onPromotionClick = { promotion ->
+                                    selectedPromotion = promotion
+                                    showPromotionDetails = true
+                                }
+                            )
+                            PromotionsTab.ACTIVE -> EnhancedActivePromotionsContent(
+                                searchQuery = searchQuery,
+                                selectedType = selectedType,
+                                sortBy = sortBy,
+                                onPromotionClick = { promotion ->
+                                    selectedPromotion = promotion
+                                    showPromotionDetails = true
+                                },
+                                onEditPromotion = { promotion ->
+                                    editingPromotion = promotion
+                                },
+                                onDeletePromotion = { promotion ->
+                                    promotionToDelete = promotion
+                                    showDeleteConfirmation = true
+                                }
+                            )
+                            PromotionsTab.EXPIRED -> EnhancedExpiredPromotionsContent(
+                                searchQuery = searchQuery,
+                                selectedType = selectedType,
+                                sortBy = sortBy
+                            )
+                            PromotionsTab.ANALYTICS -> EnhancedPromotionAnalyticsContent(
+                                searchQuery = searchQuery
+                            )
+                        }
+                    }
+                }
+
+                // Right Panel - Details and Statistics (when promotion selected)
+                AnimatedVisibility(
+                    visible = showPromotionDetails && selectedPromotion != null,
+                    enter = slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(300)
+                    ) + fadeIn(),
+                    exit = slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(300)
+                    ) + fadeOut()
+                ) {
+                    EnhancedPromotionDetailsPanel(
+                        promotionId = selectedPromotion ?: "",
+                        onClose = {
+                            showPromotionDetails = false
+                            selectedPromotion = null
+                        },
+                        onEdit = { promotion ->
+                            editingPromotion = promotion
+                            showPromotionDetails = false
+                        }
+                    )
+                }
+            }
+
+            // Snackbar for export messages
+            exportMessage?.let { message ->
+                LaunchedEffect(message) {
+                    snackbarHostState.showSnackbar(message)
+                    exportMessage = null
+                }
+            }
+
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
+
         // Dialogs
         if (showNewPromotionDialog) {
-            NewPromotionDialog(
+            EnhancedNewPromotionDialog(
                 onDismiss = { showNewPromotionDialog = false },
                 onSave = {
                     // Handle save promotion
                     showNewPromotionDialog = false
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar("تم إضافة العرض بنجاح!")
+                    }
                 }
             )
         }
 
         if (showNewCouponDialog) {
-            NewCouponDialog(
+            EnhancedNewCouponDialog(
                 onDismiss = { showNewCouponDialog = false },
                 onSave = {
                     // Handle save coupon
                     showNewCouponDialog = false
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar("تم إضافة الكوبون بنجاح!")
+                    }
+                }
+            )
+        }
+
+        if (showDeleteConfirmation && promotionToDelete != null) {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirmation = false },
+                title = { Text("تأكيد الحذف") },
+                text = { Text("هل أنت متأكد من حذف هذا العرض؟") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            // Handle delete
+                            showDeleteConfirmation = false
+                            promotionToDelete = null
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar("تم حذف العرض بنجاح!")
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text("حذف")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirmation = false }) {
+                        Text("إلغاء")
+                    }
                 }
             )
         }
     }
 }
 
-// Enhanced Header Component
+// Enhanced Tab Row Component
 @Composable
-private fun EnhancedPromotionsHeader(
-    onAddPromotion: () -> Unit,
-    onAddCoupon: () -> Unit,
-    isDesktop: Boolean,
-    modifier: Modifier = Modifier
+private fun EnhancedPromotionsTabRow(
+    selectedTab: PromotionsTab,
+    onTabSelected: (PromotionsTab) -> Unit
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardStyles.elevatedCardColors(),
-        shape = RoundedCornerShape(24.dp),
-        elevation = CardStyles.elevatedCardElevation()
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Box(
-            modifier = Modifier.fillMaxWidth()
+        TabRow(
+            selectedTabIndex = selectedTab.ordinal,
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.primary,
+            indicator = { tabPositions ->
+                TabRowDefaults.Indicator(
+                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab.ordinal]),
+                    color = MaterialTheme.colorScheme.primary,
+                    height = 3.dp
+                )
+            }
         ) {
-            // Enhanced gradient background
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(if (isDesktop) 200.dp else 180.dp)
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.02f),
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                            )
-                        )
-                    )
-            )
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
-                // Header content
-                RTLRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+            PromotionsTab.values().forEach { tab ->
+                Tab(
+                    selected = selectedTab == tab,
+                    onClick = { onTabSelected(tab) },
+                    text = {
                         Text(
-                            text = "العروض والخصومات",
-                            style = if (isDesktop) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            text = tab.title,
+                            fontWeight = if (selectedTab == tab) FontWeight.Bold else FontWeight.Medium,
+                            style = MaterialTheme.typography.titleMedium
                         )
-                        Text(
-                            text = "إدارة العروض الترويجية وكوبونات الخصم بكفاءة عالية",
-                            style = if (isDesktop) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    // Header icon
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                        modifier = Modifier.size(64.dp)
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            Icon(
-                                Icons.Default.LocalOffer,
-                                contentDescription = null,
-                                modifier = Modifier.size(32.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                }
-
-                // Action buttons
-                RTLRow(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Button(
-                        onClick = onAddPromotion,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.height(48.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "إضافة عرض جديد",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-
-                    OutlinedButton(
-                        onClick = onAddCoupon,
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.primary
-                        ),
-                        border = BorderStroke(
-                            width = 1.5.dp,
-                            color = MaterialTheme.colorScheme.primary
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.height(48.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.LocalOffer,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "إضافة كوبون",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
+                    },
+                    modifier = Modifier.padding(vertical = 12.dp)
+                )
             }
         }
     }
 }
 
-// Enhanced Search and Filters Component
+// Enhanced Filter Dropdown Component
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun EnhancedSearchAndFilters(
-    searchQuery: String,
-    onSearchQueryChange: (String) -> Unit,
-    selectedStatus: String,
-    onStatusChange: (String) -> Unit
+private fun EnhancedFilterDropdown(
+    label: String,
+    value: String,
+    options: List<String>,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val responsive = ResponsiveUtils.getResponsiveSpacing()
-    val responsiveCorners = ResponsiveUtils.getResponsiveCornerRadius()
+    var expanded by remember { mutableStateOf(false) }
 
-    Card(
-        colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(responsiveCorners.large),
-        elevation = CardStyles.defaultCardElevation(),
-        modifier = Modifier.fillMaxWidth()
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = modifier
     ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+        OutlinedTextField(
+            value = value,
+            onValueChange = { },
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+            )
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
         ) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option) },
+                    onClick = {
+                        onValueChange(option)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+// Enhanced Promotions Overview Content
+@Composable
+private fun EnhancedPromotionsOverviewContent(
+    searchQuery: String,
+    selectedStatus: String,
+    selectedType: String,
+    showActiveOnly: Boolean,
+    showExpiringOnly: Boolean,
+    sortBy: String,
+    onPromotionClick: (String) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Statistics Cards
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                EnhancedPromotionStatCard(
+                    title = "إجمالي العروض",
+                    value = "24",
+                    subtitle = "عرض مسجل",
+                    icon = Icons.Default.LocalOffer,
+                    iconColor = MaterialTheme.colorScheme.primary,
+                    trend = "+3 هذا الشهر",
+                    modifier = Modifier.weight(1f)
+                )
+                EnhancedPromotionStatCard(
+                    title = "العروض النشطة",
+                    value = "12",
+                    subtitle = "عرض نشط",
+                    icon = Icons.Default.TrendingUp,
+                    iconColor = AppTheme.colors.success,
+                    trend = "+50%",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                EnhancedPromotionStatCard(
+                    title = "إجمالي الخصومات",
+                    value = UiUtils.formatCurrency(45600.0),
+                    subtitle = "قيمة الخصومات",
+                    icon = Icons.Default.Discount,
+                    iconColor = AppTheme.colors.warning,
+                    trend = "+15.2%",
+                    modifier = Modifier.weight(1f)
+                )
+                EnhancedPromotionStatCard(
+                    title = "معدل الاستخدام",
+                    value = "78%",
+                    subtitle = "من العروض",
+                    icon = Icons.Default.Analytics,
+                    iconColor = AppTheme.colors.info,
+                    trend = "+5.8%",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        // Recent Promotions
+        item {
             Text(
-                text = "البحث والتصفية",
-                style = MaterialTheme.typography.titleMedium,
+                text = "العروض الحديثة",
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
+        }
 
-            // Search field
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = onSearchQueryChange,
-                label = { Text("البحث في العروض والكوبونات") },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.Search,
-                        contentDescription = "بحث",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
-                trailingIcon = if (searchQuery.isNotEmpty()) {
-                    {
-                        IconButton(onClick = { onSearchQueryChange("") }) {
-                            Icon(
-                                Icons.Default.Clear,
-                                contentDescription = "مسح",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                } else null,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                )
+        // Sample promotion items
+        items(8) { index ->
+            EnhancedPromotionCard(
+                title = "خصم ${(index + 1) * 15}%",
+                description = "خصم على جميع المنتجات في فئة ${if (index == 0) "الإلكترونيات" else if (index == 1) "الملابس" else "المنزل والحديقة"}",
+                validUntil = "صالح حتى 31/12/2024",
+                discountValue = "${(index + 1) * 15}%",
+                usageCount = "${(index + 1) * 45}",
+                isActive = index % 3 != 0,
+                promotionType = if (index % 2 == 0) "نسبة مئوية" else "مبلغ ثابت",
+                onClick = { onPromotionClick("promotion_$index") }
             )
-
-            // Status filter chips
-            Text(
-                text = "تصفية حسب الحالة",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(horizontal = 4.dp)
-            ) {
-                val statuses = listOf("الكل", "نشط", "منتهي", "مجدول", "متوقف")
-                items(statuses) { status ->
-                    FilterChip(
-                        onClick = { onStatusChange(status) },
-                        label = { Text(status) },
-                        selected = selectedStatus == status,
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                            selectedLabelColor = MaterialTheme.colorScheme.primary
-                        ),
-                        shape = RoundedCornerShape(20.dp)
-                    )
-                }
-            }
         }
     }
 }
 
-// Enhanced Statistics Dashboard
+// Enhanced Promotion Stat Card Component
 @Composable
-private fun EnhancedPromotionsStatistics(
-    isDesktop: Boolean,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Text(
-            text = "إحصائيات العروض والخصومات",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-
-        if (isDesktop) {
-            // Desktop: 4 cards in a row
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(horizontal = 4.dp)
-            ) {
-                item {
-                    ModernPromotionStatCard(
-                        title = "إجمالي العروض",
-                        value = "24",
-                        subtitle = "عرض مسجل",
-                        icon = Icons.Default.LocalOffer,
-                        iconColor = MaterialTheme.colorScheme.primary,
-                        trend = "+3 هذا الشهر"
-                    )
-                }
-                item {
-                    ModernPromotionStatCard(
-                        title = "العروض النشطة",
-                        value = "12",
-                        subtitle = "عرض نشط",
-                        icon = Icons.Default.TrendingUp,
-                        iconColor = AppTheme.colors.success,
-                        trend = "+50%"
-                    )
-                }
-                item {
-                    ModernPromotionStatCard(
-                        title = "إجمالي الخصومات",
-                        value = UiUtils.formatCurrency(45600.0),
-                        subtitle = "قيمة الخصومات",
-                        icon = Icons.Default.Discount,
-                        iconColor = AppTheme.colors.warning,
-                        trend = "+15.2%"
-                    )
-                }
-                item {
-                    ModernPromotionStatCard(
-                        title = "معدل الاستخدام",
-                        value = "78%",
-                        subtitle = "من العروض",
-                        icon = Icons.Default.Analytics,
-                        iconColor = AppTheme.colors.info,
-                        trend = "+5.8%"
-                    )
-                }
-            }
-        } else {
-            // Mobile/Tablet: 2 cards per row
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.height(320.dp)
-            ) {
-                item {
-                    ModernPromotionStatCard(
-                        title = "إجمالي العروض",
-                        value = "24",
-                        subtitle = "عرض مسجل",
-                        icon = Icons.Default.LocalOffer,
-                        iconColor = MaterialTheme.colorScheme.primary,
-                        trend = "+3"
-                    )
-                }
-                item {
-                    ModernPromotionStatCard(
-                        title = "العروض النشطة",
-                        value = "12",
-                        subtitle = "عرض نشط",
-                        icon = Icons.Default.TrendingUp,
-                        iconColor = AppTheme.colors.success,
-                        trend = "+50%"
-                    )
-                }
-                item {
-                    ModernPromotionStatCard(
-                        title = "إجمالي الخصومات",
-                        value = "45.6K ر.س",
-                        subtitle = "قيمة الخصومات",
-                        icon = Icons.Default.Discount,
-                        iconColor = AppTheme.colors.warning,
-                        trend = "+15.2%"
-                    )
-                }
-                item {
-                    ModernPromotionStatCard(
-                        title = "معدل الاستخدام",
-                        value = "78%",
-                        subtitle = "من العروض",
-                        icon = Icons.Default.Analytics,
-                        iconColor = AppTheme.colors.info,
-                        trend = "+5.8%"
-                    )
-                }
-            }
-        }
-    }
-}
-
-// Modern Promotion Stat Card Component
-@Composable
-private fun ModernPromotionStatCard(
+private fun EnhancedPromotionStatCard(
     title: String,
     value: String,
     subtitle: String,
@@ -472,11 +775,14 @@ private fun ModernPromotionStatCard(
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier.width(280.dp),
+        modifier = modifier,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 1.dp
+        ),
         border = BorderStroke(
             width = 1.dp,
             color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
@@ -489,12 +795,12 @@ private fun ModernPromotionStatCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(140.dp)
+                    .height(120.dp)
                     .background(
                         brush = Brush.verticalGradient(
                             colors = listOf(
                                 iconColor.copy(alpha = 0.02f),
-                                iconColor.copy(alpha = 0.08f)
+                                iconColor.copy(alpha = 0.06f)
                             )
                         )
                     )
@@ -503,11 +809,11 @@ private fun ModernPromotionStatCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
+                    .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // Header with icon and trend
-                RTLRow(
+                Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.Top
@@ -515,7 +821,7 @@ private fun ModernPromotionStatCard(
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = iconColor.copy(alpha = 0.1f),
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(40.dp)
                     ) {
                         Box(
                             contentAlignment = Alignment.Center,
@@ -524,7 +830,7 @@ private fun ModernPromotionStatCard(
                             Icon(
                                 icon,
                                 contentDescription = null,
-                                modifier = Modifier.size(24.dp),
+                                modifier = Modifier.size(20.dp),
                                 tint = iconColor
                             )
                         }
@@ -532,13 +838,13 @@ private fun ModernPromotionStatCard(
 
                     // Trend indicator
                     Surface(
-                        shape = RoundedCornerShape(20.dp),
+                        shape = RoundedCornerShape(16.dp),
                         color = if (trend.startsWith("+")) AppTheme.colors.success.copy(alpha = 0.1f)
                                else AppTheme.colors.error.copy(alpha = 0.1f)
                     ) {
                         Text(
                             text = trend,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Medium,
                             color = if (trend.startsWith("+")) AppTheme.colors.success
@@ -549,7 +855,7 @@ private fun ModernPromotionStatCard(
 
                 // Value and title
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     Text(
                         text = value,
@@ -559,7 +865,7 @@ private fun ModernPromotionStatCard(
                     )
                     Text(
                         text = title,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -574,18 +880,51 @@ private fun ModernPromotionStatCard(
     }
 }
 
-// Enhanced Active Promotions Section
+// Enhanced Promotion Card Component
 @Composable
-private fun EnhancedActivePromotions(
-    searchQuery: String,
-    selectedStatus: String,
+private fun EnhancedPromotionCard(
+    title: String,
+    description: String,
+    validUntil: String,
+    discountValue: String,
+    usageCount: String,
+    isActive: Boolean,
+    promotionType: String,
+    onClick: () -> Unit = {},
+    onEdit: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
+    showActions: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardStyles.elevatedCardColors(),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardStyles.elevatedCardElevation()
+    // Enhanced hover effect with complete coverage
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                color = when {
+                    isHovered -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+                    else -> MaterialTheme.colorScheme.surface
+                },
+                shape = RoundedCornerShape(20.dp)
+            )
+            .border(
+                width = if (isHovered) 1.5.dp else 1.dp,
+                color = when {
+                    isHovered && isActive -> AppTheme.colors.success.copy(alpha = 0.5f)
+                    isHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                    isActive -> AppTheme.colors.success.copy(alpha = 0.3f)
+                    else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                },
+                shape = RoundedCornerShape(20.dp)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { onClick() }
     ) {
         Box(
             modifier = Modifier.fillMaxWidth()
@@ -595,74 +934,200 @@ private fun EnhancedActivePromotions(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(
-                        brush = Brush.verticalGradient(
+                        brush = Brush.horizontalGradient(
                             colors = listOf(
-                                AppTheme.colors.success.copy(alpha = 0.01f),
-                                AppTheme.colors.success.copy(alpha = 0.03f)
+                                if (isActive) AppTheme.colors.success.copy(alpha = 0.02f)
+                                else AppTheme.colors.error.copy(alpha = 0.02f),
+                                Color.Transparent
                             )
                         )
                     )
             )
 
             Column(
-                modifier = Modifier.padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Section header
-                RTLRow(
+                // Header with status and actions
+                Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "العروض النشطة",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "العروض والخصومات المتاحة حالياً",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        // Status chip
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = if (isActive) AppTheme.colors.success.copy(alpha = 0.1f)
+                                   else AppTheme.colors.error.copy(alpha = 0.1f)
+                        ) {
+                            Text(
+                                text = if (isActive) "نشط" else "منتهي",
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isActive) AppTheme.colors.success else AppTheme.colors.error
+                            )
+                        }
+
+                        // Promotion type chip
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                        ) {
+                            Text(
+                                text = promotionType,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
 
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = AppTheme.colors.success.copy(alpha = 0.1f),
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.fillMaxSize()
+                    // Action buttons
+                    if (showActions && (onEdit != null || onDelete != null)) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(
-                                Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp),
-                                tint = AppTheme.colors.success
-                            )
+                            onEdit?.let { editAction ->
+                                IconButton(
+                                    onClick = editAction,
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Edit,
+                                        contentDescription = "تعديل",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            onDelete?.let { deleteAction ->
+                                IconButton(
+                                    onClick = deleteAction,
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = "حذف",
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
 
-                // Sample active promotions
+                // Main content
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    repeat(3) { index ->
-                        EnhancedPromotionCard(
-                            title = "خصم ${(index + 1) * 15}%",
-                            description = "خصم على جميع المنتجات في فئة ${if (index == 0) "الإلكترونيات" else if (index == 1) "الملابس" else "المنزل والحديقة"}",
-                            validUntil = "صالح حتى 31/12/2024",
-                            discountValue = "${(index + 1) * 15}%",
-                            usageCount = "${(index + 1) * 45}",
-                            isActive = true,
-                            promotionType = if (index % 2 == 0) "نسبة مئوية" else "مبلغ ثابت"
+                    // Title and discount value
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                        ) {
+                            Text(
+                                text = discountValue,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    // Description
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    // Footer with validity and usage
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.Schedule,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = if (isActive) AppTheme.colors.success else AppTheme.colors.error
+                                )
+                                Text(
+                                    text = validUntil,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (isActive) AppTheme.colors.success else AppTheme.colors.error
+                                )
+                            }
+
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.People,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "$usageCount استخدام",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        // View details button
+                        TextButton(
+                            onClick = onClick,
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Text(
+                                text = "عرض التفاصيل",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -682,23 +1147,35 @@ private fun EnhancedPromotionCard(
     promotionType: String,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    // Enhanced hover effect with complete coverage
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { /* Handle click */ },
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(
-            width = 1.dp,
-            color = if (isActive) AppTheme.colors.success.copy(alpha = 0.3f)
-                   else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 2.dp,
-            hoveredElevation = 4.dp
-        )
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                color = when {
+                    isHovered -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+                    else -> MaterialTheme.colorScheme.surface
+                },
+                shape = RoundedCornerShape(16.dp)
+            )
+            .border(
+                width = if (isHovered) 1.5.dp else 1.dp,
+                color = when {
+                    isHovered && isActive -> AppTheme.colors.success.copy(alpha = 0.5f)
+                    isHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                    isActive -> AppTheme.colors.success.copy(alpha = 0.3f)
+                    else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                },
+                shape = RoundedCornerShape(16.dp)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { /* Handle click */ }
     ) {
         Box(
             modifier = Modifier.fillMaxWidth()
@@ -903,250 +1380,301 @@ private fun EnhancedPromotionCard(
     }
 }
 
-// Enhanced Expired Promotions Section
+// Enhanced Active Promotions Content
 @Composable
-private fun EnhancedExpiredPromotions(
-    modifier: Modifier = Modifier
+private fun EnhancedActivePromotionsContent(
+    searchQuery: String,
+    selectedType: String,
+    sortBy: String,
+    onPromotionClick: (String) -> Unit,
+    onEditPromotion: (String) -> Unit,
+    onDeletePromotion: (String) -> Unit
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardStyles.defaultCardElevation()
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Box(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            // Subtle gradient background
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                AppTheme.colors.error.copy(alpha = 0.01f),
-                                AppTheme.colors.error.copy(alpha = 0.03f)
-                            )
-                        )
-                    )
+        // Sample active promotions
+        items(6) { index ->
+            EnhancedPromotionCard(
+                title = "خصم ${(index + 1) * 15}%",
+                description = "خصم على جميع المنتجات في فئة ${if (index == 0) "الإلكترونيات" else if (index == 1) "الملابس" else "المنزل والحديقة"}",
+                validUntil = "صالح حتى 31/12/2024",
+                discountValue = "${(index + 1) * 15}%",
+                usageCount = "${(index + 1) * 45}",
+                isActive = true,
+                promotionType = if (index % 2 == 0) "نسبة مئوية" else "مبلغ ثابت",
+                onClick = { onPromotionClick("promotion_$index") },
+                onEdit = { onEditPromotion("promotion_$index") },
+                onDelete = { onDeletePromotion("promotion_$index") },
+                showActions = true
             )
+        }
+    }
+}
 
-            Column(
-                modifier = Modifier.padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
+// Enhanced Expired Promotions Content
+@Composable
+private fun EnhancedExpiredPromotionsContent(
+    searchQuery: String,
+    selectedType: String,
+    sortBy: String
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Sample expired promotions
+        items(4) { index ->
+            EnhancedPromotionCard(
+                title = "عرض الصيف ${index + 1}",
+                description = "عرض خاص لفصل الصيف على منتجات مختارة",
+                validUntil = "انتهى في 30/09/2024",
+                discountValue = "${(index + 1) * 20}%",
+                usageCount = "${(index + 1) * 120}",
+                isActive = false,
+                promotionType = "عرض موسمي",
+                onClick = { /* View expired promotion details */ }
+            )
+        }
+    }
+}
+
+// Enhanced Promotion Analytics Content
+@Composable
+private fun EnhancedPromotionAnalyticsContent(
+    searchQuery: String
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Analytics Cards
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Section header
-                RTLRow(
-                    modifier = Modifier.fillMaxWidth(),
+                EnhancedPromotionStatCard(
+                    title = "أفضل عرض",
+                    value = "خصم 30%",
+                    subtitle = "على الإلكترونيات",
+                    icon = Icons.Default.TrendingUp,
+                    iconColor = AppTheme.colors.success,
+                    trend = "450 استخدام",
+                    modifier = Modifier.weight(1f)
+                )
+                EnhancedPromotionStatCard(
+                    title = "متوسط الخصم",
+                    value = "18.5%",
+                    subtitle = "لجميع العروض",
+                    icon = Icons.Default.Analytics,
+                    iconColor = AppTheme.colors.info,
+                    trend = "+2.3%",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        // Top Performing Promotions
+        item {
+            Text(
+                text = "أفضل العروض أداءً",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+
+        items(5) { index ->
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "العروض المنتهية",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "العروض والخصومات المنتهية الصلاحية",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = AppTheme.colors.error.copy(alpha = 0.1f),
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.fillMaxSize()
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                            modifier = Modifier.size(32.dp)
                         ) {
-                            Icon(
-                                Icons.Default.Cancel,
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp),
-                                tint = AppTheme.colors.error
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                Text(
+                                    text = "${index + 1}",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+
+                        Column {
+                            Text(
+                                text = "خصم ${(index + 1) * 15}% على الإلكترونيات",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "${(index + 1) * 150} استخدام",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
-                }
 
-                // Sample expired promotions
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    repeat(2) { index ->
-                        EnhancedPromotionCard(
-                            title = "عرض الصيف ${index + 1}",
-                            description = "عرض خاص لفصل الصيف على منتجات مختارة",
-                            validUntil = "انتهى في 30/09/2024",
-                            discountValue = "${(index + 1) * 20}%",
-                            usageCount = "${(index + 1) * 120}",
-                            isActive = false,
-                            promotionType = "عرض موسمي"
-                        )
-                    }
+                    Text(
+                        text = UiUtils.formatCurrency((index + 1) * 5600.0),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = AppTheme.colors.success
+                    )
                 }
             }
         }
     }
 }
 
-// Enhanced Promotion Analytics Section
+// Enhanced Promotion Details Panel
 @Composable
-private fun EnhancedPromotionAnalytics(
-    isDesktop: Boolean,
+private fun EnhancedPromotionDetailsPanel(
+    promotionId: String,
+    onClose: () -> Unit,
+    onEdit: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardStyles.elevatedCardColors(),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardStyles.elevatedCardElevation()
+        modifier = modifier
+            .width(400.dp)
+            .fillMaxHeight(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(24.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 0.dp
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+        )
     ) {
-        Box(
-            modifier = Modifier.fillMaxWidth()
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp)
         ) {
-            // Subtle gradient background
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                AppTheme.colors.info.copy(alpha = 0.01f),
-                                AppTheme.colors.info.copy(alpha = 0.03f)
-                            )
-                        )
-                    )
-            )
-
-            Column(
-                modifier = Modifier.padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Section header
-                RTLRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = "تحليلات العروض",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "تحليل أداء العروض والخصومات",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                Text(
+                    text = "تفاصيل العرض",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
 
-                    Button(
-                        onClick = { /* View detailed analytics */ },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = AppTheme.colors.info
-                        ),
-                        shape = RoundedCornerShape(12.dp)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    IconButton(
+                        onClick = { onEdit(promotionId) },
+                        modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
-                            Icons.Default.Analytics,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
+                            Icons.Default.Edit,
+                            contentDescription = "تعديل",
+                            tint = MaterialTheme.colorScheme.primary
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "تقرير مفصل",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Medium
+                    }
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "إغلاق",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
+            }
 
-                // Analytics content placeholder
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Promotion details content
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "خصم 25% على الإلكترونيات",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "عرض خاص على جميع المنتجات الإلكترونية",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                item {
                     Text(
-                        text = "أفضل العروض أداءً",
+                        text = "معلومات العرض",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
+                }
 
-                    repeat(3) { index ->
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surface
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(
-                                width = 1.dp,
-                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-                            )
-                        ) {
-                            RTLRow(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RTLRow(
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Box(
-                                            contentAlignment = Alignment.Center,
-                                            modifier = Modifier.fillMaxSize()
-                                        ) {
-                                            Text(
-                                                text = "${index + 1}",
-                                                style = MaterialTheme.typography.labelLarge,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
-                                    }
-
-                                    Column {
-                                        Text(
-                                            text = "خصم ${(index + 1) * 15}% على الإلكترونيات",
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            fontWeight = FontWeight.Medium,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Text(
-                                            text = "${(index + 1) * 150} استخدام",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-
-                                Text(
-                                    text = UiUtils.formatCurrency((index + 1) * 5600.0),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = AppTheme.colors.success
-                                )
-                            }
-                        }
+                // Promotion details
+                item {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        DetailRow("نوع الخصم", "نسبة مئوية")
+                        DetailRow("قيمة الخصم", "25%")
+                        DetailRow("تاريخ البداية", "01/11/2024")
+                        DetailRow("تاريخ النهاية", "31/12/2024")
+                        DetailRow("عدد الاستخدامات", "156 استخدام")
+                        DetailRow("الحد الأقصى للاستخدام", "500 استخدام")
+                        DetailRow("الحالة", "نشط")
                     }
                 }
             }
@@ -1154,152 +1682,231 @@ private fun EnhancedPromotionAnalytics(
     }
 }
 
-// New Promotion Dialog
 @Composable
-private fun NewPromotionDialog(
-    onDismiss: () -> Unit,
-    onSave: () -> Unit
+private fun DetailRow(
+    label: String,
+    value: String
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = "إضافة عرض جديد",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text(
-                    text = "سيتم تنفيذ نموذج إضافة العرض الجديد قريباً",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                // Placeholder for form fields
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "الحقول المطلوبة:",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text("• اسم العرض", style = MaterialTheme.typography.bodySmall)
-                        Text("• نوع الخصم", style = MaterialTheme.typography.bodySmall)
-                        Text("• قيمة الخصم", style = MaterialTheme.typography.bodySmall)
-                        Text("• تاريخ البداية والنهاية", style = MaterialTheme.typography.bodySmall)
-                        Text("• المنتجات المشمولة", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = onSave,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                ),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("حفظ")
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            ) {
-                Text("إلغاء")
-            }
-        },
-        shape = RoundedCornerShape(16.dp)
-    )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
 }
 
-// New Coupon Dialog
+// Enhanced New Promotion Dialog
 @Composable
-private fun NewCouponDialog(
+private fun EnhancedNewPromotionDialog(
     onDismiss: () -> Unit,
     onSave: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = "إضافة كوبون جديد",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text(
-                    text = "سيتم تنفيذ نموذج إضافة الكوبون الجديد قريباً",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+    var promotionName by remember { mutableStateOf("") }
+    var discountType by remember { mutableStateOf("نسبة مئوية") }
+    var discountValue by remember { mutableStateOf("") }
 
-                // Placeholder for form fields
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                    ),
-                    shape = RoundedCornerShape(12.dp)
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            shape = RoundedCornerShape(24.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "الحقول المطلوبة:",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium
+                    Text(
+                        text = "إضافة عرض جديد",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "إغلاق",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Text("• كود الكوبون", style = MaterialTheme.typography.bodySmall)
-                        Text("• نوع الخصم", style = MaterialTheme.typography.bodySmall)
-                        Text("• قيمة الخصم", style = MaterialTheme.typography.bodySmall)
-                        Text("• عدد مرات الاستخدام", style = MaterialTheme.typography.bodySmall)
-                        Text("• الحد الأدنى للطلب", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+
+                // Form fields
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    OutlinedTextField(
+                        value = promotionName,
+                        onValueChange = { promotionName = it },
+                        label = { Text("اسم العرض") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    EnhancedFilterDropdown(
+                        label = "نوع الخصم",
+                        value = discountType,
+                        options = listOf("نسبة مئوية", "مبلغ ثابت"),
+                        onValueChange = { discountType = it },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = discountValue,
+                        onValueChange = { discountValue = it },
+                        label = { Text("قيمة الخصم") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+
+                // Action buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("إلغاء")
+                    }
+                    Button(
+                        onClick = onSave,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("حفظ")
                     }
                 }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = onSave,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                ),
-                shape = RoundedCornerShape(8.dp)
+        }
+    }
+}
+
+// Enhanced New Coupon Dialog
+@Composable
+private fun EnhancedNewCouponDialog(
+    onDismiss: () -> Unit,
+    onSave: () -> Unit
+) {
+    var couponCode by remember { mutableStateOf("") }
+    var discountType by remember { mutableStateOf("نسبة مئوية") }
+    var discountValue by remember { mutableStateOf("") }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            shape = RoundedCornerShape(24.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                Text("حفظ")
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "إضافة كوبون جديد",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "إغلاق",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // Form fields
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    OutlinedTextField(
+                        value = couponCode,
+                        onValueChange = { couponCode = it },
+                        label = { Text("كود الكوبون") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    EnhancedFilterDropdown(
+                        label = "نوع الخصم",
+                        value = discountType,
+                        options = listOf("نسبة مئوية", "مبلغ ثابت"),
+                        onValueChange = { discountType = it },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = discountValue,
+                        onValueChange = { discountValue = it },
+                        label = { Text("قيمة الخصم") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+
+                // Action buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("إلغاء")
+                    }
+                    Button(
+                        onClick = onSave,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("حفظ")
+                    }
+                }
             }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            ) {
-                Text("إلغاء")
-            }
-        },
-        shape = RoundedCornerShape(16.dp)
-    )
+        }
+    }
 }

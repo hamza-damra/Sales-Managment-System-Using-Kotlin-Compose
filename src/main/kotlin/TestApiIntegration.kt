@@ -94,10 +94,10 @@ fun main() = runBlocking {
                 is NetworkResult.Success -> {
                     val dashboard = dashboardResult.data
                     println("✓ Successfully retrieved dashboard summary")
-                    println("   Total sales count: ${dashboard.sales.totalSales}")
-                    println("   Total revenue: ${dashboard.sales.totalRevenue}")
-                    println("   Total customers: ${dashboard.customers.totalCustomers}")
-                    println("   Total products: ${dashboard.inventory.totalProducts}")
+                    println("   Total sales count: ${dashboard.sales?.totalSales ?: 0}")
+                    println("   Total revenue: ${dashboard.sales?.totalRevenue ?: 0.0}")
+                    println("   Total customers: ${dashboard.customers?.totalCustomers ?: 0}")
+                    println("   Total products: ${dashboard.inventory?.totalProducts ?: 0}")
                 }
                 is NetworkResult.Error -> {
                     println("✗ Failed to get dashboard summary: ${dashboardResult.exception.message}")

@@ -19,6 +19,16 @@ object ApiConfig {
         const val CUSTOMERS_SEARCH = "/customers/search"
         fun customerById(id: Long) = "/customers/$id"
         
+        // Categories
+        const val CATEGORIES = "/categories"
+        const val CATEGORIES_ACTIVE = "/categories/active"
+        const val CATEGORIES_SEARCH = "/categories/search"
+        const val CATEGORIES_EMPTY = "/categories/empty"
+        fun categoryById(id: Long) = "/categories/$id"
+        fun categoryByName(name: String) = "/categories/name/$name"
+        fun categoryByStatus(status: String) = "/categories/status/$status"
+        fun categoryStatus(id: Long) = "/categories/$id/status"
+
         // Products
         const val PRODUCTS = "/products"
         const val PRODUCTS_SEARCH = "/products/search"
@@ -34,6 +44,27 @@ object ApiConfig {
         fun completeSale(id: Long) = "/sales/$id/complete"
         fun cancelSale(id: Long) = "/sales/$id/cancel"
         
+        // Suppliers
+        const val SUPPLIERS = "/suppliers"
+        const val SUPPLIERS_SEARCH = "/suppliers/search"
+        fun supplierById(id: Long) = "/suppliers/$id"
+        fun supplierAnalytics(id: Long) = "/suppliers/$id/analytics"
+
+        // Returns
+        const val RETURNS = "/returns"
+        fun returnById(id: Long) = "/returns/$id"
+        fun approveReturn(id: Long) = "/returns/$id/approve"
+        fun rejectReturn(id: Long) = "/returns/$id/reject"
+        fun processRefund(id: Long) = "/returns/$id/refund"
+
+        // Promotions
+        const val PROMOTIONS = "/promotions"
+        const val PROMOTIONS_ACTIVE = "/promotions/active"
+        fun promotionById(id: Long) = "/promotions/$id"
+        fun activatePromotion(id: Long) = "/promotions/$id/activate"
+        fun deactivatePromotion(id: Long) = "/promotions/$id/deactivate"
+        fun promotionAnalytics(id: Long) = "/promotions/$id/analytics"
+
         // Reports
         const val REPORTS_SALES = "/reports/sales"
         const val REPORTS_REVENUE = "/reports/revenue"

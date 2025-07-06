@@ -15,6 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
@@ -45,20 +46,33 @@ fun CartItemImproved(
 ) {
     var isRemoving by remember { mutableStateOf(false) }
 
+    // Enhanced hover effect with complete coverage
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
     AnimatedVisibility(
         visible = !isRemoving,
         exit = fadeOut() + shrinkVertically()
     ) {
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            shape = RoundedCornerShape(12.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-            border = BorderStroke(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
-            )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(
+                    color = if (isHovered)
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+                    else
+                        MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(12.dp)
+                )
+                .border(
+                    width = if (isHovered) 1.5.dp else 1.dp,
+                    color = if (isHovered)
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                    else
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(12.dp)
+                )
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
@@ -331,24 +345,39 @@ private fun PaymentMethodCard(
         PaymentMethod.DIGITAL_WALLET -> Icons.Outlined.Wallet
     }
 
-    Card(
+    // Enhanced hover effect with complete coverage
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
         modifier = Modifier
             .width(120.dp)
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected)
-                MaterialTheme.colorScheme.primaryContainer
-            else
-                MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(
-            width = if (isSelected) 2.dp else 1.dp,
-            color = if (isSelected)
-                MaterialTheme.colorScheme.primary
-            else
-                MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-        )
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                color = when {
+                    isSelected -> MaterialTheme.colorScheme.primaryContainer
+                    isHovered -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+                    else -> MaterialTheme.colorScheme.surface
+                },
+                shape = RoundedCornerShape(12.dp)
+            )
+            .border(
+                width = when {
+                    isSelected -> 2.dp
+                    isHovered -> 1.5.dp
+                    else -> 1.dp
+                },
+                color = when {
+                    isSelected -> MaterialTheme.colorScheme.primary
+                    isHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                    else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                },
+                shape = RoundedCornerShape(12.dp)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { onClick() }
     ) {
         Column(
             modifier = Modifier

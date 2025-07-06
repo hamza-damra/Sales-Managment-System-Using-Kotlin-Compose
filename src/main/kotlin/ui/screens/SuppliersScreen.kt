@@ -1,513 +1,1189 @@
 package ui.screens
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.launch
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
 import data.*
 import ui.components.*
 import ui.theme.AppTheme
 import ui.theme.CardStyles
 import ui.utils.ResponsiveUtils
 
+// Supplier Tab Enum
+enum class SupplierTab(val title: String) {
+    SUPPLIERS("الموردين"),
+    ORDERS("طلبات الشراء"),
+    ANALYTICS("التحليلات والتقارير")
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SuppliersScreen(salesDataManager: SalesDataManager) {
     RTLProvider {
+        // Enhanced state management
         var selectedTab by remember { mutableStateOf(SupplierTab.SUPPLIERS) }
         var searchQuery by remember { mutableStateOf("") }
+        var selectedStatus by remember { mutableStateOf("الكل") }
+        var selectedLocation by remember { mutableStateOf("الكل") }
+        var selectedRating by remember { mutableStateOf("الكل") }
+        var sortBy by remember { mutableStateOf("name") }
+        var showActiveOnly by remember { mutableStateOf(false) }
+        var showWithOrdersOnly by remember { mutableStateOf(false) }
+        var isExporting by remember { mutableStateOf(false) }
+        var exportMessage by remember { mutableStateOf<String?>(null) }
+
+        // Dialog states
         var showAddSupplierDialog by remember { mutableStateOf(false) }
+        var editingSupplier by remember { mutableStateOf<Supplier?>(null) }
         var selectedSupplier by remember { mutableStateOf<Supplier?>(null) }
+        var showSupplierDetails by remember { mutableStateOf(false) }
+        var showDeleteConfirmation by remember { mutableStateOf(false) }
+        var supplierToDelete by remember { mutableStateOf<Supplier?>(null) }
 
-        val responsive = ResponsiveUtils.getResponsiveSpacing()
-        val responsivePadding = ResponsiveUtils.getResponsivePadding()
-        val responsiveCorners = ResponsiveUtils.getResponsiveCornerRadius()
+        // For desktop application, we'll use window size detection
+        val isTablet = true // Assume tablet/desktop for now
+        val isDesktop = true // Desktop application
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-        ) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(responsivePadding.screen),
-                verticalArrangement = Arrangement.spacedBy(responsive.large)
+        // Snackbar state
+        val snackbarHostState = remember { SnackbarHostState() }
+        val coroutineScope = rememberCoroutineScope()
+
+        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            RTLRow(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Enhanced Header Section
-                item {
-                    EnhancedSuppliersHeader(
-                        onAddSupplier = { showAddSupplierDialog = true }
+                // Left Panel - Supplier Management
+                Card(
+                    modifier = Modifier
+                        .weight(2f)
+                        .fillMaxHeight(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    shape = RoundedCornerShape(24.dp),
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = 0.dp
+                    ),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
                     )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp)
+                    ) {
+                        // Header
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "إدارة الموردين",
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+
+                            Button(
+                                onClick = { showAddSupplierDialog = true },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                ),
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = ButtonDefaults.buttonElevation(
+                                    defaultElevation = 2.dp
+                                )
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("إضافة مورد جديد")
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // Enhanced Tabs
+                        EnhancedSupplierTabRow(
+                            selectedTab = selectedTab,
+                            onTabSelected = { selectedTab = it }
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Search and Filter Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            // Search Field
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                label = { Text("البحث في الموردين") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Search,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                                )
+                            )
+
+                            // Status Filter
+                            EnhancedSupplierFilterDropdown(
+                                label = "الحالة",
+                                value = selectedStatus,
+                                options = listOf("الكل", "نشط", "غير نشط", "معلق"),
+                                onValueChange = { selectedStatus = it },
+                                modifier = Modifier.weight(0.7f)
+                            )
+
+                            // Location Filter
+                            EnhancedSupplierFilterDropdown(
+                                label = "الموقع",
+                                value = selectedLocation,
+                                options = listOf("الكل", "الرياض", "جدة", "الدمام", "مكة"),
+                                onValueChange = { selectedLocation = it },
+                                modifier = Modifier.weight(0.7f)
+                            )
+                        }
+
+                        // Sort and Action Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Sort Dropdown
+                            EnhancedSupplierFilterDropdown(
+                                label = "ترتيب حسب",
+                                value = when(sortBy) {
+                                    "name" -> "الاسم"
+                                    "rating" -> "التقييم"
+                                    "orders" -> "عدد الطلبات"
+                                    "amount" -> "قيمة المشتريات"
+                                    else -> "الاسم"
+                                },
+                                options = listOf("الاسم", "التقييم", "عدد الطلبات", "قيمة المشتريات"),
+                                onValueChange = {
+                                    sortBy = when(it) {
+                                        "الاسم" -> "name"
+                                        "التقييم" -> "rating"
+                                        "عدد الطلبات" -> "orders"
+                                        "قيمة المشتريات" -> "amount"
+                                        else -> "name"
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            // Enhanced Quick Filters with complete hover coverage
+                            val activeOnlyInteractionSource = remember { MutableInteractionSource() }
+                            val isActiveOnlyHovered by activeOnlyInteractionSource.collectIsHoveredAsState()
+
+                            Box(
+                                modifier = Modifier
+                                    .height(56.dp) // Match dropdown height
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        color = when {
+                                            showActiveOnly -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            isActiveOnlyHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                                            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                        },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .border(
+                                        width = if (showActiveOnly) 1.5.dp else if (isActiveOnlyHovered) 1.dp else 0.5.dp,
+                                        color = when {
+                                            showActiveOnly -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                            isActiveOnlyHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                            else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                        },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable(
+                                        interactionSource = activeOnlyInteractionSource,
+                                        indication = null
+                                    ) { showActiveOnly = !showActiveOnly },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 12.dp)
+                                ) {
+                                    if (showActiveOnly) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Text(
+                                        "نشط فقط",
+                                        color = when {
+                                            showActiveOnly -> MaterialTheme.colorScheme.primary
+                                            isActiveOnlyHovered -> MaterialTheme.colorScheme.onSurface
+                                            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                                        },
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+
+                            val withOrdersInteractionSource = remember { MutableInteractionSource() }
+                            val isWithOrdersHovered by withOrdersInteractionSource.collectIsHoveredAsState()
+
+                            Box(
+                                modifier = Modifier
+                                    .height(56.dp) // Match dropdown height
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        color = when {
+                                            showWithOrdersOnly -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            isWithOrdersHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                                            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                        },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .border(
+                                        width = if (showWithOrdersOnly) 1.5.dp else if (isWithOrdersHovered) 1.dp else 0.5.dp,
+                                        color = when {
+                                            showWithOrdersOnly -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                            isWithOrdersHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                            else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                        },
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable(
+                                        interactionSource = withOrdersInteractionSource,
+                                        indication = null
+                                    ) { showWithOrdersOnly = !showWithOrdersOnly },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 12.dp)
+                                ) {
+                                    if (showWithOrdersOnly) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Text(
+                                        "لديهم طلبات",
+                                        color = when {
+                                            showWithOrdersOnly -> MaterialTheme.colorScheme.primary
+                                            isWithOrdersHovered -> MaterialTheme.colorScheme.onSurface
+                                            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                                        },
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+
+                            // Enhanced Export Button with complete hover coverage
+                            val exportInteractionSource = remember { MutableInteractionSource() }
+                            val isExportHovered by exportInteractionSource.collectIsHoveredAsState()
+
+                            Box(
+                                modifier = Modifier
+                                    .height(56.dp) // Match dropdown height
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        color = if (isExportHovered && !isExporting)
+                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                        else
+                                            MaterialTheme.colorScheme.surface,
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .border(
+                                        width = if (isExportHovered && !isExporting) 1.5.dp else 1.dp,
+                                        color = if (isExportHovered && !isExporting)
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                                        else
+                                            MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable(
+                                        interactionSource = exportInteractionSource,
+                                        indication = null,
+                                        enabled = !isExporting
+                                    ) { if (!isExporting) { /* handleExportExcel() */ } },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                ) {
+                                    if (isExporting) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(18.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    } else {
+                                        Icon(
+                                            Icons.Default.FileDownload,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = if (isExportHovered)
+                                                MaterialTheme.colorScheme.primary
+                                            else
+                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                                        )
+                                    }
+                                    Text(
+                                        "تصدير",
+                                        color = if (isExporting)
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        else if (isExportHovered)
+                                            MaterialTheme.colorScheme.primary
+                                        else
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Content based on selected tab
+                        when (selectedTab) {
+                            SupplierTab.SUPPLIERS -> EnhancedSuppliersContent(
+                                searchQuery = searchQuery,
+                                selectedStatus = selectedStatus,
+                                selectedLocation = selectedLocation,
+                                showActiveOnly = showActiveOnly,
+                                showWithOrdersOnly = showWithOrdersOnly,
+                                sortBy = sortBy,
+                                onSupplierClick = { supplier ->
+                                    selectedSupplier = supplier
+                                    showSupplierDetails = true
+                                },
+                                onEditSupplier = { supplier ->
+                                    editingSupplier = supplier
+                                },
+                                onDeleteSupplier = { supplier ->
+                                    supplierToDelete = supplier
+                                    showDeleteConfirmation = true
+                                }
+                            )
+                            SupplierTab.ORDERS -> EnhancedPurchaseOrdersContent(
+                                searchQuery = searchQuery
+                            )
+                            SupplierTab.ANALYTICS -> EnhancedSupplierAnalyticsContent()
+                        }
+                    }
                 }
 
-                // Search and Filters Section
-                item {
-                    EnhancedSearchAndFilters(
-                        searchQuery = searchQuery,
-                        onSearchQueryChange = { searchQuery = it }
-                    )
-                }
-
-                // Enhanced Statistics Dashboard
-                item {
-                    EnhancedSupplierStatistics()
-                }
-
-                // Enhanced Suppliers List
-                item {
-                    EnhancedSuppliersList()
+                // Right Panel - Details and Statistics (when supplier selected)
+                AnimatedVisibility(
+                    visible = showSupplierDetails && selectedSupplier != null,
+                    enter = slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(300)
+                    ) + fadeIn(),
+                    exit = slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(300)
+                    ) + fadeOut()
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        shape = RoundedCornerShape(24.dp),
+                        elevation = CardDefaults.cardElevation(
+                            defaultElevation = 0.dp
+                        ),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                        )
+                    ) {
+                        selectedSupplier?.let { supplier ->
+                            EnhancedSupplierDetailsPanel(
+                                supplier = supplier,
+                                onEdit = {
+                                    editingSupplier = supplier
+                                    showSupplierDetails = false
+                                },
+                                onDelete = {
+                                    supplierToDelete = supplier
+                                    showDeleteConfirmation = true
+                                    showSupplierDetails = false
+                                },
+                                onClose = {
+                                    showSupplierDetails = false
+                                    selectedSupplier = null
+                                }
+                            )
+                        }
+                    }
                 }
             }
+
+            // Export status message
+            exportMessage?.let { message ->
+                Card(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (message.contains("نجاح"))
+                            AppTheme.colors.success.copy(alpha = 0.9f)
+                        else
+                            AppTheme.colors.error.copy(alpha = 0.9f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            if (message.contains("نجاح")) Icons.Default.CheckCircle else Icons.Default.Error,
+                            contentDescription = null,
+                            tint = Color.White
+                        )
+                        Text(
+                            text = message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.Medium
+                        )
+                        IconButton(
+                            onClick = { exportMessage = null }
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "إغلاق",
+                                tint = Color.White
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Snackbar
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
         }
 
-        // Add supplier dialog
+        // Dialogs
         if (showAddSupplierDialog) {
             EnhancedAddSupplierDialog(
                 onDismiss = { showAddSupplierDialog = false },
                 onSave = { supplier ->
-                    // Add supplier logic
+                    // Handle adding new supplier
                     showAddSupplierDialog = false
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar("تم إضافة المورد بنجاح")
+                    }
+                }
+            )
+        }
+
+        if (editingSupplier != null) {
+            EnhancedEditSupplierDialog(
+                supplier = editingSupplier!!,
+                onDismiss = { editingSupplier = null },
+                onSave = { supplier ->
+                    // Handle updating supplier
+                    editingSupplier = null
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar("تم تحديث المورد بنجاح")
+                    }
+                }
+            )
+        }
+
+        if (showDeleteConfirmation && supplierToDelete != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    showDeleteConfirmation = false
+                    supplierToDelete = null
+                },
+                title = { Text("تأكيد الحذف") },
+                text = { Text("هل أنت متأكد من حذف هذا المورد؟") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            // Handle deleting supplier
+                            showDeleteConfirmation = false
+                            supplierToDelete = null
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar("تم حذف المورد بنجاح")
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text("حذف")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(
+                        onClick = {
+                            showDeleteConfirmation = false
+                            supplierToDelete = null
+                        }
+                    ) {
+                        Text("إلغاء")
+                    }
                 }
             )
         }
     }
 }
 
-// Enhanced Component Functions
+// Enhanced Tab Row Component
 @Composable
-private fun EnhancedSuppliersHeader() {
-    val responsive = ResponsiveUtils.getResponsiveSpacing()
-    val responsiveCorners = ResponsiveUtils.getResponsiveCornerRadius()
-
+private fun EnhancedSupplierTabRow(
+    selectedTab: SupplierTab,
+    onTabSelected: (SupplierTab) -> Unit
+) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         ),
-        shape = RoundedCornerShape(responsiveCorners.large),
-        border = BorderStroke(
-            width = 1.dp,
-            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
-        )
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Box(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            // Subtle gradient background
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(120.dp)
-                    .background(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
-                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.03f)
-                            )
-                        )
-                    )
-            )
-
-            RTLRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(responsive.large),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(responsive.small)
-                ) {
-                    Text(
-                        text = "إدارة الموردين",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "تنظيم معلومات الموردين وطلبات الشراء",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EnhancedSuppliersHeader(
-    onAddSupplier: () -> Unit
-) {
-    val responsive = ResponsiveUtils.getResponsiveSpacing()
-    val responsiveCorners = ResponsiveUtils.getResponsiveCornerRadius()
-
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        ),
-        shape = RoundedCornerShape(responsiveCorners.large),
-        border = BorderStroke(
-            width = 1.dp,
-            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
-        )
-    ) {
-        Box(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            // Subtle gradient background
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(120.dp)
-                    .background(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
-                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.03f)
-                            )
-                        )
-                    )
-            )
-
-            RTLRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(responsive.large),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(responsive.small)
-                ) {
-                    Text(
-                        text = "إدارة الموردين",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "تنظيم معلومات الموردين وطلبات الشراء",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Button(
-                    onClick = onAddSupplier,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.height(48.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "إضافة مورد",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EnhancedSearchAndFilters(
-    searchQuery: String,
-    onSearchQueryChange: (String) -> Unit
-) {
-    val responsive = ResponsiveUtils.getResponsiveSpacing()
-    val responsiveCorners = ResponsiveUtils.getResponsiveCornerRadius()
-
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(responsiveCorners.large),
-        border = BorderStroke(
-            width = 1.dp,
-            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
-        )
-    ) {
-        RTLRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(responsive.medium),
-            horizontalArrangement = Arrangement.spacedBy(responsive.medium),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            SearchBar(
-                query = searchQuery,
-                onQueryChange = onSearchQueryChange,
-                placeholder = "البحث في الموردين...",
-                modifier = Modifier.weight(1f)
-            )
-
-            FilterChip(
-                selected = true,
-                onClick = { /* Filter active suppliers */ },
-                label = { Text("موردين نشطين") },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = AppTheme.colors.success.copy(alpha = 0.2f),
-                    selectedLabelColor = AppTheme.colors.success
+        TabRow(
+            selectedTabIndex = selectedTab.ordinal,
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.primary,
+            indicator = { tabPositions ->
+                TabRowDefaults.Indicator(
+                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab.ordinal]),
+                    color = MaterialTheme.colorScheme.primary,
+                    height = 3.dp
                 )
-            )
-
-            FilterChip(
-                selected = false,
-                onClick = { /* Filter by orders */ },
-                label = { Text("لديهم طلبات") }
-            )
+            }
+        ) {
+            SupplierTab.values().forEach { tab ->
+                Tab(
+                    selected = selectedTab == tab,
+                    onClick = { onTabSelected(tab) },
+                    text = {
+                        Text(
+                            text = tab.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = if (selectedTab == tab) FontWeight.Bold else FontWeight.Normal
+                        )
+                    },
+                    icon = {
+                        Icon(
+                            when (tab) {
+                                SupplierTab.SUPPLIERS -> Icons.Default.Business
+                                SupplierTab.ORDERS -> Icons.Default.ShoppingCart
+                                SupplierTab.ANALYTICS -> Icons.Default.Analytics
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                )
+            }
         }
     }
 }
 
+// Enhanced Filter Dropdown Component
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun EnhancedSupplierStatistics() {
-    val responsive = ResponsiveUtils.getResponsiveSpacing()
+private fun EnhancedSupplierFilterDropdown(
+    label: String,
+    value: String,
+    options: List<String>,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
 
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(responsive.medium),
-        contentPadding = PaddingValues(horizontal = 4.dp)
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = modifier
     ) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = { },
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = {
+                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+            },
+            modifier = Modifier
+                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+            )
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option) },
+                    onClick = {
+                        onValueChange(option)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+// Enhanced Suppliers Content
+@Composable
+private fun EnhancedSuppliersContent(
+    searchQuery: String,
+    selectedStatus: String,
+    selectedLocation: String,
+    showActiveOnly: Boolean,
+    showWithOrdersOnly: Boolean,
+    sortBy: String,
+    onSupplierClick: (Supplier) -> Unit,
+    onEditSupplier: (Supplier) -> Unit,
+    onDeleteSupplier: (Supplier) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Statistics Cards
         item {
-            ModernStatCard(
-                title = "إجمالي الموردين",
-                value = "25",
-                subtitle = "مورد مسجل",
-                icon = Icons.Default.Business,
-                iconColor = MaterialTheme.colorScheme.primary,
-                trend = "+3 هذا الشهر"
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                EnhancedSupplierStatCard(
+                    title = "إجمالي الموردين",
+                    value = "25",
+                    subtitle = "مورد مسجل",
+                    icon = Icons.Default.Business,
+                    iconColor = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f)
+                )
+
+                EnhancedSupplierStatCard(
+                    title = "موردين نشطين",
+                    value = "23",
+                    subtitle = "مورد نشط",
+                    icon = Icons.Default.Verified,
+                    iconColor = AppTheme.colors.success,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                EnhancedSupplierStatCard(
+                    title = "طلبات الشراء",
+                    value = "12",
+                    subtitle = "طلب هذا الشهر",
+                    icon = Icons.Default.ShoppingCart,
+                    iconColor = AppTheme.colors.warning,
+                    modifier = Modifier.weight(1f)
+                )
+
+                EnhancedSupplierStatCard(
+                    title = "قيمة المشتريات",
+                    value = "45,680 ر.س",
+                    subtitle = "إجمالي الشهر",
+                    icon = Icons.Default.AttachMoney,
+                    iconColor = AppTheme.colors.info,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        // Recent Suppliers
+        item {
+            Text(
+                text = "قائمة الموردين",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
-        item {
-            ModernStatCard(
-                title = "موردين نشطين",
-                value = "23",
-                subtitle = "مورد نشط",
-                icon = Icons.Default.Verified,
-                iconColor = AppTheme.colors.success,
-                trend = "+92%"
-            )
-        }
-        item {
-            ModernStatCard(
-                title = "طلبات الشراء",
-                value = "12",
-                subtitle = "طلب هذا الشهر",
-                icon = Icons.Default.ShoppingCart,
-                iconColor = AppTheme.colors.warning,
-                trend = "+25%"
-            )
-        }
-        item {
-            ModernStatCard(
-                title = "قيمة المشتريات",
-                value = "45,680 ر.س",
-                subtitle = "إجمالي الشهر",
-                icon = Icons.Default.AttachMoney,
-                iconColor = AppTheme.colors.info,
-                trend = "+18.5%"
-            )
-        }
-        item {
-            ModernStatCard(
-                title = "متوسط قيمة الطلب",
-                value = "3,807 ر.س",
-                subtitle = "متوسط شهري",
-                icon = Icons.Default.Analytics,
-                iconColor = AppTheme.colors.purple,
-                trend = "+12.3%"
+
+        // Sample suppliers
+        items(15) { index ->
+            EnhancedSupplierCard(
+                supplier = Supplier(
+                    id = index,
+                    name = "شركة المورد ${index + 1}",
+                    contactPerson = "أحمد محمد",
+                    phone = "+966-50-123-45${index + 10}",
+                    email = "supplier${index + 1}@company.com",
+                    address = "الرياض، المملكة العربية السعودية",
+                    paymentTerms = "NET_30",
+                    deliveryTerms = "FOB_DESTINATION",
+                    rating = 4.0 + (index % 5) * 0.2
+                ),
+                totalOrders = 5 + index * 2,
+                totalAmount = (10000 + index * 5000).toDouble(),
+                status = if (index % 3 == 0) "معلق" else "نشط",
+                onClick = onSupplierClick,
+                onEdit = onEditSupplier,
+                onDelete = onDeleteSupplier
             )
         }
     }
 }
 
+// Enhanced Purchase Orders Content
 @Composable
-private fun ModernStatCard(
+private fun EnhancedPurchaseOrdersContent(
+    searchQuery: String
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Sample purchase orders
+        items(10) { index ->
+            EnhancedPurchaseOrderCard(
+                orderId = "PO-${1000 + index}",
+                supplierName = "شركة المورد ${index + 1}",
+                orderDate = "2024-01-${(index % 28) + 1}",
+                totalAmount = (5000 + index * 1000).toDouble(),
+                status = when (index % 3) {
+                    0 -> "في الانتظار"
+                    1 -> "تم التسليم"
+                    else -> "ملغي"
+                },
+                itemsCount = 3 + index % 5
+            )
+        }
+    }
+}
+
+// Enhanced Supplier Analytics Content
+@Composable
+private fun EnhancedSupplierAnalyticsContent() {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Analytics Cards
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                EnhancedSupplierStatCard(
+                    title = "متوسط قيمة الطلب",
+                    value = "3,807 ر.س",
+                    subtitle = "متوسط شهري",
+                    icon = Icons.Default.Analytics,
+                    iconColor = AppTheme.colors.purple,
+                    modifier = Modifier.weight(1f)
+                )
+
+                EnhancedSupplierStatCard(
+                    title = "أفضل مورد",
+                    value = "شركة المورد 1",
+                    subtitle = "حسب التقييم",
+                    icon = Icons.Default.Star,
+                    iconColor = AppTheme.colors.warning,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        item {
+            Text(
+                text = "تحليل الأداء",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+
+        // Performance metrics would go here
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "تقرير الأداء الشهري",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "سيتم إضافة الرسوم البيانية والتحليلات هنا",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Enhanced Supplier Stat Card Component
+@Composable
+private fun EnhancedSupplierStatCard(
     title: String,
     value: String,
     subtitle: String,
     icon: ImageVector,
     iconColor: Color,
-    trend: String,
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier.width(280.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        ),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(
-            width = 1.dp,
-            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
-        )
-    ) {
-        Box(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            // Subtle gradient background
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(140.dp)
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                iconColor.copy(alpha = 0.02f),
-                                iconColor.copy(alpha = 0.08f)
-                            )
-                        )
-                    )
-            )
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                RTLRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = value,
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = subtitle,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .background(
-                                color = iconColor.copy(alpha = 0.1f),
-                                shape = RoundedCornerShape(12.dp)
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = iconColor,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
-
-                // Trend indicator
-                Surface(
-                    color = AppTheme.colors.success.copy(alpha = 0.1f),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(
-                        text = trend,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AppTheme.colors.success,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EnhancedSuppliersList() {
-    val responsive = ResponsiveUtils.getResponsiveSpacing()
-    val responsiveCorners = ResponsiveUtils.getResponsiveCornerRadius()
-
-    Card(
+        modifier = modifier,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        shape = RoundedCornerShape(responsiveCorners.large),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 1.dp
+        ),
         border = BorderStroke(
             width = 1.dp,
             color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
         )
     ) {
         Column(
-            modifier = Modifier.padding(responsive.large),
-            verticalArrangement = Arrangement.spacedBy(responsive.medium)
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            RTLRow(
+            Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = iconColor,
+                    modifier = Modifier.size(24.dp)
+                )
+
                 Text(
-                    text = "قائمة الموردين",
-                    style = MaterialTheme.typography.titleLarge,
+                    text = value,
+                    style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+            }
 
-                TextButton(
-                    onClick = { /* View all suppliers */ }
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+// Enhanced Supplier Card Component
+@Composable
+private fun EnhancedSupplierCard(
+    supplier: Supplier,
+    totalOrders: Int,
+    totalAmount: Double,
+    status: String,
+    onClick: (Supplier) -> Unit,
+    onEdit: (Supplier) -> Unit,
+    onDelete: (Supplier) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Enhanced hover effect with complete coverage
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                color = if (isHovered)
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+                else
+                    MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(20.dp)
+            )
+            .border(
+                width = if (isHovered) 1.5.dp else 1.dp,
+                color = if (isHovered)
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                else
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(20.dp)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { onClick(supplier) }
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Header with actions
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = supplier.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Text(
+                        text = "الشخص المسؤول: ${supplier.contactPerson}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text("عرض الكل")
-                    Spacer(modifier = Modifier.width(4.dp))
+                    IconButton(
+                        onClick = { onEdit(supplier) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "تعديل",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { onDelete(supplier) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "حذف",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
+            // Status and Rating
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (status == "نشط")
+                            AppTheme.colors.success.copy(alpha = 0.2f)
+                        else
+                            AppTheme.colors.warning.copy(alpha = 0.2f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            if (status == "نشط") Icons.Default.CheckCircle else Icons.Default.Warning,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = if (status == "نشط") AppTheme.colors.success else AppTheme.colors.warning
+                        )
+                        Text(
+                            text = status,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = if (status == "نشط") AppTheme.colors.success else AppTheme.colors.warning
+                        )
+                    }
+                }
+
+                // Rating
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     Icon(
-                        Icons.AutoMirrored.Filled.ArrowForward,
+                        Icons.Default.Star,
                         contentDescription = null,
+                        tint = AppTheme.colors.warning,
                         modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = String.format("%.1f", supplier.rating),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
 
-            Column(
-                verticalArrangement = Arrangement.spacedBy(responsive.small)
+            // Order Information
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                repeat(10) { index ->
-                    EnhancedSupplierCard(
-                        supplierName = "شركة المورد ${index + 1}",
-                        contactPerson = "أحمد محمد",
-                        phone = "+966-50-123-45${index + 10}",
-                        email = "supplier${index + 1}@company.com",
-                        totalOrders = (5 + index * 2),
-                        totalAmount = (10000 + index * 5000).toDouble(),
-                        status = if (index % 3 == 0) "معلق" else "نشط"
+                Column {
+                    Text(
+                        text = "عدد الطلبات",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "$totalOrders طلب",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Column {
+                    Text(
+                        text = "إجمالي المشتريات",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${totalAmount.toInt()} ر.س",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
+            // Contact Information
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = "الهاتف",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = supplier.phone,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Column {
+                    Text(
+                        text = "البريد الإلكتروني",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = supplier.email,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -515,159 +1191,454 @@ private fun EnhancedSuppliersList() {
     }
 }
 
+// Enhanced Purchase Order Card Component
 @Composable
-private fun EnhancedSupplierCard(
+private fun EnhancedPurchaseOrderCard(
+    orderId: String,
     supplierName: String,
-    contactPerson: String,
-    phone: String,
-    email: String,
-    totalOrders: Int,
+    orderDate: String,
     totalAmount: Double,
-    status: String
+    status: String,
+    itemsCount: Int,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { /* Handle click */ },
+        modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 1.dp
+        ),
         border = BorderStroke(
             width = 1.dp,
             color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
         )
     ) {
-        Box(
-            modifier = Modifier.fillMaxWidth()
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Subtle gradient background
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(120.dp)
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.01f),
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.03f)
-                            )
-                        )
-                    )
-            )
-
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                RTLRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    RTLRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Status indicator
-                        Surface(
-                            color = if (status == "نشط") AppTheme.colors.success.copy(alpha = 0.1f)
-                                   else AppTheme.colors.warning.copy(alpha = 0.1f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(
-                                text = status,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (status == "نشط") AppTheme.colors.success else AppTheme.colors.warning,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
-
-                        Column(
-                            horizontalAlignment = Alignment.Start
-                        ) {
-                            Text(
-                                text = supplierName,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "الشخص المسؤول: $contactPerson",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    IconButton(
-                        onClick = { /* View details */ }
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "عرض التفاصيل",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                Column {
+                    Text(
+                        text = orderId,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = supplierName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
 
-                RTLRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = when (status) {
+                            "في الانتظار" -> AppTheme.colors.warning.copy(alpha = 0.2f)
+                            "تم التسليم" -> AppTheme.colors.success.copy(alpha = 0.2f)
+                            "ملغي" -> MaterialTheme.colorScheme.errorContainer
+                            else -> MaterialTheme.colorScheme.surfaceVariant
+                        }
+                    ),
+                    shape = RoundedCornerShape(8.dp)
                 ) {
-                    RTLRow(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.Start
-                        ) {
-                            Text(
-                                text = "${totalAmount.toInt()} ر.س",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = "$totalOrders طلب",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                    Text(
+                        text = status,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = when (status) {
+                            "في الانتظار" -> AppTheme.colors.warning
+                            "تم التسليم" -> AppTheme.colors.success
+                            "ملغي" -> MaterialTheme.colorScheme.onErrorContainer
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
 
-                        IconButton(
-                            onClick = { /* Edit supplier */ }
-                        ) {
-                            Icon(
-                                Icons.Default.Edit,
-                                contentDescription = "تعديل",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = "تاريخ الطلب",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = orderDate,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
 
-                    Column(
-                        horizontalAlignment = Alignment.End
-                    ) {
-                        Text(
-                            text = phone,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = email,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                Column {
+                    Text(
+                        text = "عدد العناصر",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "$itemsCount عنصر",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Column {
+                    Text(
+                        text = "المبلغ الإجمالي",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${totalAmount.toInt()} ر.س",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         }
     }
+}
+
+// Enhanced Supplier Details Panel Component
+@Composable
+private fun EnhancedSupplierDetailsPanel(
+    supplier: Supplier,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "تفاصيل المورد",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            IconButton(onClick = onClose) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "إغلاق",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // Supplier Information
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = supplier.name,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Star,
+                        contentDescription = null,
+                        tint = AppTheme.colors.warning,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = String.format("%.1f", supplier.rating),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "تقييم",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+
+                // Contact Information
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DetailRow("الشخص المسؤول", supplier.contactPerson)
+                    DetailRow("الهاتف", supplier.phone)
+                    DetailRow("البريد الإلكتروني", supplier.email)
+                    DetailRow("العنوان", supplier.address)
+                    DetailRow("شروط الدفع", supplier.paymentTerms)
+                    DetailRow("شروط التسليم", supplier.deliveryTerms)
+                }
+            }
+        }
+
+        // Action Buttons
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Button(
+                onClick = onEdit,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.Edit, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("تعديل")
+            }
+
+            OutlinedButton(
+                onClick = onDelete,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.Delete, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("حذف")
+            }
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun DetailRow(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(2f),
+            textAlign = TextAlign.End
+        )
+    }
+}
+
+// Enhanced Edit Supplier Dialog
+@Composable
+private fun EnhancedEditSupplierDialog(
+    supplier: Supplier,
+    onDismiss: () -> Unit,
+    onSave: (Supplier) -> Unit
+) {
+    var name by remember { mutableStateOf(supplier.name) }
+    var contactPerson by remember { mutableStateOf(supplier.contactPerson) }
+    var phone by remember { mutableStateOf(supplier.phone) }
+    var email by remember { mutableStateOf(supplier.email) }
+    var address by remember { mutableStateOf(supplier.address) }
+    var paymentTerms by remember { mutableStateOf(supplier.paymentTerms) }
+    var deliveryTerms by remember { mutableStateOf(supplier.deliveryTerms) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "تعديل بيانات المورد",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.height(400.dp)
+            ) {
+                item {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("اسم الشركة") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+
+                item {
+                    OutlinedTextField(
+                        value = contactPerson,
+                        onValueChange = { contactPerson = it },
+                        label = { Text("الشخص المسؤول") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+
+                item {
+                    OutlinedTextField(
+                        value = phone,
+                        onValueChange = { phone = it },
+                        label = { Text("رقم الهاتف") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+
+                item {
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it },
+                        label = { Text("البريد الإلكتروني") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+
+                item {
+                    OutlinedTextField(
+                        value = address,
+                        onValueChange = { address = it },
+                        label = { Text("العنوان") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+
+                item {
+                    OutlinedTextField(
+                        value = paymentTerms,
+                        onValueChange = { paymentTerms = it },
+                        label = { Text("شروط الدفع") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+
+                item {
+                    OutlinedTextField(
+                        value = deliveryTerms,
+                        onValueChange = { deliveryTerms = it },
+                        label = { Text("شروط التسليم") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val updatedSupplier = supplier.copy(
+                        name = name,
+                        contactPerson = contactPerson,
+                        phone = phone,
+                        email = email,
+                        address = address,
+                        paymentTerms = paymentTerms,
+                        deliveryTerms = deliveryTerms
+                    )
+                    onSave(updatedSupplier)
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    "حفظ التغييرات",
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    "إلغاء",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        shape = RoundedCornerShape(20.dp),
+        containerColor = MaterialTheme.colorScheme.surface
+    )
 }
 
 @Composable
@@ -680,6 +1651,8 @@ private fun EnhancedAddSupplierDialog(
     var phone by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
+    var paymentTerms by remember { mutableStateOf("NET_30") }
+    var deliveryTerms by remember { mutableStateOf("FOB_DESTINATION") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -692,69 +1665,108 @@ private fun EnhancedAddSupplierDialog(
             )
         },
         text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.height(400.dp)
             ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("اسم الشركة") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        focusedLabelColor = MaterialTheme.colorScheme.primary
+                item {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("اسم الشركة *") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary
+                        )
                     )
-                )
+                }
 
-                OutlinedTextField(
-                    value = contactPerson,
-                    onValueChange = { contactPerson = it },
-                    label = { Text("الشخص المسؤول") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        focusedLabelColor = MaterialTheme.colorScheme.primary
+                item {
+                    OutlinedTextField(
+                        value = contactPerson,
+                        onValueChange = { contactPerson = it },
+                        label = { Text("الشخص المسؤول *") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary
+                        )
                     )
-                )
+                }
 
-                OutlinedTextField(
-                    value = phone,
-                    onValueChange = { phone = it },
-                    label = { Text("رقم الهاتف") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        focusedLabelColor = MaterialTheme.colorScheme.primary
+                item {
+                    OutlinedTextField(
+                        value = phone,
+                        onValueChange = { phone = it },
+                        label = { Text("رقم الهاتف *") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary
+                        )
                     )
-                )
+                }
 
-                OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    label = { Text("البريد الإلكتروني") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        focusedLabelColor = MaterialTheme.colorScheme.primary
+                item {
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it },
+                        label = { Text("البريد الإلكتروني *") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary
+                        )
                     )
-                )
+                }
 
-                OutlinedTextField(
-                    value = address,
-                    onValueChange = { address = it },
-                    label = { Text("العنوان") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 2,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        focusedLabelColor = MaterialTheme.colorScheme.primary
+                item {
+                    OutlinedTextField(
+                        value = address,
+                        onValueChange = { address = it },
+                        label = { Text("العنوان") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary
+                        )
                     )
-                )
+                }
+
+                item {
+                    OutlinedTextField(
+                        value = paymentTerms,
+                        onValueChange = { paymentTerms = it },
+                        label = { Text("شروط الدفع") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+
+                item {
+                    OutlinedTextField(
+                        value = deliveryTerms,
+                        onValueChange = { deliveryTerms = it },
+                        label = { Text("شروط التسليم") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
             }
         },
         confirmButton = {
@@ -765,10 +1777,14 @@ private fun EnhancedAddSupplierDialog(
                         contactPerson = contactPerson,
                         phone = phone,
                         email = email,
-                        address = address
+                        address = address,
+                        paymentTerms = paymentTerms,
+                        deliveryTerms = deliveryTerms
                     )
                     onSave(supplier)
                 },
+                enabled = name.isNotBlank() && contactPerson.isNotBlank() &&
+                         phone.isNotBlank() && email.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
                 ),
@@ -801,11 +1817,7 @@ data class SupplierData(
     val contactPerson: String,
     val phone: String,
     val email: String,
-    val address: String
+    val address: String,
+    val paymentTerms: String = "NET_30",
+    val deliveryTerms: String = "FOB_DESTINATION"
 )
-
-enum class SupplierTab(val title: String) {
-    SUPPLIERS("الموردين"),
-    ORDERS("طلبات الشراء"),
-    ANALYTICS("التحليلات والتقارير")
-}

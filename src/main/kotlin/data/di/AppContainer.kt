@@ -5,6 +5,7 @@ import data.api.services.*
 import data.auth.AuthService
 import data.auth.TokenManager
 import data.repository.*
+import ui.viewmodels.*
 import io.ktor.client.*
 
 /**
@@ -37,10 +38,30 @@ class AppContainer {
         SalesApiService(httpClient) 
     }
     
-    val reportsApiService: ReportsApiService by lazy { 
-        ReportsApiService(httpClient) 
+    val reportsApiService: ReportsApiService by lazy {
+        ReportsApiService(httpClient)
     }
-    
+
+    val supplierApiService: SupplierApiService by lazy {
+        SupplierApiService(httpClient)
+    }
+
+    val returnApiService: ReturnApiService by lazy {
+        ReturnApiService(httpClient)
+    }
+
+    val promotionApiService: PromotionApiService by lazy {
+        PromotionApiService(httpClient)
+    }
+
+    val dashboardApiService: DashboardApiService by lazy {
+        DashboardApiService(httpClient)
+    }
+
+    val categoryApiService: CategoryApiService by lazy {
+        CategoryApiService(httpClient)
+    }
+
     // Repositories
     val customerRepository: CustomerRepository by lazy { 
         CustomerRepository(customerApiService) 
@@ -54,10 +75,43 @@ class AppContainer {
         SalesRepository(salesApiService) 
     }
     
-    val reportsRepository: ReportsRepository by lazy { 
-        ReportsRepository(reportsApiService) 
+    val reportsRepository: ReportsRepository by lazy {
+        ReportsRepository(reportsApiService)
     }
-    
+
+    val supplierRepository: SupplierRepository by lazy {
+        SupplierRepository(supplierApiService)
+    }
+
+    val returnRepository: ReturnRepository by lazy {
+        ReturnRepository(returnApiService)
+    }
+
+    val promotionRepository: PromotionRepository by lazy {
+        PromotionRepository(promotionApiService)
+    }
+
+    val dashboardRepository: DashboardRepository by lazy {
+        DashboardRepository(dashboardApiService)
+    }
+
+    val categoryRepository: CategoryRepository by lazy {
+        CategoryRepository(categoryApiService)
+    }
+
+    // ViewModels
+    val dashboardViewModel: DashboardViewModel by lazy {
+        DashboardViewModel(dashboardRepository)
+    }
+
+    val productViewModel: ProductViewModel by lazy {
+        ProductViewModel(productRepository, categoryRepository)
+    }
+
+    val categoryViewModel: CategoryViewModel by lazy {
+        CategoryViewModel(categoryRepository)
+    }
+
     /**
      * Clean up resources when the application is closing
      */

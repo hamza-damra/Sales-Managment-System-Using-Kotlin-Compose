@@ -10,14 +10,14 @@ import kotlin.random.Random
 class SalesDataManager {
     // بيانات تجريبية للمنتجات
     val products = mutableListOf(
-        Product(1, "iPhone 14", "123456789012", 4500.0, 4000.0, 15, "إلكترونيات"),
-        Product(2, "Samsung Galaxy S23", "123456789013", 4200.0, 3700.0, 12, "إلكترونيات"),
-        Product(3, "لابتوب HP", "123456789014", 3500.0, 3000.0, 8, "إلكترونيات"),
-        Product(4, "سماعات AirPods", "123456789015", 750.0, 600.0, 25, "إكسسوارات"),
-        Product(5, "شاحن سريع", "123456789016", 150.0, 100.0, 50, "إكسسوارات"),
-        Product(6, "كيبورد لاسلكي", "123456789017", 200.0, 150.0, 30, "إكسسوارات"),
-        Product(7, "ماوس جيمنج", "123456789018", 180.0, 130.0, 20, "إكسسوارات"),
-        Product(8, "شاشة 27 بوصة", "123456789019", 1200.0, 1000.0, 10, "إلكترونيات")
+        Product(1, "iPhone 14", null, 4500.0, 4000.0, 15, "إلكترونيات", barcode = "123456789012"),
+        Product(2, "Samsung Galaxy S23", null, 4200.0, 3700.0, 12, "إلكترونيات", barcode = "123456789013"),
+        Product(3, "لابتوب HP", null, 3500.0, 3000.0, 8, "إلكترونيات", barcode = "123456789014"),
+        Product(4, "سماعات AirPods", null, 750.0, 600.0, 25, "إكسسوارات", barcode = "123456789015"),
+        Product(5, "شاحن سريع", null, 150.0, 100.0, 50, "إكسسوارات", barcode = "123456789016"),
+        Product(6, "كيبورد لاسلكي", null, 200.0, 150.0, 30, "إكسسوارات", barcode = "123456789017"),
+        Product(7, "ماوس جيمنج", null, 180.0, 130.0, 20, "إكسسوارات", barcode = "123456789018"),
+        Product(8, "شاشة 27 بوصة", null, 1200.0, 1000.0, 10, "إلكترونيات", barcode = "123456789019")
     )
 
     // بيانات تجريبية للعملاء
@@ -95,7 +95,7 @@ class SalesDataManager {
     fun searchProducts(query: String): List<Product> {
         return products.filter {
             it.name.contains(query, ignoreCase = true) ||
-            it.barcode.contains(query) ||
+            it.barcode?.contains(query) == true ||
             it.category.contains(query, ignoreCase = true)
         }
     }

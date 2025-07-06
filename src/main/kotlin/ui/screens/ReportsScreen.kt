@@ -3,8 +3,11 @@ package ui.screens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -18,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -308,7 +312,7 @@ private fun EnhancedReportTypeSelector(
     }
 }
 
-// Enhanced Report Card Component
+// Enhanced Report Card Component with Box-based hover effects
 @Composable
 private fun EnhancedReportCard(
     title: String,
@@ -320,102 +324,110 @@ private fun EnhancedReportCard(
 ) {
     val responsivePadding = ResponsiveUtils.getResponsivePadding()
 
-    Card(
+    // Enhanced hover effect with complete coverage
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
         modifier = Modifier
             .width(300.dp)
-            .clickable(onClick = onClick),
-        colors = if (isSelected) {
-            CardDefaults.cardColors(
-                containerColor = color.copy(alpha = 0.1f)
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                color = when {
+                    isSelected -> color.copy(alpha = 0.1f)
+                    isHovered -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+                    else -> MaterialTheme.colorScheme.surface
+                },
+                shape = RoundedCornerShape(12.dp)
             )
-        } else {
-            CardStyles.elevatedCardColors()
-        },
-        shape = RoundedCornerShape(20.dp),
-        elevation = if (isSelected) {
-            CardDefaults.cardElevation(defaultElevation = 8.dp)
-        } else {
-            CardStyles.elevatedCardElevation()
-        },
-        border = if (isSelected) {
-            BorderStroke(2.dp, color.copy(alpha = 0.3f))
-        } else {
-            BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-        }
+            .border(
+                width = when {
+                    isSelected -> 2.dp
+                    isHovered -> 1.5.dp
+                    else -> 1.dp
+                },
+                color = when {
+                    isSelected -> color.copy(alpha = 0.5f)
+                    isHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                    else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                },
+                shape = RoundedCornerShape(12.dp)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { onClick() }
     ) {
+        // Subtle gradient background
         Box(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            color.copy(alpha = if (isSelected) 0.05f else 0.02f),
+                            color.copy(alpha = if (isSelected) 0.1f else 0.05f)
+                        )
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                )
+        )
+
+        Column(
+            modifier = Modifier
+                .padding(responsivePadding.card)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Subtle gradient background
+            // Icon with enhanced styling
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .size(56.dp)
                     .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                color.copy(alpha = if (isSelected) 0.05f else 0.02f),
-                                color.copy(alpha = if (isSelected) 0.1f else 0.05f)
-                            )
-                        )
-                    )
+                        color.copy(alpha = 0.15f),
+                        RoundedCornerShape(16.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = color,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = if (isSelected) color else MaterialTheme.colorScheme.onSurface
             )
 
-            Column(
-                modifier = Modifier
-                    .padding(responsivePadding.card)
-                    .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Icon with enhanced styling
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = MaterialTheme.typography.bodyMedium.lineHeight
+            )
+
+            // Selection indicator
+            if (isSelected) {
                 Box(
                     modifier = Modifier
-                        .size(56.dp)
+                        .fillMaxWidth()
+                        .height(3.dp)
                         .background(
-                            color.copy(alpha = 0.15f),
-                            RoundedCornerShape(16.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        icon,
-                        contentDescription = null,
-                        tint = color,
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isSelected) color else MaterialTheme.colorScheme.onSurface
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    color.copy(alpha = 0.3f),
+                                    color,
+                                    color.copy(alpha = 0.3f)
+                                )
+                            ),
+                            shape = RoundedCornerShape(2.dp)
+                        )
                 )
-
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = MaterialTheme.typography.bodyMedium.lineHeight
-                )
-
-                // Selection indicator
-                if (isSelected) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(3.dp)
-                            .background(
-                                brush = Brush.horizontalGradient(
-                                    colors = listOf(
-                                        color.copy(alpha = 0.3f),
-                                        color,
-                                        color.copy(alpha = 0.3f)
-                                    )
-                                ),
-                                shape = RoundedCornerShape(2.dp)
-                            )
-                    )
-                }
             }
         }
     }

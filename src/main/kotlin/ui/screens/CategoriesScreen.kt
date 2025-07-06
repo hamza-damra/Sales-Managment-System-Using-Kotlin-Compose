@@ -1,0 +1,1288 @@
+package ui.screens
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.material3.MenuAnchorType
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import data.Category
+import data.CategoryStatus
+import data.api.CategoryDTO
+import ui.components.RTLProvider
+import ui.components.RTLRow
+import ui.theme.AppTheme
+import ui.viewmodels.CategoryViewModel
+import ui.utils.ColorUtils
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CategoriesScreen(categoryViewModel: CategoryViewModel) {
+    RTLProvider {
+        var searchQuery by remember { mutableStateOf("") }
+        var showAddCategoryDialog by remember { mutableStateOf(false) }
+        var editingCategory by remember { mutableStateOf<Category?>(null) }
+        var selectedStatus by remember { mutableStateOf("الكل") }
+        var showCategoryDetails by remember { mutableStateOf(false) }
+        var selectedCategory by remember { mutableStateOf<Category?>(null) }
+        var sortBy by remember { mutableStateOf("displayOrder") }
+        val coroutineScope = rememberCoroutineScope()
+
+        val uiState by categoryViewModel.uiState.collectAsState()
+        val searchQueryState by categoryViewModel.searchQuery.collectAsState()
+        val selectedStatusState by categoryViewModel.selectedStatus.collectAsState()
+
+        // Load categories when screen is first displayed
+        LaunchedEffect(Unit) {
+            categoryViewModel.loadCategories()
+            categoryViewModel.loadActiveCategories()
+        }
+
+        // Handle success states
+        LaunchedEffect(uiState.creationSuccess) {
+            if (uiState.creationSuccess) {
+                showAddCategoryDialog = false
+                categoryViewModel.clearSuccessStates()
+            }
+        }
+
+        LaunchedEffect(uiState.updateSuccess) {
+            if (uiState.updateSuccess) {
+                editingCategory = null
+                categoryViewModel.clearSuccessStates()
+            }
+        }
+
+        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            RTLRow(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Left Panel - Categories List
+                Card(
+                    modifier = Modifier
+                        .weight(2f)
+                        .fillMaxHeight(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    shape = RoundedCornerShape(24.dp),
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = 0.dp
+                    ),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp)
+                    ) {
+                        // Header
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "إدارة الفئات",
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+
+                            val addCategoryInteractionSource = remember { MutableInteractionSource() }
+                            val isAddCategoryHovered by addCategoryInteractionSource.collectIsHoveredAsState()
+
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        color = if (isAddCategoryHovered)
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 1f)
+                                        else
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable(
+                                        interactionSource = addCategoryInteractionSource,
+                                        indication = null
+                                    ) { showAddCategoryDialog = true }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Add,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                    Text(
+                                        "إضافة فئة جديدة",
+                                        color = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // Search and Filter Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            // Search Field
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = {
+                                    searchQuery = it
+                                    categoryViewModel.searchCategories(it)
+                                },
+                                label = { Text("البحث في الفئات") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Search,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                                )
+                            )
+
+                            // Status Filter
+                            var statusExpanded by remember { mutableStateOf(false) }
+                            ExposedDropdownMenuBox(
+                                expanded = statusExpanded,
+                                onExpandedChange = { statusExpanded = !statusExpanded },
+                                modifier = Modifier.width(200.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = selectedStatus,
+                                    onValueChange = { },
+                                    readOnly = true,
+                                    label = { Text("الحالة") },
+                                    trailingIcon = {
+                                        ExposedDropdownMenuDefaults.TrailingIcon(
+                                            expanded = statusExpanded
+                                        )
+                                    },
+                                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                                    )
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = statusExpanded,
+                                    onDismissRequest = { statusExpanded = false }
+                                ) {
+                                    listOf("الكل", "نشط", "غير نشط", "مؤرشف").forEach { status ->
+                                        DropdownMenuItem(
+                                            text = { Text(status) },
+                                            onClick = {
+                                                selectedStatus = status
+                                                categoryViewModel.filterByStatus(status)
+                                                statusExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Refresh Button with enhanced hover effects
+                            val refreshInteractionSource = remember { MutableInteractionSource() }
+                            val isRefreshHovered by refreshInteractionSource.collectIsHoveredAsState()
+
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        color = if (isRefreshHovered)
+                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                        else
+                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable(
+                                        interactionSource = refreshInteractionSource,
+                                        indication = null
+                                    ) { categoryViewModel.refreshCategories() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.Refresh,
+                                    contentDescription = "تحديث",
+                                    tint = if (isRefreshHovered)
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    else
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        // Categories List
+                        Text(
+                            text = "قائمة الفئات (${uiState.categories.size})",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+
+                        if (uiState.isLoading) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        } else if (uiState.hasError) {
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.Error,
+                                    contentDescription = null,
+                                    tint = AppTheme.colors.error,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = uiState.error ?: "حدث خطأ غير معروف",
+                                    color = AppTheme.colors.error,
+                                    textAlign = TextAlign.Center,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Button(
+                                    onClick = {
+                                        categoryViewModel.clearError()
+                                        categoryViewModel.refreshCategories()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary
+                                    ),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("إعادة المحاولة")
+                                }
+                            }
+                        } else if (uiState.categories.isEmpty()) {
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.Category,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(64.dp)
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "لا توجد فئات",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "ابدأ بإضافة فئة جديدة لتنظيم منتجاتك",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        } else {
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(uiState.categories) { category ->
+                                    ModernCategoryItem(
+                                        category = category,
+                                        onEdit = { editingCategory = it },
+                                        onDelete = { categoryViewModel.deleteCategory(it.id) },
+                                        onStatusChange = { cat, status ->
+                                            categoryViewModel.updateCategoryStatus(cat.id, status)
+                                        },
+                                        onViewDetails = {
+                                            selectedCategory = it
+                                            showCategoryDetails = true
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Right Panel - Statistics and Overview
+                Card(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    shape = RoundedCornerShape(24.dp),
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = 0.dp
+                    ),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(20.dp)
+                    ) {
+                        // Statistics Header
+                        Text(
+                            text = "إحصائيات الفئات",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        // Summary Cards
+                        ModernCategorySummaryCard(
+                            title = "إجمالي الفئات",
+                            value = uiState.totalCategories.toString(),
+                            subtitle = "فئة مسجلة",
+                            icon = Icons.Default.Category,
+                            iconColor = MaterialTheme.colorScheme.primary
+                        )
+
+                        ModernCategorySummaryCard(
+                            title = "الفئات النشطة",
+                            value = uiState.activeCategories.size.toString(),
+                            subtitle = "فئة نشطة",
+                            icon = Icons.Default.CheckCircle,
+                            iconColor = AppTheme.colors.success
+                        )
+
+                        ModernCategorySummaryCard(
+                            title = "الفئات الفارغة",
+                            value = uiState.categories.count { it.productCount == 0 }.toString(),
+                            subtitle = "فئة بدون منتجات",
+                            icon = Icons.Default.Warning,
+                            iconColor = AppTheme.colors.warning
+                        )
+
+                        // Quick Actions
+                        Text(
+                            text = "إجراءات سريعة",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+
+                        QuickActionButton(
+                            text = "إضافة فئة جديدة",
+                            icon = Icons.Default.Add,
+                            onClick = { showAddCategoryDialog = true }
+                        )
+
+                        QuickActionButton(
+                            text = "تحديث البيانات",
+                            icon = Icons.Default.Refresh,
+                            onClick = { categoryViewModel.refreshCategories() }
+                        )
+                    }
+                }
+            }
+        }
+
+        // Add/Edit Category Dialog
+        if (showAddCategoryDialog || editingCategory != null) {
+            CategoryDialog(
+                category = editingCategory,
+                onDismiss = { 
+                    showAddCategoryDialog = false
+                    editingCategory = null
+                },
+                onSave = { categoryDTO ->
+                    if (editingCategory != null) {
+                        categoryViewModel.updateCategory(editingCategory!!.id, categoryDTO)
+                    } else {
+                        categoryViewModel.createCategory(categoryDTO)
+                    }
+                }
+            )
+        }
+
+        // Category Details Dialog
+        if (showCategoryDetails && selectedCategory != null) {
+            CategoryDetailsDialog(
+                category = selectedCategory!!,
+                onDismiss = { 
+                    showCategoryDetails = false
+                    selectedCategory = null
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun ModernCategorySummaryCard(
+    title: String,
+    value: String,
+    subtitle: String,
+    icon: ImageVector,
+    iconColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+        )
+    ) {
+        Box(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            // Subtle gradient background
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                iconColor.copy(alpha = 0.02f),
+                                iconColor.copy(alpha = 0.08f)
+                            )
+                        )
+                    )
+            )
+
+            Column(
+                modifier = Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Icon with background
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(
+                            iconColor.copy(alpha = 0.1f),
+                            CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        tint = iconColor,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center
+                )
+
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ModernCategoryItem(
+    category: Category,
+    onEdit: (Category) -> Unit,
+    onDelete: (Category) -> Unit,
+    onStatusChange: (Category, CategoryStatus) -> Unit,
+    onViewDetails: (Category) -> Unit
+) {
+    // Enhanced hover effect with complete coverage
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                color = if (isHovered)
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+                else
+                    MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(16.dp)
+            )
+            .border(
+                width = if (isHovered) 1.5.dp else 1.dp,
+                color = if (isHovered)
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                else
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(16.dp)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { onViewDetails(category) }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Category Info
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                // Category Icon or Color with enhanced design
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            category.colorCode?.let {
+                                ColorUtils.parseHexColor(it) ?: MaterialTheme.colorScheme.primary
+                            } ?: MaterialTheme.colorScheme.primary
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (category.icon != null) {
+                        Icon(
+                            Icons.Default.Category,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    } else {
+                        Text(
+                            text = category.name.take(2),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = category.name,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    if (category.description != null) {
+                        Text(
+                            text = category.description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // Product count with icon
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Inventory,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "${category.productCount} منتج",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        // Display order
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Sort,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "ترتيب ${category.displayOrder}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Status Badge
+                ModernStatusBadge(status = category.status)
+
+                // Action Buttons
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Edit Button
+                    IconButton(
+                        onClick = { onEdit(category) },
+                        modifier = Modifier
+                            .background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                CircleShape
+                            )
+                    ) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "تعديل",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    // Status Toggle Button
+                    var statusMenuExpanded by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(
+                            onClick = { statusMenuExpanded = true },
+                            modifier = Modifier
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    CircleShape
+                                )
+                        ) {
+                            Icon(
+                                Icons.Default.MoreVert,
+                                contentDescription = "تغيير الحالة",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = statusMenuExpanded,
+                            onDismissRequest = { statusMenuExpanded = false }
+                        ) {
+                            CategoryStatus.values().forEach { status ->
+                                DropdownMenuItem(
+                                    text = { Text(status.displayName) },
+                                    onClick = {
+                                        onStatusChange(category, status)
+                                        statusMenuExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Delete Button (only if no products)
+                    if (category.productCount == 0) {
+                        IconButton(
+                            onClick = { onDelete(category) },
+                            modifier = Modifier
+                                .background(
+                                    AppTheme.colors.error.copy(alpha = 0.1f),
+                                    CircleShape
+                                )
+                        ) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "حذف",
+                                tint = AppTheme.colors.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ModernStatusBadge(status: CategoryStatus) {
+    val (backgroundColor, textColor) = when (status) {
+        CategoryStatus.ACTIVE -> AppTheme.colors.success to Color.White
+        CategoryStatus.INACTIVE -> AppTheme.colors.warning to Color.White
+        CategoryStatus.ARCHIVED -> MaterialTheme.colorScheme.onSurfaceVariant to Color.White
+    }
+
+    Box(
+        modifier = Modifier
+            .background(
+                backgroundColor,
+                RoundedCornerShape(20.dp)
+            )
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text = status.displayName,
+            color = textColor,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+fun QuickActionButton(
+    text: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                color = if (isHovered)
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                else
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                shape = RoundedCornerShape(16.dp)
+            )
+            .border(
+                width = if (isHovered) 1.5.dp else 1.dp,
+                color = if (isHovered)
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                else
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                shape = RoundedCornerShape(16.dp)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(8.dp)
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = if (isHovered)
+                    MaterialTheme.colorScheme.onSurface
+                else
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = if (isHovered)
+                    MaterialTheme.colorScheme.onSurface
+                else
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+            )
+        }
+    }
+}
+
+@Composable
+fun CategoryDialog(
+    category: Category? = null,
+    onDismiss: () -> Unit,
+    onSave: (CategoryDTO) -> Unit
+) {
+    var name by remember { mutableStateOf(category?.name ?: "") }
+    var description by remember { mutableStateOf(category?.description ?: "") }
+    var displayOrder by remember { mutableStateOf(category?.displayOrder?.toString() ?: "0") }
+    var colorCode by remember { mutableStateOf(category?.colorCode ?: "#007bff") }
+    var icon by remember { mutableStateOf(category?.icon ?: "") }
+    var imageUrl by remember { mutableStateOf(category?.imageUrl ?: "") }
+
+    val isEditing = category != null
+    val title = if (isEditing) "تعديل الفئة" else "إضافة فئة جديدة"
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            shape = RoundedCornerShape(24.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+            border = BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(bottom = 24.dp)
+                )
+
+                // Name Field (Required)
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("اسم الفئة *") },
+                    modifier = Modifier.fillMaxWidth(),
+                    isError = name.isBlank(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                        errorBorderColor = AppTheme.colors.error
+                    )
+                )
+                if (name.isBlank()) {
+                    Text(
+                        text = "اسم الفئة مطلوب",
+                        color = AppTheme.colors.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Description Field
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("الوصف") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3,
+                    maxLines = 5,
+                    shape = RoundedCornerShape(16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Display Order Field
+                OutlinedTextField(
+                    value = displayOrder,
+                    onValueChange = {
+                        if (it.all { char -> char.isDigit() } || it.isEmpty()) {
+                            displayOrder = it
+                        }
+                    },
+                    label = { Text("ترتيب العرض") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Color Code Field
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = colorCode,
+                        onValueChange = { colorCode = it },
+                        label = { Text("رمز اللون") },
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text("#007bff") }
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                ColorUtils.parseHexColor(colorCode) ?: MaterialTheme.colorScheme.primary
+                            )
+                            .border(
+                                1.dp,
+                                MaterialTheme.colorScheme.outline,
+                                RoundedCornerShape(8.dp)
+                            )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Icon Field
+                OutlinedTextField(
+                    value = icon,
+                    onValueChange = { icon = it },
+                    label = { Text("الأيقونة") },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("category-icon") }
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Image URL Field
+                OutlinedTextField(
+                    value = imageUrl,
+                    onValueChange = { imageUrl = it },
+                    label = { Text("رابط الصورة") },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("https://example.com/image.jpg") }
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Action Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                        )
+                    ) {
+                        Text(
+                            "إلغاء",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            if (name.isNotBlank()) {
+                                val categoryDTO = CategoryDTO(
+                                    id = category?.id,
+                                    name = name.trim(),
+                                    description = description.trim().takeIf { it.isNotEmpty() },
+                                    displayOrder = displayOrder.toIntOrNull() ?: 0,
+                                    status = category?.status?.name ?: "ACTIVE",
+                                    imageUrl = imageUrl.trim().takeIf { it.isNotEmpty() },
+                                    icon = icon.trim().takeIf { it.isNotEmpty() },
+                                    colorCode = colorCode.trim().takeIf { it.isNotEmpty() }
+                                )
+                                onSave(categoryDTO)
+                            }
+                        },
+                        enabled = name.isNotBlank(),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            disabledContainerColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                        )
+                    ) {
+                        Text(
+                            if (isEditing) "تحديث" else "إضافة",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CategoryDetailsDialog(
+    category: Category,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            shape = RoundedCornerShape(24.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+            border = BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "تفاصيل الفئة",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    ModernStatusBadge(status = category.status)
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Category Icon/Color and Name
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(60.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                category.colorCode?.let {
+                                    ColorUtils.parseHexColor(it) ?: MaterialTheme.colorScheme.primary
+                                } ?: MaterialTheme.colorScheme.primary
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (category.icon != null) {
+                            Icon(
+                                Icons.Default.Category,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        } else {
+                            Text(
+                                text = category.name.take(2),
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    Column {
+                        Text(
+                            text = category.name,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (category.description != null) {
+                            Text(
+                                text = category.description,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Details Grid
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    CategoryDetailRow("المعرف", category.id.toString())
+                    CategoryDetailRow("عدد المنتجات", category.productCount.toString())
+                    CategoryDetailRow("ترتيب العرض", category.displayOrder.toString())
+
+                    if (category.colorCode != null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "رمز اللون:",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = category.colorCode,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(
+                                            ColorUtils.parseHexColor(category.colorCode) ?: MaterialTheme.colorScheme.primary
+                                        )
+                                        .border(
+                                            1.dp,
+                                            MaterialTheme.colorScheme.outline,
+                                            RoundedCornerShape(4.dp)
+                                        )
+                                )
+                            }
+                        }
+                    }
+
+                    if (category.icon != null) {
+                        CategoryDetailRow("الأيقونة", category.icon)
+                    }
+
+                    if (category.imageUrl != null) {
+                        CategoryDetailRow("رابط الصورة", category.imageUrl)
+                    }
+
+                    if (category.createdAt != null) {
+                        CategoryDetailRow("تاريخ الإنشاء", category.createdAt.toString().split("T")[0])
+                    }
+
+                    if (category.updatedAt != null) {
+                        CategoryDetailRow("آخر تحديث", category.updatedAt.toString().split("T")[0])
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Close Button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Button(onClick = onDismiss) {
+                        Text("إغلاق")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CategoryDetailRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = "$label:",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
+}

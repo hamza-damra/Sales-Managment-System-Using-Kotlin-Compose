@@ -34,7 +34,7 @@ object HttpClientProvider {
                 json(Json {
                     ignoreUnknownKeys = true
                     isLenient = true
-                    encodeDefaults = false
+                    encodeDefaults = true  // Changed to true to include all fields
                     prettyPrint = true
                     coerceInputValues = true
                 })
@@ -61,9 +61,16 @@ object HttpClientProvider {
                 bearer {
                     loadTokens {
                         val accessToken = tokenManager.getAccessToken()
+                        val refreshToken = tokenManager.getRefreshToken()
+                        println("🔐 HTTP Client - Loading tokens...")
+                        println("🔐 HTTP Client - Access Token: ${accessToken?.take(30)}...")
+                        println("🔐 HTTP Client - Refresh Token: ${refreshToken?.take(30)}...")
+
                         if (accessToken != null) {
-                            BearerTokens(accessToken, tokenManager.getRefreshToken() ?: "")
+                            println("✅ HTTP Client - Using Bearer tokens for request")
+                            BearerTokens(accessToken, refreshToken ?: "")
                         } else {
+                            println("❌ HTTP Client - No access token available")
                             null
                         }
                     }

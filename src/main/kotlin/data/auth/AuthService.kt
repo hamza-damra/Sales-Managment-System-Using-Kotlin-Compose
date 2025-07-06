@@ -8,6 +8,7 @@ import io.ktor.http.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.json.Json
 
 /**
  * Authentication service for handling login, signup, and token management
@@ -87,17 +88,47 @@ class AuthService(
         role: String = "USER"
     ): NetworkResult<AuthResponse> {
         _authState.value = _authState.value.copy(isLoading = true, error = null)
-        
+
+        println("🔐 Starting signup process...")
+        println("📤 Signup data: username=$username, email=$email, firstName=$firstName, lastName=$lastName")
+
         return safeApiCall {
+            val signupRequest = SignupRequest(username, email, password, firstName, lastName, role)
             val fullUrl = "${ApiConfig.BASE_URL}${ApiConfig.Endpoints.AUTH_SIGNUP}"
+
+            println("📡 Signup URL: $fullUrl")
+            println("📦 Signup request: $signupRequest")
+
+            // Debug: Show the actual JSON being sent
+            try {
+                val json = Json.encodeToString(SignupRequest.serializer(), signupRequest)
+                println("📄 JSON payload: $json")
+            } catch (e: Exception) {
+                println("⚠️ Could not serialize to JSON: ${e.message}")
+            }
+
             val response = httpClient.post(fullUrl) {
                 contentType(ContentType.Application.Json)
-                setBody(SignupRequest(username, email, password, firstName, lastName, role))
+                setBody(signupRequest)
             }
-            
+
+            println("📥 Signup response status: ${response.status}")
+
             val authResponse = response.body<AuthResponse>()
+            println("✅ Signup successful for user: ${authResponse.user?.username}")
+            println("🔑 Access Token received: ${authResponse.accessToken.take(30)}...")
+            println("🔄 Refresh Token received: ${authResponse.refreshToken.take(30)}...")
+
             tokenManager.saveTokens(authResponse)
-            
+            println("💾 Tokens saved to TokenManager")
+
+            // Verify tokens were saved
+            val savedAccessToken = tokenManager.getAccessToken()
+            val savedRefreshToken = tokenManager.getRefreshToken()
+            println("🔍 Verification - Access Token saved: ${savedAccessToken?.take(30)}...")
+            println("🔍 Verification - Refresh Token saved: ${savedRefreshToken?.take(30)}...")
+            println("🔍 Verification - Is Authenticated: ${tokenManager.isAuthenticated()}")
+
             _authState.value = AuthState(
                 isAuthenticated = true,
                 user = authResponse.user,
@@ -105,14 +136,25 @@ class AuthService(
                 refreshToken = authResponse.refreshToken,
                 isLoading = false
             )
-            
+
+            println("🎯 Auth State updated - isAuthenticated: true")
+
             authResponse
         }.also { result ->
-            if (result.isError) {
-                _authState.value = _authState.value.copy(
-                    isLoading = false,
-                    error = result.getOrNull()?.toString() ?: "Signup failed"
-                )
+            when (result) {
+                is NetworkResult.Error -> {
+                    println("❌ Signup failed: ${result.exception.message}")
+                    _authState.value = _authState.value.copy(
+                        isLoading = false,
+                        error = result.exception.message ?: "Signup failed"
+                    )
+                }
+                is NetworkResult.Success -> {
+                    println("✅ Signup completed successfully")
+                }
+                is NetworkResult.Loading -> {
+                    println("⏳ Signup still loading...")
+                }
             }
         }
     }

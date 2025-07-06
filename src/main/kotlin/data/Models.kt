@@ -3,15 +3,79 @@ package data
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 
+// نموذج الفئة
+data class Category(
+    val id: Long,
+    val name: String,
+    val description: String? = null,
+    val displayOrder: Int = 0,
+    val status: CategoryStatus = CategoryStatus.ACTIVE,
+    val imageUrl: String? = null,
+    val icon: String? = null,
+    val colorCode: String? = null,
+    val createdAt: LocalDateTime? = null,
+    val updatedAt: LocalDateTime? = null,
+    val productCount: Int = 0
+)
+
+// حالة الفئة
+enum class CategoryStatus(val displayName: String) {
+    ACTIVE("نشط"),
+    INACTIVE("غير نشط"),
+    ARCHIVED("مؤرشف")
+}
+
 // نموذج المنتج
 data class Product(
     val id: Int,
     val name: String,
-    val barcode: String,
+    val description: String? = null,
     val price: Double,
     val cost: Double,
     val stock: Int,
-    val category: String
+    val category: String,
+    val categoryId: Long? = null,
+    val categoryName: String? = null,
+    val sku: String? = null,
+    val brand: String? = null,
+    val modelNumber: String? = null,
+    val barcode: String? = null,
+    val weight: Double? = null,
+    val length: Double? = null,
+    val width: Double? = null,
+    val height: Double? = null,
+    val productStatus: String? = null,
+    val minStockLevel: Int? = null,
+    val maxStockLevel: Int? = null,
+    val reorderPoint: Int? = null,
+    val reorderQuantity: Int? = null,
+    val supplierName: String? = null,
+    val supplierCode: String? = null,
+    val warrantyPeriod: Int? = null,
+    val expiryDate: String? = null,
+    val manufacturingDate: String? = null,
+    val tags: List<String>? = null,
+    val imageUrl: String? = null,
+    val additionalImages: List<String>? = null,
+    val isSerialized: Boolean? = null,
+    val isDigital: Boolean? = null,
+    val isTaxable: Boolean? = null,
+    val taxRate: Double? = null,
+    val unitOfMeasure: String? = null,
+    val discountPercentage: Double? = null,
+    val locationInWarehouse: String? = null,
+    val totalSold: Int? = null,
+    val totalRevenue: Double? = null,
+    val lastSoldDate: String? = null,
+    val lastRestockedDate: String? = null,
+    val notes: String? = null,
+    val createdAt: String? = null,
+    val updatedAt: String? = null,
+    val lowStock: Boolean? = null,
+    val expired: Boolean? = null,
+    val profitMargin: Double? = null,
+    val outOfStock: Boolean? = null,
+    val discountedPrice: Double? = null
 )
 
 // نموذج العميل
