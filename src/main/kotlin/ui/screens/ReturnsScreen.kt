@@ -48,6 +48,9 @@ import ui.utils.ResponsiveUtils.getResponsivePadding
 import ui.utils.ResponsiveUtils.getScreenInfo
 import ui.viewmodels.ReturnsViewModel
 import androidx.compose.runtime.collectAsState
+import services.ReturnReceiptService
+import utils.FileDialogUtils
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,6 +87,12 @@ fun ReturnsScreen() {
         var showRefundableOnly by remember { mutableStateOf(false) }
         var isExporting by remember { mutableStateOf(false) }
         var exportMessage by remember { mutableStateOf<String?>(null) }
+
+        // PDF generation states
+        var generatedPdfFile by remember { mutableStateOf<File?>(null) }
+        var showPdfViewer by remember { mutableStateOf(false) }
+        var showFullScreenPdfViewer by remember { mutableStateOf(false) }
+        var isGeneratingPdf by remember { mutableStateOf(false) }
 
         // Dialog states
         var showNewReturnDialog by remember { mutableStateOf(false) }
@@ -525,7 +534,35 @@ fun ReturnsScreen() {
                                 onClose = {
                                     showReturnDetails = false
                                     viewModel.selectReturn(null)
-                                }
+                                },
+                                onGeneratePdf = { returnItem ->
+                                    coroutineScope.launch {
+                                        isGeneratingPdf = true
+                                        try {
+                                            val receiptsDir = services.ReturnReceiptService.getReceiptsDirectory()
+                                            val fileName = services.ReturnReceiptService.generateReturnReceiptFilename(returnItem.id?.toInt() ?: 0)
+                                            val pdfFile = File(receiptsDir, fileName)
+
+                                            val success = services.ReturnReceiptService.generateReturnReceipt(
+                                                returnItem = returnItem,
+                                                outputFile = pdfFile
+                                            )
+
+                                            if (success) {
+                                                generatedPdfFile = pdfFile
+                                                showPdfViewer = true
+                                                exportMessage = "تم إنشاء إيصال الإرجاع بنجاح"
+                                            } else {
+                                                exportMessage = "خطأ في إنشاء إيصال الإرجاع"
+                                            }
+                                        } catch (e: Exception) {
+                                            exportMessage = "خطأ في إنشاء إيصال الإرجاع: ${e.message}"
+                                        } finally {
+                                            isGeneratingPdf = false
+                                        }
+                                    }
+                                },
+                                isGeneratingPdf = isGeneratingPdf
                             )
                         }
                     }
@@ -700,6 +737,65 @@ fun ReturnsScreen() {
                 snackbarHostState.showSnackbar("تم حذف المرتجع بنجاح")
                 viewModel.clearLastDeletedReturnId()
             }
+        }
+
+        // PDF Viewer Dialog
+        generatedPdfFile?.let { pdfFile ->
+            if (showPdfViewer) {
+                ui.screens.PdfViewerDialog(
+                    pdfFile = pdfFile,
+                    onDismiss = {
+                        showPdfViewer = false
+                        generatedPdfFile = null
+                    },
+                    onPrint = {
+                        coroutineScope.launch {
+                            val printResult = utils.FileDialogUtils.printFile(pdfFile)
+                            when (printResult) {
+                                is utils.FileDialogUtils.PrintResult.Success -> {
+                                    exportMessage = "تم إرسال الملف للطباعة بنجاح"
+                                }
+                                is utils.FileDialogUtils.PrintResult.NoAssociatedApp,
+                                is utils.FileDialogUtils.PrintResult.NotSupported,
+                                is utils.FileDialogUtils.PrintResult.Error -> {
+                                    utils.FileDialogUtils.openWithSystemDefault(pdfFile)
+                                    exportMessage = "تم فتح الملف للطباعة اليدوية"
+                                }
+                            }
+                        }
+                    },
+                    onDownload = {
+                        coroutineScope.launch {
+                            try {
+                                val defaultFileName = pdfFile.nameWithoutExtension + "_copy.pdf"
+                                val selectedFile = utils.FileDialogUtils.selectPdfSaveFile(defaultFileName)
+
+                                if (selectedFile != null) {
+                                    pdfFile.copyTo(selectedFile, overwrite = true)
+                                    exportMessage = "تم حفظ الملف بنجاح"
+                                    try {
+                                        utils.FileDialogUtils.openFolder(selectedFile.parentFile)
+                                    } catch (e: Exception) {
+                                        // Ignore if can't open folder
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                exportMessage = "خطأ في حفظ الملف: ${e.message}"
+                            }
+                        }
+                    }
+                )
+            }
+        }
+
+        // Full Screen PDF Viewer
+        if (showFullScreenPdfViewer && generatedPdfFile != null) {
+            ui.screens.PdfViewerFullScreen(
+                pdfFile = generatedPdfFile!!,
+                onBack = {
+                    showFullScreenPdfViewer = false
+                }
+            )
         }
     }
 }
@@ -1274,6 +1370,8 @@ private fun EnhancedReturnDetailsPanel(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onClose: () -> Unit,
+    onGeneratePdf: (ReturnDTO) -> Unit = {},
+    isGeneratingPdf: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -1404,7 +1502,7 @@ private fun EnhancedReturnDetailsPanel(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.weight(1f)
         ) {
-            items(returnItem.items) { item ->
+            items(returnItem.items ?: emptyList()) { item ->
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
@@ -1425,29 +1523,34 @@ private fun EnhancedReturnDetailsPanel(
                                 fontWeight = FontWeight.Medium
                             )
                             Text(
-                                text = "${item.quantity} × ${String.format("%.2f", item.unitPrice)} ر.س",
+                                text = "${item.returnQuantity} × ${String.format("%.2f", item.originalUnitPrice)} ر.س",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium
                             )
                         }
                         Text(
-                            text = "الحالة: ${when (item.condition) {
+                            text = "الحالة: ${when (item.itemCondition) {
                                 "NEW" -> "جديد"
-                                "USED" -> "مستعمل"
+                                "LIKE_NEW" -> "شبه جديد"
+                                "GOOD" -> "جيد"
+                                "FAIR" -> "مقبول"
+                                "POOR" -> "ضعيف"
                                 "DAMAGED" -> "تالف"
                                 "DEFECTIVE" -> "معيب"
-                                else -> item.condition
+                                else -> item.itemCondition
                             }}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        if (item.conditionNotes?.isNotEmpty() == true) {
+                            Text(
+                                text = "ملاحظات الحالة: ${item.conditionNotes}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         Text(
-                            text = "السبب: ${getReasonDisplayName(item.reason)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "إجمالي الاسترداد: ${String.format("%.2f", item.totalRefundAmount)} ر.س",
+                            text = "إجمالي الاسترداد: ${String.format("%.2f", item.refundAmount)} ر.س",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Medium
@@ -1458,35 +1561,141 @@ private fun EnhancedReturnDetailsPanel(
         }
 
         // Action Buttons
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Button(
-                onClick = onEdit,
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                ),
-                shape = RoundedCornerShape(12.dp)
+            // First row - Edit and Delete
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(Icons.Default.Edit, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("تعديل")
+                Button(
+                    onClick = onEdit,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Edit, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("تعديل")
+                }
+
+                OutlinedButton(
+                    onClick = onDelete,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("حذف")
+                }
             }
 
-            OutlinedButton(
-                onClick = onDelete,
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error
-                ),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
-                shape = RoundedCornerShape(12.dp)
+            // Second row - PDF Generation
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(Icons.Default.Delete, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("حذف")
+                // Generate PDF Receipt Button
+                val pdfInteractionSource = remember { MutableInteractionSource() }
+                val isPdfHovered by pdfInteractionSource.collectIsHoveredAsState()
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            color = when {
+                                isGeneratingPdf -> MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                isPdfHovered && !isGeneratingPdf -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                else -> MaterialTheme.colorScheme.surface
+                            },
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .border(
+                            width = if (isPdfHovered && !isGeneratingPdf) 1.5.dp else 1.dp,
+                            color = if (isPdfHovered && !isGeneratingPdf)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                            else
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .clickable(
+                            interactionSource = pdfInteractionSource,
+                            indication = null,
+                            enabled = !isGeneratingPdf
+                        ) {
+                            if (!isGeneratingPdf) {
+                                onGeneratePdf(returnItem)
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isGeneratingPdf) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.PictureAsPdf,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = if (isPdfHovered)
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                            )
+                        }
+                        Text(
+                            text = if (isGeneratingPdf) "جاري الإنشاء..." else "إنشاء إيصال PDF",
+                            color = when {
+                                isGeneratingPdf -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                isPdfHovered -> MaterialTheme.colorScheme.primary
+                                else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                            },
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+
+                // Print Receipt Button (placeholder for future enhancement)
+                OutlinedButton(
+                    onClick = {
+                        // Future: Direct print functionality
+                        onGeneratePdf(returnItem)
+                    },
+                    modifier = Modifier.weight(1f),
+                    enabled = !isGeneratingPdf,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (isGeneratingPdf)
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+                        else
+                            Color.Transparent
+                    )
+                ) {
+                    Icon(
+                        Icons.Default.Print,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("طباعة إيصال")
+                }
             }
         }
     }
@@ -1543,12 +1752,79 @@ fun EnhancedNewReturnDialog(
     onDismiss: () -> Unit,
     onConfirm: (ReturnDTO) -> Unit
 ) {
-    var originalSaleId by remember { mutableStateOf("") }
+    // State for form fields
+    var selectedCustomer by remember { mutableStateOf<CustomerDTO?>(null) }
+    var selectedSale by remember { mutableStateOf<SaleDTO?>(null) }
+    var selectedSaleItems by remember { mutableStateOf<List<SaleItemDTO>>(emptyList()) }
     var selectedReason by remember { mutableStateOf("DEFECTIVE") }
     var notes by remember { mutableStateOf("") }
-    var customerName by remember { mutableStateOf("") }
-    var productName by remember { mutableStateOf("") }
-    var refundAmount by remember { mutableStateOf("") }
+    var refundMethod by remember { mutableStateOf("ORIGINAL_PAYMENT") }
+
+    // State for dropdowns
+    var showCustomerDropdown by remember { mutableStateOf(false) }
+    var showSaleDropdown by remember { mutableStateOf(false) }
+    var customerSearchQuery by remember { mutableStateOf("") }
+    var saleSearchQuery by remember { mutableStateOf("") }
+
+    // Data loading states
+    var customers by remember { mutableStateOf<List<CustomerDTO>>(emptyList()) }
+    var sales by remember { mutableStateOf<List<SaleDTO>>(emptyList()) }
+    var isLoadingCustomers by remember { mutableStateOf(false) }
+    var isLoadingSales by remember { mutableStateOf(false) }
+
+    // Load customers when dialog opens
+    LaunchedEffect(Unit) {
+        isLoadingCustomers = true
+        try {
+            val customerService = AppDependencies.container.customerApiService
+            val result = customerService.getAllCustomers(page = 0, size = 100)
+            result.onSuccess { pageResponse ->
+                customers = pageResponse.content
+            }.onError { exception ->
+                println("Error loading customers: ${exception.message}")
+            }
+        } catch (e: Exception) {
+            println("Error loading customers: ${e.message}")
+        } finally {
+            isLoadingCustomers = false
+        }
+    }
+
+    // Load sales when customer is selected
+    LaunchedEffect(selectedCustomer) {
+        selectedCustomer?.let { customer ->
+            isLoadingSales = true
+            try {
+                val salesService = AppDependencies.container.salesApiService
+                val result = salesService.getSalesByCustomer(customer.id!!, page = 0, size = 50)
+                result.onSuccess { pageResponse ->
+                    // Filter for completed sales only
+                    sales = pageResponse.content.filter { it.status == "COMPLETED" }
+                }.onError { exception ->
+                    println("Error loading sales: ${exception.message}")
+                }
+            } catch (e: Exception) {
+                println("Error loading sales: ${e.message}")
+            } finally {
+                isLoadingSales = false
+            }
+        }
+    }
+
+    // Update sale items when sale is selected
+    LaunchedEffect(selectedSale) {
+        selectedSale?.let { sale ->
+            selectedSaleItems = sale.items
+        }
+    }
+
+    val refundMethods = listOf(
+        "ORIGINAL_PAYMENT" to "طريقة الدفع الأصلية",
+        "CASH" to "نقداً",
+        "CREDIT_CARD" to "بطاقة ائتمان",
+        "BANK_TRANSFER" to "تحويل بنكي",
+        "STORE_CREDIT" to "رصيد المتجر"
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1584,126 +1860,392 @@ fun EnhancedNewReturnDialog(
         },
         text = {
             Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 600.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                OutlinedTextField(
-                    value = originalSaleId,
-                    onValueChange = { originalSaleId = it },
-                    label = { Text("رقم الفاتورة الأصلية") },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Receipt,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    },
+                // Customer Selection
+                Card(
                     modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    ),
                     shape = RoundedCornerShape(12.dp)
-                )
-
-                OutlinedTextField(
-                    value = customerName,
-                    onValueChange = { customerName = it },
-                    label = { Text("اسم العميل") },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Person,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                OutlinedTextField(
-                    value = refundAmount,
-                    onValueChange = { refundAmount = it },
-                    label = { Text("مبلغ الاسترداد") },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.AttachMoney,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                var expanded by remember { mutableStateOf(false) }
-                ExposedDropdownMenuBox(
-                    expanded = expanded,
-                    onExpandedChange = { expanded = !expanded }
                 ) {
-                    OutlinedTextField(
-                        value = getReasonDisplayName(selectedReason),
-                        onValueChange = { },
-                        readOnly = true,
-                        label = { Text("سبب الإرجاع") },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Help,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        },
-                        trailingIcon = {
-                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-                        },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    ExposedDropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        val reasons = listOf("DEFECTIVE", "WRONG_ITEM", "CUSTOMER_CHANGE_MIND", "EXPIRED", "DAMAGED_SHIPPING", "OTHER")
-                        reasons.forEach { reason ->
-                            DropdownMenuItem(
-                                text = { Text(getReasonDisplayName(reason)) },
-                                onClick = {
-                                    selectedReason = reason
-                                    expanded = false
-                                }
+                        Text(
+                            text = "اختيار العميل",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        ExposedDropdownMenuBox(
+                            expanded = showCustomerDropdown,
+                            onExpandedChange = { showCustomerDropdown = it }
+                        ) {
+                            OutlinedTextField(
+                                value = selectedCustomer?.name ?: "",
+                                onValueChange = { },
+                                readOnly = true,
+                                label = { Text("العميل") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Person,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showCustomerDropdown) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                                ),
+                                shape = RoundedCornerShape(12.dp)
                             )
+
+                            ExposedDropdownMenu(
+                                expanded = showCustomerDropdown,
+                                onDismissRequest = { showCustomerDropdown = false }
+                            ) {
+                                if (isLoadingCustomers) {
+                                    DropdownMenuItem(
+                                        text = { Text("جاري التحميل...") },
+                                        onClick = { }
+                                    )
+                                } else {
+                                    customers.forEach { customer ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Column {
+                                                    Text(customer.name)
+                                                    Text(
+                                                        text = customer.phone ?: "",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            },
+                                            onClick = {
+                                                selectedCustomer = customer
+                                                selectedSale = null // Reset sale selection
+                                                showCustomerDropdown = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
 
-                OutlinedTextField(
-                    value = notes,
-                    onValueChange = { notes = it },
-                    label = { Text("ملاحظات إضافية") },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Notes,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 3,
-                    shape = RoundedCornerShape(12.dp)
-                )
+                // Sale Selection (only show if customer is selected)
+                if (selectedCustomer != null) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = "اختيار الفاتورة",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            ExposedDropdownMenuBox(
+                                expanded = showSaleDropdown,
+                                onExpandedChange = { showSaleDropdown = it }
+                            ) {
+                                OutlinedTextField(
+                                    value = selectedSale?.let { "فاتورة #${it.id} - ${it.totalAmount} ريال" } ?: "",
+                                    onValueChange = { },
+                                    readOnly = true,
+                                    label = { Text("الفاتورة") },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Receipt,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showSaleDropdown) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .menuAnchor(),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                                    ),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+
+                                ExposedDropdownMenu(
+                                    expanded = showSaleDropdown,
+                                    onDismissRequest = { showSaleDropdown = false }
+                                ) {
+                                    if (isLoadingSales) {
+                                        DropdownMenuItem(
+                                            text = { Text("جاري التحميل...") },
+                                            onClick = { }
+                                        )
+                                    } else if (sales.isEmpty()) {
+                                        DropdownMenuItem(
+                                            text = { Text("لا توجد فواتير مكتملة لهذا العميل") },
+                                            onClick = { }
+                                        )
+                                    } else {
+                                        sales.forEach { sale ->
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Column {
+                                                        Text("فاتورة #${sale.id}")
+                                                        Text(
+                                                            text = "${sale.totalAmount} ريال - ${sale.items.size} منتج",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                },
+                                                onClick = {
+                                                    selectedSale = sale
+                                                    showSaleDropdown = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Return Details (only show if sale is selected)
+                if (selectedSale != null) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = "تفاصيل الإرجاع",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            // Return Reason
+                            var reasonExpanded by remember { mutableStateOf(false) }
+                            ExposedDropdownMenuBox(
+                                expanded = reasonExpanded,
+                                onExpandedChange = { reasonExpanded = it }
+                            ) {
+                                OutlinedTextField(
+                                    value = getReasonDisplayName(selectedReason),
+                                    onValueChange = { },
+                                    readOnly = true,
+                                    label = { Text("سبب الإرجاع") },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Help,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = reasonExpanded) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .menuAnchor(),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+
+                                ExposedDropdownMenu(
+                                    expanded = reasonExpanded,
+                                    onDismissRequest = { reasonExpanded = false }
+                                ) {
+                                    val reasons = listOf(
+                                        "DEFECTIVE" to "معيب",
+                                        "WRONG_ITEM" to "منتج خاطئ",
+                                        "NOT_AS_DESCRIBED" to "لا يطابق الوصف",
+                                        "CUSTOMER_CHANGE_MIND" to "تغيير رأي العميل",
+                                        "DAMAGED_IN_SHIPPING" to "تضرر أثناء الشحن",
+                                        "OTHER" to "أخرى"
+                                    )
+                                    reasons.forEach { (reason, displayName) ->
+                                        DropdownMenuItem(
+                                            text = { Text(displayName) },
+                                            onClick = {
+                                                selectedReason = reason
+                                                reasonExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Refund Method
+                            var refundExpanded by remember { mutableStateOf(false) }
+                            ExposedDropdownMenuBox(
+                                expanded = refundExpanded,
+                                onExpandedChange = { refundExpanded = it }
+                            ) {
+                                OutlinedTextField(
+                                    value = refundMethods.find { it.first == refundMethod }?.second ?: "طريقة الدفع الأصلية",
+                                    onValueChange = { },
+                                    readOnly = true,
+                                    label = { Text("طريقة الاسترداد") },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.AttachMoney,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = refundExpanded) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .menuAnchor(),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+
+                                ExposedDropdownMenu(
+                                    expanded = refundExpanded,
+                                    onDismissRequest = { refundExpanded = false }
+                                ) {
+                                    refundMethods.forEach { (method, displayName) ->
+                                        DropdownMenuItem(
+                                            text = { Text(displayName) },
+                                            onClick = {
+                                                refundMethod = method
+                                                refundExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Notes
+                            OutlinedTextField(
+                                value = notes,
+                                onValueChange = { notes = it },
+                                label = { Text("ملاحظات إضافية") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Notes,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                minLines = 2,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        }
+                    }
+
+                    // Sale Items Selection
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = "المنتجات المراد إرجاعها",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            selectedSaleItems.forEach { item ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surface
+                                    ),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = item.productName ?: "منتج #${item.productId}",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                            Text(
+                                                text = "الكمية: ${item.quantity} - السعر: ${item.unitPrice} ريال",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+
+                                        Checkbox(
+                                            checked = true, // For now, all items are selected
+                                            onCheckedChange = { /* TODO: Implement item selection */ }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    val returnData = ReturnDTO(
-                        originalSaleId = originalSaleId.toLongOrNull() ?: 0L,
-                        customerId = 1L, // TODO: Get from customer selection
-                        reason = selectedReason,
-                        totalRefundAmount = refundAmount.toDoubleOrNull() ?: 0.0,
-                        notes = notes,
-                        refundMethod = "ORIGINAL_PAYMENT",
-                        items = emptyList() // TODO: Add item selection
-                    )
-                    onConfirm(returnData)
+                    if (selectedCustomer != null && selectedSale != null) {
+                        // Create return items from selected sale items
+                        val returnItems = selectedSaleItems.map { saleItem ->
+                            ReturnItemDTO(
+                                originalSaleItemId = saleItem.id ?: 0L,
+                                productId = saleItem.productId,
+                                productName = saleItem.productName,
+                                returnQuantity = saleItem.quantity, // For now, return full quantity
+                                originalUnitPrice = saleItem.unitPrice,
+                                refundAmount = saleItem.totalPrice ?: (saleItem.unitPrice * saleItem.quantity),
+                                itemCondition = "GOOD" // Default condition
+                            )
+                        }
+
+                        val returnData = ReturnDTO(
+                            originalSaleId = selectedSale!!.id!!,
+                            customerId = selectedCustomer!!.id!!,
+                            reason = selectedReason,
+                            totalRefundAmount = returnItems.sumOf { it.refundAmount },
+                            notes = notes,
+                            refundMethod = refundMethod,
+                            items = returnItems
+                        )
+                        onConfirm(returnData)
+                    }
                 },
-                enabled = !isLoading && originalSaleId.isNotEmpty() && refundAmount.isNotEmpty(),
+                enabled = !isLoading && selectedCustomer != null && selectedSale != null,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary
@@ -3007,6 +3549,7 @@ private fun EnhancedReturnCardFromDTO(
     onClick: (ReturnDTO) -> Unit,
     onEdit: (ReturnDTO) -> Unit,
     onDelete: (ReturnDTO) -> Unit,
+    onGeneratePdf: (ReturnDTO) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // Enhanced hover effect with complete coverage
@@ -3073,6 +3616,18 @@ private fun EnhancedReturnCardFromDTO(
                             Icons.Default.Edit,
                             contentDescription = "تعديل",
                             tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { onGeneratePdf(returnItem) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.PictureAsPdf,
+                            contentDescription = "إنشاء PDF",
+                            tint = AppTheme.colors.info,
                             modifier = Modifier.size(18.dp)
                         )
                     }

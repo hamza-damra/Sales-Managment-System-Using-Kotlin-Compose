@@ -11,21 +11,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
+import org.apache.pdfbox.pdmodel.PDDocument
+import org.apache.pdfbox.rendering.PDFRenderer
 import ui.components.RTLProvider
 import ui.theme.AppTheme
 import utils.FileDialogUtils
-import java.io.File
 import java.awt.image.BufferedImage
-import org.apache.pdfbox.pdmodel.PDDocument
-import org.apache.pdfbox.rendering.PDFRenderer
-import androidx.compose.foundation.Image
-import androidx.compose.ui.graphics.toComposeImageBitmap
+import java.io.File
 
 /**
  * Enhanced PDF Viewer Screen for displaying generated receipts
@@ -42,6 +43,10 @@ fun PdfViewerDialog(
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var currentPage by remember { mutableStateOf(0) }
+    var zoomLevel by remember { mutableStateOf(1f) }
+    var showSuccessMessage by remember { mutableStateOf<String?>(null) }
+    var isDownloading by remember { mutableStateOf(false) }
+    var isPrinting by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
     // Load PDF pages as images
@@ -56,7 +61,7 @@ fun PdfViewerDialog(
                 val images = mutableListOf<BufferedImage>()
 
                 for (page in 0 until document.numberOfPages) {
-                    val image = renderer.renderImageWithDPI(page, 150f) // 150 DPI for good quality
+                    val image = renderer.renderImageWithDPI(page, 200f) // Increased DPI for better quality
                     images.add(image)
                 }
 
@@ -67,7 +72,16 @@ fun PdfViewerDialog(
             } catch (e: Exception) {
                 errorMessage = "خطأ في تحميل ملف PDF: ${e.message}"
                 isLoading = false
+                println("PDF loading error: ${e.printStackTrace()}")
             }
+        }
+    }
+
+    // Auto-dismiss success message
+    LaunchedEffect(showSuccessMessage) {
+        showSuccessMessage?.let {
+            kotlinx.coroutines.delay(3000)
+            showSuccessMessage = null
         }
     }
 
@@ -203,43 +217,102 @@ fun PdfViewerDialog(
 
                             pdfImages.isNotEmpty() -> {
                                 Column(modifier = Modifier.fillMaxSize()) {
-                                    // Page navigation (if multiple pages)
-                                    if (pdfImages.size > 1) {
+                                    // Enhanced navigation and zoom controls
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(bottom = 16.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        // Page navigation (if multiple pages)
+                                        if (pdfImages.size > 1) {
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                IconButton(
+                                                    onClick = { if (currentPage > 0) currentPage-- },
+                                                    enabled = currentPage > 0
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.ArrowBack,
+                                                        contentDescription = "الصفحة السابقة"
+                                                    )
+                                                }
+
+                                                Text(
+                                                    text = "صفحة ${currentPage + 1} من ${pdfImages.size}",
+                                                    style = MaterialTheme.typography.bodyMedium
+                                                )
+
+                                                IconButton(
+                                                    onClick = { if (currentPage < pdfImages.size - 1) currentPage++ },
+                                                    enabled = currentPage < pdfImages.size - 1
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.ArrowForward,
+                                                        contentDescription = "الصفحة التالية"
+                                                    )
+                                                }
+                                            }
+                                        } else {
+                                            Spacer(modifier = Modifier.width(1.dp))
+                                        }
+
+                                        // Zoom controls
                                         Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(bottom = 16.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             IconButton(
-                                                onClick = { if (currentPage > 0) currentPage-- },
-                                                enabled = currentPage > 0
+                                                onClick = {
+                                                    if (zoomLevel > 0.5f) zoomLevel = (zoomLevel - 0.25f).coerceAtLeast(0.5f)
+                                                },
+                                                enabled = zoomLevel > 0.5f
                                             ) {
                                                 Icon(
-                                                    Icons.Default.ArrowBack,
-                                                    contentDescription = "الصفحة السابقة"
+                                                    Icons.Default.ZoomOut,
+                                                    contentDescription = "تصغير",
+                                                    modifier = Modifier.size(20.dp)
                                                 )
                                             }
 
                                             Text(
-                                                text = "صفحة ${currentPage + 1} من ${pdfImages.size}",
-                                                style = MaterialTheme.typography.bodyMedium
+                                                text = "${(zoomLevel * 100).toInt()}%",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                modifier = Modifier.widthIn(min = 40.dp),
+                                                textAlign = TextAlign.Center
                                             )
 
                                             IconButton(
-                                                onClick = { if (currentPage < pdfImages.size - 1) currentPage++ },
-                                                enabled = currentPage < pdfImages.size - 1
+                                                onClick = {
+                                                    if (zoomLevel < 3f) zoomLevel = (zoomLevel + 0.25f).coerceAtMost(3f)
+                                                },
+                                                enabled = zoomLevel < 3f
                                             ) {
                                                 Icon(
-                                                    Icons.Default.ArrowForward,
-                                                    contentDescription = "الصفحة التالية"
+                                                    Icons.Default.ZoomIn,
+                                                    contentDescription = "تكبير",
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+
+                                            // Reset zoom button
+                                            IconButton(
+                                                onClick = { zoomLevel = 1f }
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.CenterFocusStrong,
+                                                    contentDescription = "إعادة تعيين التكبير",
+                                                    modifier = Modifier.size(18.dp)
                                                 )
                                             }
                                         }
                                     }
 
-                                    // PDF Image Display
+                                    // Enhanced PDF Image Display with zoom
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
@@ -256,7 +329,13 @@ fun PdfViewerDialog(
                                             Image(
                                                 bitmap = composeImage,
                                                 contentDescription = "PDF Page ${currentPage + 1}",
-                                                modifier = Modifier.padding(16.dp)
+                                                modifier = Modifier
+                                                    .padding(16.dp)
+                                                    .graphicsLayer(
+                                                        scaleX = zoomLevel,
+                                                        scaleY = zoomLevel
+                                                    ),
+                                                contentScale = ContentScale.Fit
                                             )
                                         }
                                     }
@@ -269,83 +348,207 @@ fun PdfViewerDialog(
                     if (!isLoading && errorMessage == null) {
                         Divider()
 
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            // Print button
-                            OutlinedButton(
-                                onClick = onPrint,
-                                modifier = Modifier.weight(1f)
+                            // First row of buttons
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Icon(
-                                    Icons.Default.Print,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("طباعة")
+                                // Enhanced Print button with loading state
+                                OutlinedButton(
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            isPrinting = true
+                                            try {
+                                                onPrint()
+                                                showSuccessMessage = "تم إرسال الملف للطباعة بنجاح"
+                                            } catch (e: Exception) {
+                                                errorMessage = "خطأ في الطباعة: ${e.message}"
+                                            } finally {
+                                                isPrinting = false
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(56.dp),
+                                    enabled = !isPrinting && !isDownloading,
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        containerColor = if (isPrinting) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent
+                                    )
+                                ) {
+                                    if (isPrinting) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    } else {
+                                        Icon(
+                                            Icons.Default.Print,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(if (isPrinting) "جاري الطباعة..." else "طباعة")
+                                }
+
+                                // Enhanced Save PDF button with loading state
+                                OutlinedButton(
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            isDownloading = true
+                                            try {
+                                                // Generate default filename based on current PDF name
+                                                val defaultFileName = pdfFile.nameWithoutExtension + "_copy.pdf"
+                                                val selectedFile = FileDialogUtils.selectPdfSaveFile(defaultFileName)
+
+                                                if (selectedFile != null) {
+                                                    // Copy the PDF file to the selected location
+                                                    pdfFile.copyTo(selectedFile, overwrite = true)
+                                                    showSuccessMessage = "تم حفظ الملف بنجاح في: ${selectedFile.name}"
+
+                                                    // Open the saved location
+                                                    try {
+                                                        FileDialogUtils.openFolder(selectedFile.parentFile)
+                                                    } catch (e: Exception) {
+                                                        // Ignore if can't open folder
+                                                    }
+                                                }
+                                            } catch (e: Exception) {
+                                                errorMessage = "خطأ في حفظ الملف: ${e.message}"
+                                            } finally {
+                                                isDownloading = false
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(56.dp),
+                                    enabled = !isDownloading && !isPrinting,
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        containerColor = if (isDownloading) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent
+                                    )
+                                ) {
+                                    if (isDownloading) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    } else {
+                                        Icon(
+                                            Icons.Default.Save,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(if (isDownloading) "جاري الحفظ..." else "حفظ باسم")
+                                }
                             }
 
-                            // Save PDF button
-                            OutlinedButton(
-                                onClick = {
-                                    coroutineScope.launch {
+                            // Second row of buttons
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                // Open in system button
+                                OutlinedButton(
+                                    onClick = {
                                         try {
-                                            // Generate default filename based on current PDF name
-                                            val defaultFileName = pdfFile.nameWithoutExtension + "_copy.pdf"
-                                            val selectedFile = FileDialogUtils.selectPdfSaveFile(defaultFileName)
-
-                                            if (selectedFile != null) {
-                                                // Copy the PDF file to the selected location
-                                                pdfFile.copyTo(selectedFile, overwrite = true)
-
-                                                // Optionally show success message or open the saved location
-                                                try {
-                                                    FileDialogUtils.openFolder(selectedFile.parentFile)
-                                                } catch (e: Exception) {
-                                                    // Ignore if can't open folder
-                                                }
+                                            val success = FileDialogUtils.openWithSystemDefault(pdfFile)
+                                            if (success) {
+                                                showSuccessMessage = "تم فتح الملف في التطبيق الافتراضي"
+                                            } else {
+                                                errorMessage = "لا يمكن فتح الملف. تأكد من وجود تطبيق لقراءة PDF"
                                             }
                                         } catch (e: Exception) {
-                                            // Handle error - could show error message in UI
-                                            println("Error saving PDF: ${e.message}")
+                                            errorMessage = "خطأ في فتح الملف: ${e.message}"
                                         }
-                                    }
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(
-                                    Icons.Default.Save,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("حفظ باسم")
-                            }
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(56.dp),
+                                    enabled = !isDownloading && !isPrinting,
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.OpenInNew,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("فتح خارجياً")
+                                }
 
-                            // Open in system button
-                            OutlinedButton(
-                                onClick = {
-                                    try {
-                                        FileDialogUtils.openWithSystemDefault(pdfFile)
-                                    } catch (e: Exception) {
-                                        // Handle error
-                                    }
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(
-                                    Icons.Default.OpenInNew,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("فتح خارجياً")
+                                // Close button
+                                Button(
+                                    onClick = onDismiss,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(56.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary
+                                    )
+                                ) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("إغلاق")
+                                }
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        // Success message overlay
+        showSuccessMessage?.let { message ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.3f))
+                    .clickable { showSuccessMessage = null },
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = AppTheme.colors.success
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                 }
             }

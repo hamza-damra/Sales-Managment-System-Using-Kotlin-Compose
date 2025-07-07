@@ -162,7 +162,7 @@ data class SaleDTO(
     val saleDate: String? = null, // ISO datetime
     val totalAmount: Double,
     val status: String? = null, // PENDING, COMPLETED, CANCELLED, REFUNDED
-    val items: List<SaleItemDTO>,
+    val items: List<SaleItemDTO> = emptyList(),
     val saleNumber: String? = null,
     val referenceNumber: String? = null,
     val subtotal: Double? = null,
@@ -325,7 +325,7 @@ data class ReturnDTO(
     val processedBy: String? = null,
     val processedDate: String? = null, // ISO datetime
     val refundMethod: String? = null, // ORIGINAL_PAYMENT, STORE_CREDIT, CASH
-    val items: List<ReturnItemDTO>,
+    val items: List<ReturnItemDTO>? = null,
     val createdAt: String? = null, // ISO datetime
     val updatedAt: String? = null // ISO datetime
 )
@@ -333,13 +333,20 @@ data class ReturnDTO(
 @Serializable
 data class ReturnItemDTO(
     val id: Long? = null,
+    val returnId: Long? = null,
+    val originalSaleItemId: Long,
     val productId: Long,
     val productName: String? = null,
-    val quantity: Int,
-    val unitPrice: Double,
-    val totalRefundAmount: Double,
-    val reason: String,
-    val condition: String // NEW, USED, DAMAGED, DEFECTIVE
+    val productSku: String? = null,
+    val returnQuantity: Int,
+    val originalUnitPrice: Double,
+    val refundAmount: Double,
+    val restockingFee: Double? = null,
+    val conditionNotes: String? = null,
+    val itemCondition: String, // NEW, LIKE_NEW, GOOD, FAIR, POOR, DAMAGED, DEFECTIVE
+    val serialNumbers: String? = null,
+    val isRestockable: Boolean? = null,
+    val disposalReason: String? = null
 )
 
 // Promotion DTOs

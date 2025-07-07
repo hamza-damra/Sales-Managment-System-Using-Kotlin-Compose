@@ -396,9 +396,10 @@ data class ReturnFormData(
 )
 
 data class ReturnItemFormData(
+    val originalSaleItemId: Long,
     val productId: Long,
-    val quantity: Int,
-    val unitPrice: Double,
-    val reason: String,
-    val condition: String
+    val returnQuantity: Int,
+    val originalUnitPrice: Double,
+    val refundAmount: Double,
+    val itemCondition: String
 )

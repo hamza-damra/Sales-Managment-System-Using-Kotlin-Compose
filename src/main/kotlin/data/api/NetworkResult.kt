@@ -100,20 +100,41 @@ fun Throwable.toApiException(): ApiException {
 
     return when (this) {
         is ClientRequestException -> {
-            println("📡 HTTP Client Error: ${response.status.value} ${response.status.description}")
-            when (response.status.value) {
-                HttpStatusCode.Unauthorized.value ->
-                    ApiException.AuthenticationError("Invalid username or password")
-                HttpStatusCode.BadRequest.value ->
-                    ApiException.ValidationError(emptyMap()) // TODO: Parse validation errors
-                HttpStatusCode.NotFound.value ->
-                    ApiException.HttpError(404, "API endpoint not found", "Check if backend is running and endpoints are correct")
-                else ->
+            val statusCode = response.status.value
+            val statusText = response.status.description
+            val url = response.call.request.url.toString()
+
+            println("📡 HTTP Client Error: $statusCode $statusText for URL: $url")
+
+            when (statusCode) {
+                HttpStatusCode.Unauthorized.value -> {
+                    println("🔐 Authentication Error (401) - Token invalid, expired, or missing")
+                    ApiException.AuthenticationError("Authentication failed - Token invalid, expired, or missing. Please login again.")
+                }
+                HttpStatusCode.Forbidden.value -> {
+                    println("🚫 Authorization Error (403) - Access forbidden")
+                    ApiException.AuthenticationError("Access forbidden - Insufficient permissions for this operation")
+                }
+                HttpStatusCode.BadRequest.value -> {
+                    println("⚠️ Validation Error (400) - Bad request")
+                    ApiException.ValidationError(emptyMap()) // TODO: Parse validation errors from response body
+                }
+                HttpStatusCode.NotFound.value -> {
+                    println("🔍 Not Found Error (404) - Endpoint not found: $url")
+                    if (url.contains("/api/")) {
+                        ApiException.HttpError(404, "API endpoint not found", "The endpoint '$url' does not exist. Check if the backend is running and the endpoint is implemented.")
+                    } else {
+                        ApiException.HttpError(404, "Resource not found", "The requested resource was not found")
+                    }
+                }
+                else -> {
+                    println("⚠️ Client Error ($statusCode) - $statusText")
                     ApiException.HttpError(
-                        statusCode = response.status.value,
-                        statusText = response.status.description,
+                        statusCode = statusCode,
+                        statusText = statusText,
                         errorBody = message
                     )
+                }
             }
         }
         is ServerResponseException -> {

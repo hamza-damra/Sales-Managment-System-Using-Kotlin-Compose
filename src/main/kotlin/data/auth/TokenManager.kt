@@ -3,6 +3,17 @@ package data.auth
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.prefs.Preferences
+import io.ktor.client.*
+import io.ktor.client.call.*
+import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.client.request.*
+import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
+import data.api.ApiConfig
 
 /**
  * Manages authentication tokens with secure storage and automatic refresh
@@ -74,10 +85,49 @@ class TokenManager {
     
     suspend fun refreshToken(refreshToken: String): TokenResponse? {
         // This will be called by the HTTP client when token refresh is needed
-        // The actual refresh logic will be handled by AuthService
-        // For now, return null to indicate refresh failed
-        // The AuthService will handle the actual refresh logic
-        return null
+        // We need to delegate to AuthService to avoid circular dependency
+
+        // Create a temporary HTTP client for refresh (without auth to avoid recursion)
+        val tempClient = HttpClient(CIO) {
+            install(ContentNegotiation) {
+                json(Json {
+                    ignoreUnknownKeys = true
+                    isLenient = true
+                    encodeDefaults = true
+                })
+            }
+        }
+
+        return try {
+            println("🔄 TokenManager - Attempting token refresh...")
+
+            val response = tempClient.post("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.AUTH_REFRESH}") {
+                contentType(ContentType.Application.Json)
+                setBody(RefreshTokenRequest(refreshToken))
+            }
+
+            if (response.status.value == 200) {
+                val tokenResponse = response.body<TokenResponse>()
+                println("✅ TokenManager - Token refresh successful")
+
+                // Save the new tokens
+                saveTokens(tokenResponse)
+                tempClient.close()
+                tokenResponse
+            } else {
+                println("❌ TokenManager - Token refresh failed: ${response.status}")
+                tempClient.close()
+                null
+            }
+        } catch (e: Exception) {
+            println("❌ TokenManager - Token refresh exception: ${e.message}")
+            try {
+                tempClient.close()
+            } catch (closeException: Exception) {
+                println("⚠️ TokenManager - Failed to close temp client: ${closeException.message}")
+            }
+            null
+        }
     }
     
     suspend fun clearTokens() = mutex.withLock {
