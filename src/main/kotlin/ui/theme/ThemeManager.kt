@@ -5,6 +5,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 // Enhanced AppColors with additional properties for compatibility
 @Immutable
@@ -41,14 +44,33 @@ enum class ThemeMode {
     LIGHT, DARK, SYSTEM
 }
 
-// Theme state holder
+// Theme state holder with persistent storage
 @Stable
-class ThemeState {
-    private var _themeMode by mutableStateOf(ThemeMode.SYSTEM)
+class ThemeState(
+    private val preferencesManager: data.preferences.ThemePreferencesManager? = null
+) {
+    private var _themeMode by mutableStateOf(
+        preferencesManager?.loadTheme() ?: ThemeMode.SYSTEM
+    )
     val themeMode: ThemeMode get() = _themeMode
 
     fun setThemeMode(mode: ThemeMode) {
         _themeMode = mode
+        // Save to persistent storage if available
+        preferencesManager?.let { manager ->
+            CoroutineScope(Dispatchers.IO).launch {
+                manager.saveTheme(mode)
+            }
+        }
+    }
+
+    /**
+     * Initialize theme from persistent storage
+     */
+    fun initializeFromStorage() {
+        preferencesManager?.let { manager ->
+            _themeMode = manager.loadTheme()
+        }
     }
 }
 
@@ -294,6 +316,22 @@ fun AppThemeProvider(
     themeState: ThemeState = remember { ThemeState() },
     content: @Composable () -> Unit
 ) {
+    CompositionLocalProvider(LocalThemeState provides themeState) {
+        AppTheme(
+            themeMode = themeState.themeMode,
+            content = content
+        )
+    }
+}
+
+// Enhanced theme provider with persistent storage
+@Composable
+fun AppThemeProviderWithPersistence(
+    preferencesManager: data.preferences.ThemePreferencesManager,
+    content: @Composable () -> Unit
+) {
+    val themeState = remember { ThemeState(preferencesManager) }
+
     CompositionLocalProvider(LocalThemeState provides themeState) {
         AppTheme(
             themeMode = themeState.themeMode,

@@ -151,19 +151,52 @@ fun ReturnsScreen() {
                                 color = MaterialTheme.colorScheme.onSurface
                             )
 
-                            Button(
-                                onClick = { showNewReturnDialog = true },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary
-                                ),
-                                shape = RoundedCornerShape(16.dp),
-                                elevation = ButtonDefaults.buttonElevation(
-                                    defaultElevation = 2.dp
-                                )
+                            // Enhanced Add New Return Button with hover effects
+                            val addReturnInteractionSource = remember { MutableInteractionSource() }
+                            val isAddReturnHovered by addReturnInteractionSource.collectIsHoveredAsState()
+
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        color = if (isAddReturnHovered)
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 1f)
+                                        else
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .border(
+                                        width = if (isAddReturnHovered) 2.dp else 1.dp,
+                                        color = if (isAddReturnHovered)
+                                            MaterialTheme.colorScheme.primary
+                                        else
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable(
+                                        interactionSource = addReturnInteractionSource,
+                                        indication = null
+                                    ) { showNewReturnDialog = true }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.Add, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("إرجاع جديد")
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Add,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                    Text(
+                                        "إرجاع جديد",
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
                             }
                         }
 
@@ -2217,67 +2250,131 @@ fun EnhancedNewReturnDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    if (selectedCustomer != null && selectedSale != null) {
-                        // Create return items from selected sale items
-                        val returnItems = selectedSaleItems.map { saleItem ->
-                            ReturnItemDTO(
-                                originalSaleItemId = saleItem.id ?: 0L,
-                                productId = saleItem.productId,
-                                productName = saleItem.productName,
-                                returnQuantity = saleItem.quantity, // For now, return full quantity
-                                originalUnitPrice = saleItem.unitPrice,
-                                refundAmount = saleItem.totalPrice ?: (saleItem.unitPrice * saleItem.quantity),
-                                itemCondition = "GOOD" // Default condition
-                            )
-                        }
-
-                        val returnData = ReturnDTO(
-                            originalSaleId = selectedSale!!.id!!,
-                            customerId = selectedCustomer!!.id!!,
-                            reason = selectedReason,
-                            totalRefundAmount = returnItems.sumOf { it.refundAmount },
-                            notes = notes,
-                            refundMethod = refundMethod,
-                            items = returnItems
-                        )
-                        onConfirm(returnData)
-                    }
-                },
-                enabled = !isLoading && selectedCustomer != null && selectedSale != null,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                ),
-                shape = RoundedCornerShape(12.dp)
+            // Full-width button row with enhanced hover effects
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = Color.White
-                    )
-                } else {
+                // Cancel Button with Box-based hover effects
+                val cancelInteractionSource = remember { MutableInteractionSource() }
+                val isCancelHovered by cancelInteractionSource.collectIsHoveredAsState()
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            color = if (isCancelHovered)
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+                            else
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .border(
+                            width = if (isCancelHovered) 1.5.dp else 1.dp,
+                            color = if (isCancelHovered)
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
+                            else
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .clickable(
+                            interactionSource = cancelInteractionSource,
+                            indication = null
+                        ) { onDismiss() },
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
-                        "إضافة",
-                        fontWeight = FontWeight.SemiBold
+                        text = "إلغاء",
+                        color = if (isCancelHovered)
+                            MaterialTheme.colorScheme.onSurface
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium,
+                        style = MaterialTheme.typography.bodyMedium
                     )
+                }
+
+                // Add Button with Box-based hover effects
+                val addInteractionSource = remember { MutableInteractionSource() }
+                val isAddHovered by addInteractionSource.collectIsHoveredAsState()
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            color = if (isAddHovered && !isLoading && selectedCustomer != null && selectedSale != null)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 1f)
+                            else if (!isLoading && selectedCustomer != null && selectedSale != null)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                            else
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .border(
+                            width = if (isAddHovered && !isLoading && selectedCustomer != null && selectedSale != null) 2.dp else 1.dp,
+                            color = if (isAddHovered && !isLoading && selectedCustomer != null && selectedSale != null)
+                                MaterialTheme.colorScheme.primary
+                            else if (!isLoading && selectedCustomer != null && selectedSale != null)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                            else
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .clickable(
+                            interactionSource = addInteractionSource,
+                            indication = null,
+                            enabled = !isLoading && selectedCustomer != null && selectedSale != null
+                        ) {
+                            if (selectedCustomer != null && selectedSale != null) {
+                                // Create return items from selected sale items
+                                val returnItems = selectedSaleItems.map { saleItem ->
+                                    ReturnItemDTO(
+                                        originalSaleItemId = saleItem.id ?: 0L,
+                                        productId = saleItem.productId,
+                                        productName = saleItem.productName,
+                                        returnQuantity = saleItem.quantity, // For now, return full quantity
+                                        originalUnitPrice = saleItem.unitPrice,
+                                        refundAmount = saleItem.totalPrice ?: (saleItem.unitPrice * saleItem.quantity),
+                                        itemCondition = "GOOD" // Default condition
+                                    )
+                                }
+
+                                val returnData = ReturnDTO(
+                                    originalSaleId = selectedSale!!.id!!,
+                                    customerId = selectedCustomer!!.id!!,
+                                    reason = selectedReason,
+                                    totalRefundAmount = returnItems.sumOf { it.refundAmount },
+                                    notes = notes,
+                                    refundMethod = refundMethod,
+                                    items = returnItems
+                                )
+                                onConfirm(returnData)
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text(
+                            text = "إضافة",
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                 }
             }
         },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    "إلغاء",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        },
+        dismissButton = null, // Remove dismissButton since we're handling both buttons in confirmButton
         shape = RoundedCornerShape(20.dp),
         containerColor = MaterialTheme.colorScheme.surface
     )

@@ -47,8 +47,15 @@ class AuthService(
 
             val authResponse = response.body<AuthResponse>()
             println("✅ Login successful for user: ${authResponse.user?.username}")
+            println("🔍 AuthResponse User Data: ${authResponse.user}")
+            println("🔍 AuthResponse User Username: ${authResponse.user?.username}")
+            println("🔍 AuthResponse User FirstName: ${authResponse.user?.firstName}")
+            println("🔍 AuthResponse User LastName: ${authResponse.user?.lastName}")
+            println("🔍 AuthResponse User Email: ${authResponse.user?.email}")
+            println("🔍 AuthResponse User Role: ${authResponse.user?.role}")
 
             tokenManager.saveTokens(authResponse)
+            println("🔍 AuthService - Tokens saved to TokenManager")
 
             _authState.value = AuthState(
                 isAuthenticated = true,
@@ -57,6 +64,7 @@ class AuthService(
                 refreshToken = authResponse.refreshToken,
                 isLoading = false
             )
+            println("🔍 AuthService - Auth state updated with user: ${authResponse.user?.username}")
 
             authResponse
         }.also { result ->
@@ -194,8 +202,20 @@ class AuthService(
         )
     }
     
-    fun getCurrentUser(): UserDTO? = tokenManager.getUser()
-    
+    fun getCurrentUser(): UserDTO? {
+        val user = tokenManager.getUser()
+        println("🔍 AuthService.getCurrentUser() - TokenManager user: $user")
+
+        // If TokenManager doesn't have user, try from current auth state
+        if (user == null) {
+            val stateUser = _authState.value.user
+            println("🔍 AuthService.getCurrentUser() - AuthState user: $stateUser")
+            return stateUser
+        }
+
+        return user
+    }
+
     fun isAuthenticated(): Boolean = tokenManager.isAuthenticated() && tokenManager.hasValidTokens()
     
     fun getUserRole(): UserRole {

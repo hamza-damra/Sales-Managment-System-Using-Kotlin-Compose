@@ -1092,25 +1092,12 @@ private fun EnhancedCustomerDialog(
     var website by remember { mutableStateOf(customer?.website ?: "") }
     var notes by remember { mutableStateOf(customer?.notes ?: "") }
 
-    Dialog(onDismissRequest = if (!isLoading) onDismiss else {{}}) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-                .heightIn(max = 600.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            shape = RoundedCornerShape(16.dp)
-        ) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
             Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Header
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1118,250 +1105,472 @@ private fun EnhancedCustomerDialog(
                 ) {
                     Text(
                         text = if (customer == null) "إضافة عميل جديد" else "تعديل العميل",
-                        style = MaterialTheme.typography.headlineSmall,
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
 
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.dp
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "إغلاق",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
+
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 600.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
 
                 // Basic Information Section
-                Text(
-                    text = "المعلومات الأساسية",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("اسم العميل *") },
-                    leadingIcon = {
-                        Icon(Icons.Default.Person, contentDescription = null)
-                    },
+                Card(
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    enabled = !isLoading
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    OutlinedTextField(
-                        value = firstName,
-                        onValueChange = { firstName = it },
-                        label = { Text("الاسم الأول") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        enabled = !isLoading
-                    )
-                    OutlinedTextField(
-                        value = lastName,
-                        onValueChange = { lastName = it },
-                        label = { Text("اسم العائلة") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        enabled = !isLoading
-                    )
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "المعلومات الأساسية",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        OutlinedTextField(
+                            value = name,
+                            onValueChange = { name = it },
+                            label = { Text("اسم العميل *") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isLoading,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = firstName,
+                                onValueChange = { firstName = it },
+                                label = { Text("الاسم الأول") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                enabled = !isLoading,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                                )
+                            )
+                            OutlinedTextField(
+                                value = lastName,
+                                onValueChange = { lastName = it },
+                                label = { Text("اسم العائلة") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                enabled = !isLoading,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                                )
+                            )
+                        }
+
+                        OutlinedTextField(
+                            value = phone,
+                            onValueChange = { phone = it },
+                            label = { Text("رقم الهاتف") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Phone,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isLoading,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+
+                        OutlinedTextField(
+                            value = email,
+                            onValueChange = { email = it },
+                            label = { Text("البريد الإلكتروني") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Email,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isLoading,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+                    }
                 }
 
-                OutlinedTextField(
-                    value = phone,
-                    onValueChange = { phone = it },
-                    label = { Text("رقم الهاتف") },
-                    leadingIcon = {
-                        Icon(Icons.Default.Phone, contentDescription = null)
-                    },
+                // Address Information Section
+                Card(
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    enabled = !isLoading
-                )
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "معلومات العنوان",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
 
-                OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    label = { Text("البريد الإلكتروني") },
-                    leadingIcon = {
-                        Icon(Icons.Default.Email, contentDescription = null)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    enabled = !isLoading
-                )
+                        OutlinedTextField(
+                            value = address,
+                            onValueChange = { address = it },
+                            label = { Text("العنوان") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.LocationOn,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isLoading,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
 
-                OutlinedTextField(
-                    value = address,
-                    onValueChange = { address = it },
-                    label = { Text("العنوان") },
-                    leadingIcon = {
-                        Icon(Icons.Default.LocationOn, contentDescription = null)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    enabled = !isLoading
-                )
+                        OutlinedTextField(
+                            value = billingAddress,
+                            onValueChange = { billingAddress = it },
+                            label = { Text("عنوان الفواتير") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isLoading,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+
+                        OutlinedTextField(
+                            value = shippingAddress,
+                            onValueChange = { shippingAddress = it },
+                            label = { Text("عنوان الشحن") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isLoading,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+                    }
+                }
 
                 // Additional Information Section
-                Text(
-                    text = "معلومات إضافية",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-
-                Row(
+                Card(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    // Customer Type Dropdown
-                    var customerTypeExpanded by remember { mutableStateOf(false) }
-                    val customerTypes = mapOf(
-                        "REGULAR" to "عادي",
-                        "PREMIUM" to "مميز",
-                        "VIP" to "كبار الشخصيات"
-                    )
-
-                    ExposedDropdownMenuBox(
-                        expanded = customerTypeExpanded,
-                        onExpandedChange = { customerTypeExpanded = !customerTypeExpanded },
-                        modifier = Modifier.weight(1f)
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        OutlinedTextField(
-                            value = customerTypes[customerType] ?: "عادي",
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("نوع العميل") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = customerTypeExpanded) },
-                            modifier = Modifier.menuAnchor().fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            enabled = !isLoading
+                        Text(
+                            text = "معلومات إضافية",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
                         )
-                        ExposedDropdownMenu(
-                            expanded = customerTypeExpanded,
-                            onDismissRequest = { customerTypeExpanded = false }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            customerTypes.forEach { (key, value) ->
-                                DropdownMenuItem(
-                                    text = { Text(value) },
-                                    onClick = {
-                                        customerType = key
-                                        customerTypeExpanded = false
-                                    }
+                            // Customer Type Dropdown
+                            var customerTypeExpanded by remember { mutableStateOf(false) }
+                            val customerTypes = mapOf(
+                                "REGULAR" to "عادي",
+                                "PREMIUM" to "مميز",
+                                "VIP" to "كبار الشخصيات"
+                            )
+
+                            ExposedDropdownMenuBox(
+                                expanded = customerTypeExpanded,
+                                onExpandedChange = { customerTypeExpanded = !customerTypeExpanded },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                OutlinedTextField(
+                                    value = customerTypes[customerType] ?: "عادي",
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("نوع العميل") },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = customerTypeExpanded) },
+                                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    enabled = !isLoading,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                                    )
                                 )
+                                ExposedDropdownMenu(
+                                    expanded = customerTypeExpanded,
+                                    onDismissRequest = { customerTypeExpanded = false }
+                                ) {
+                                    customerTypes.forEach { (key, value) ->
+                                        DropdownMenuItem(
+                                            text = { Text(value) },
+                                            onClick = {
+                                                customerType = key
+                                                customerTypeExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Customer Status Dropdown
+                            var customerStatusExpanded by remember { mutableStateOf(false) }
+                            val customerStatuses = mapOf(
+                                "ACTIVE" to "نشط",
+                                "INACTIVE" to "غير نشط",
+                                "SUSPENDED" to "معلق"
+                            )
+
+                            ExposedDropdownMenuBox(
+                                expanded = customerStatusExpanded,
+                                onExpandedChange = { customerStatusExpanded = !customerStatusExpanded },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                OutlinedTextField(
+                                    value = customerStatuses[customerStatus] ?: "نشط",
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("حالة العميل") },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = customerStatusExpanded) },
+                                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    enabled = !isLoading,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                                    )
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = customerStatusExpanded,
+                                    onDismissRequest = { customerStatusExpanded = false }
+                                ) {
+                                    customerStatuses.forEach { (key, value) ->
+                                        DropdownMenuItem(
+                                            text = { Text(value) },
+                                            onClick = {
+                                                customerStatus = key
+                                                customerStatusExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
                             }
                         }
-                    }
 
-                    // Customer Status Dropdown
-                    var customerStatusExpanded by remember { mutableStateOf(false) }
-                    val customerStatuses = mapOf(
-                        "ACTIVE" to "نشط",
-                        "INACTIVE" to "غير نشط",
-                        "SUSPENDED" to "معلق"
-                    )
-
-                    ExposedDropdownMenuBox(
-                        expanded = customerStatusExpanded,
-                        onExpandedChange = { customerStatusExpanded = !customerStatusExpanded },
-                        modifier = Modifier.weight(1f)
-                    ) {
                         OutlinedTextField(
-                            value = customerStatuses[customerStatus] ?: "نشط",
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("حالة العميل") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = customerStatusExpanded) },
-                            modifier = Modifier.menuAnchor().fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            enabled = !isLoading
-                        )
-                        ExposedDropdownMenu(
-                            expanded = customerStatusExpanded,
-                            onDismissRequest = { customerStatusExpanded = false }
-                        ) {
-                            customerStatuses.forEach { (key, value) ->
-                                DropdownMenuItem(
-                                    text = { Text(value) },
-                                    onClick = {
-                                        customerStatus = key
-                                        customerStatusExpanded = false
-                                    }
+                            value = creditLimit,
+                            onValueChange = { creditLimit = it },
+                            label = { Text("الحد الائتماني") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.CreditCard,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
-                            }
-                        }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isLoading,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+
+                        OutlinedTextField(
+                            value = companyName,
+                            onValueChange = { companyName = it },
+                            label = { Text("اسم الشركة") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Business,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isLoading,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+
+                        OutlinedTextField(
+                            value = notes,
+                            onValueChange = { notes = it },
+                            label = { Text("ملاحظات") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 2,
+                            maxLines = 3,
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isLoading,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
                     }
                 }
+            }
+        },
+        confirmButton = {
+            // Full-width button row with enhanced hover effects
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                val isValid = name.isNotBlank()
 
-                OutlinedTextField(
-                    value = creditLimit,
-                    onValueChange = { creditLimit = it },
-                    label = { Text("الحد الائتماني") },
-                    leadingIcon = {
-                        Icon(Icons.Default.CreditCard, contentDescription = null)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    enabled = !isLoading
-                )
+                // Cancel Button with Box-based hover effects
+                val cancelInteractionSource = remember { MutableInteractionSource() }
+                val isCancelHovered by cancelInteractionSource.collectIsHoveredAsState()
 
-                OutlinedTextField(
-                    value = companyName,
-                    onValueChange = { companyName = it },
-                    label = { Text("اسم الشركة") },
-                    leadingIcon = {
-                        Icon(Icons.Default.Business, contentDescription = null)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    enabled = !isLoading
-                )
-
-                OutlinedTextField(
-                    value = notes,
-                    onValueChange = { notes = it },
-                    label = { Text("ملاحظات") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 2,
-                    maxLines = 3,
-                    shape = RoundedCornerShape(12.dp),
-                    enabled = !isLoading
-                )
-
-                // Action Buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            color = if (isCancelHovered)
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+                            else
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .border(
+                            width = if (isCancelHovered) 1.5.dp else 1.dp,
+                            color = if (isCancelHovered)
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
+                            else
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .clickable(
+                            interactionSource = cancelInteractionSource,
+                            indication = null
+                        ) { onDismiss() },
+                    contentAlignment = Alignment.Center
                 ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        enabled = !isLoading
-                    ) {
-                        Text("إلغاء")
-                    }
+                    Text(
+                        text = "إلغاء",
+                        color = if (isCancelHovered)
+                            MaterialTheme.colorScheme.onSurface
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
 
-                    val isValid = name.isNotBlank()
+                // Save Button with Box-based hover effects
+                val saveInteractionSource = remember { MutableInteractionSource() }
+                val isSaveHovered by saveInteractionSource.collectIsHoveredAsState()
 
-                    Button(
-                        onClick = {
-                            if (isValid) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            color = if (isSaveHovered && isValid && !isLoading)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 1f)
+                            else if (isValid && !isLoading)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                            else
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .border(
+                            width = if (isSaveHovered && isValid && !isLoading) 2.dp else 1.dp,
+                            color = if (isSaveHovered && isValid && !isLoading)
+                                MaterialTheme.colorScheme.primary
+                            else if (isValid && !isLoading)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                            else
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .clickable(
+                            interactionSource = saveInteractionSource,
+                            indication = null,
+                            enabled = isValid && !isLoading
+                        ) {
+                            if (isValid && !isLoading) {
                                 val newCustomer = CustomerDTO(
                                     id = customer?.id,
                                     name = name,
@@ -1383,27 +1592,29 @@ private fun EnhancedCustomerDialog(
                                 onSave(newCustomer)
                             }
                         },
-                        modifier = Modifier.weight(1f),
-                        enabled = isValid && !isLoading,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onPrimary
-                            )
-                        } else {
-                            Text(if (customer != null) "تحديث" else "إضافة")
-                        }
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text(
+                            text = if (customer != null) "تحديث" else "إضافة",
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                     }
                 }
             }
-        }
-    }
+        },
+        dismissButton = {},
+        shape = RoundedCornerShape(20.dp),
+        containerColor = MaterialTheme.colorScheme.surface
+    )
 }
 
 @Composable

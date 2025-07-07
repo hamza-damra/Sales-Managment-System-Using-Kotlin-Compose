@@ -4,6 +4,7 @@ import data.api.HttpClientProvider
 import data.api.services.*
 import data.auth.AuthService
 import data.auth.TokenManager
+import data.preferences.ThemePreferencesManager
 import data.repository.*
 import ui.viewmodels.*
 import io.ktor.client.*
@@ -15,9 +16,13 @@ class AppContainer {
     
     // Core dependencies
     val tokenManager: TokenManager by lazy { TokenManager() }
-    
-    val httpClient: HttpClient by lazy { 
-        HttpClientProvider.getClient(tokenManager) 
+
+    val themePreferencesManager: ThemePreferencesManager by lazy {
+        ThemePreferencesManager()
+    }
+
+    val httpClient: HttpClient by lazy {
+        HttpClientProvider.getClient(tokenManager)
     }
     
     // Authentication

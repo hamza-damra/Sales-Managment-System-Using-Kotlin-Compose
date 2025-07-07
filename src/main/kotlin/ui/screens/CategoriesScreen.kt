@@ -25,10 +25,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.foundation.text.KeyboardOptions
 import data.Category
 import data.CategoryStatus
 import data.api.CategoryDTO
@@ -900,171 +902,290 @@ fun CategoryDialog(
     val isEditing = category != null
     val title = if (isEditing) "تعديل الفئة" else "إضافة فئة جديدة"
 
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            shape = RoundedCornerShape(24.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-            border = BorderStroke(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
-            )
-        ) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
             Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .verticalScroll(rememberScrollState())
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(bottom = 24.dp)
-                )
-
-                // Name Field (Required)
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("اسم الفئة *") },
-                    modifier = Modifier.fillMaxWidth(),
-                    isError = name.isBlank(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                        errorBorderColor = AppTheme.colors.error
-                    )
-                )
-                if (name.isBlank()) {
-                    Text(
-                        text = "اسم الفئة مطلوب",
-                        color = AppTheme.colors.error,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Description Field
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("الوصف") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 3,
-                    maxLines = 5,
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                    )
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Display Order Field
-                OutlinedTextField(
-                    value = displayOrder,
-                    onValueChange = {
-                        if (it.all { char -> char.isDigit() } || it.isEmpty()) {
-                            displayOrder = it
-                        }
-                    },
-                    label = { Text("ترتيب العرض") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                    )
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Color Code Field
                 Row(
                     modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    OutlinedTextField(
-                        value = colorCode,
-                        onValueChange = { colorCode = it },
-                        label = { Text("رمز اللون") },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text("#007bff") }
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                ColorUtils.parseHexColor(colorCode) ?: MaterialTheme.colorScheme.primary
+
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "إغلاق",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 600.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+
+                // Basic Information Section
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "المعلومات الأساسية",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        // Name Field (Required)
+                        OutlinedTextField(
+                            value = name,
+                            onValueChange = { name = it },
+                            label = { Text("اسم الفئة *") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Category,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            isError = name.isBlank(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
                             )
-                            .border(
-                                1.dp,
-                                MaterialTheme.colorScheme.outline,
-                                RoundedCornerShape(8.dp)
+                        )
+                        if (name.isBlank()) {
+                            Text(
+                                text = "اسم الفئة مطلوب",
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                             )
+                        }
+
+                        // Description Field
+                        OutlinedTextField(
+                            value = description,
+                            onValueChange = { description = it },
+                            label = { Text("الوصف") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 3,
+                            maxLines = 5,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+
+                        // Display Order Field
+                        OutlinedTextField(
+                            value = displayOrder,
+                            onValueChange = { displayOrder = it },
+                            label = { Text("ترتيب العرض") },
+                            modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+                    }
+                }
+
+                // Styling & Media Section
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "التصميم والوسائط",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        // Color Code Field
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = colorCode,
+                                onValueChange = { colorCode = it },
+                                label = { Text("رمز اللون") },
+                                modifier = Modifier.weight(1f),
+                                placeholder = { Text("#007bff") },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(
+                                        ColorUtils.parseHexColor(colorCode) ?: MaterialTheme.colorScheme.primary
+                                    )
+                                    .border(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outline,
+                                        RoundedCornerShape(8.dp)
+                                    )
+                            )
+                        }
+
+                        // Icon Field
+                        OutlinedTextField(
+                            value = icon,
+                            onValueChange = { icon = it },
+                            label = { Text("الأيقونة") },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("category-icon") },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+
+                        // Image URL Field
+                        OutlinedTextField(
+                            value = imageUrl,
+                            onValueChange = { imageUrl = it },
+                            label = { Text("رابط الصورة") },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("https://example.com/image.jpg") },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            // Full-width button row with enhanced hover effects
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Cancel Button with Box-based hover effects
+                val cancelInteractionSource = remember { MutableInteractionSource() }
+                val isCancelHovered by cancelInteractionSource.collectIsHoveredAsState()
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            color = if (isCancelHovered)
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+                            else
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .border(
+                            width = if (isCancelHovered) 1.5.dp else 1.dp,
+                            color = if (isCancelHovered)
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
+                            else
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .clickable(
+                            interactionSource = cancelInteractionSource,
+                            indication = null
+                        ) { onDismiss() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "إلغاء",
+                        color = if (isCancelHovered)
+                            MaterialTheme.colorScheme.onSurface
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium,
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                // Save Button with Box-based hover effects
+                val saveInteractionSource = remember { MutableInteractionSource() }
+                val isSaveHovered by saveInteractionSource.collectIsHoveredAsState()
+                val isValid = name.isNotBlank()
 
-                // Icon Field
-                OutlinedTextField(
-                    value = icon,
-                    onValueChange = { icon = it },
-                    label = { Text("الأيقونة") },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("category-icon") }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Image URL Field
-                OutlinedTextField(
-                    value = imageUrl,
-                    onValueChange = { imageUrl = it },
-                    label = { Text("رابط الصورة") },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("https://example.com/image.jpg") }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Action Buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            color = if (isSaveHovered && isValid)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 1f)
+                            else if (isValid)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                            else
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(12.dp)
                         )
-                    ) {
-                        Text(
-                            "إلغاء",
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Medium
+                        .border(
+                            width = if (isSaveHovered && isValid) 2.dp else 1.dp,
+                            color = if (isSaveHovered && isValid)
+                                MaterialTheme.colorScheme.primary
+                            else if (isValid)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                            else
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                            shape = RoundedCornerShape(12.dp)
                         )
-                    }
-
-                    Button(
-                        onClick = {
-                            if (name.isNotBlank()) {
+                        .clickable(
+                            interactionSource = saveInteractionSource,
+                            indication = null,
+                            enabled = isValid
+                        ) {
+                            if (isValid) {
                                 val categoryDTO = CategoryDTO(
                                     id = category?.id,
                                     name = name.trim(),
@@ -1078,24 +1199,21 @@ fun CategoryDialog(
                                 onSave(categoryDTO)
                             }
                         },
-                        enabled = name.isNotBlank(),
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            disabledContainerColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                        )
-                    ) {
-                        Text(
-                            if (isEditing) "تحديث" else "إضافة",
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (isEditing) "تحديث" else "إضافة",
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
             }
-        }
-    }
+        },
+        dismissButton = {},
+        shape = RoundedCornerShape(20.dp),
+        containerColor = MaterialTheme.colorScheme.surface
+    )
 }
 
 @Composable

@@ -49,8 +49,9 @@ class TokenManager {
         // Save user data if available
         authResponse.user?.let { user ->
             val userData = "${user.id}|${user.username}|${user.email}|${user.firstName}|${user.lastName}|${user.role}|${user.createdAt}"
+            println("🔍 TokenManager - Saving user data: $userData")
             prefs.put(USER_DATA_KEY, userData)
-        }
+        } ?: println("⚠️ TokenManager - No user data in AuthResponse to save")
         
         // Save token expiry time (estimate 1 hour for access token)
         val expiryTime = System.currentTimeMillis() + (60 * 60 * 1000) // 1 hour
@@ -148,9 +149,11 @@ class TokenManager {
         
         // Load user data
         val userData = prefs.get(USER_DATA_KEY, null)
+        println("🔍 TokenManager - Loading user data from storage: $userData")
         if (userData != null) {
             try {
                 val parts = userData.split("|")
+                println("🔍 TokenManager - User data parts: ${parts.size} parts")
                 if (parts.size >= 7) {
                     _user = UserDTO(
                         id = parts[0].toLong(),
@@ -161,11 +164,17 @@ class TokenManager {
                         role = parts[5],
                         createdAt = parts[6]
                     )
+                    println("🔍 TokenManager - Loaded user: ${_user}")
+                } else {
+                    println("⚠️ TokenManager - Invalid user data format: expected 7 parts, got ${parts.size}")
                 }
             } catch (e: Exception) {
+                println("❌ TokenManager - Error loading user data: ${e.message}")
                 // Invalid user data, clear it
                 prefs.remove(USER_DATA_KEY)
             }
+        } else {
+            println("⚠️ TokenManager - No user data found in storage")
         }
     }
     

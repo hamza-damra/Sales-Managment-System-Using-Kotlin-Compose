@@ -1235,91 +1235,144 @@ private fun ComprehensiveProductDialog(
                      stockQuantity.toIntOrNull() != null
     }
 
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.9f)
-                .padding(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            shape = RoundedCornerShape(16.dp)
-        ) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
             Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .fillMaxWidth()
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Header
-                Text(
-                    text = if (product == null) "إضافة منتج جديد" else "تعديل المنتج",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Scrollable content
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Required Fields Section
                     Text(
-                        text = "الحقول المطلوبة",
-                        style = MaterialTheme.typography.titleMedium,
+                        text = if (product == null) "إضافة منتج جديد" else "تعديل المنتج",
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
 
-                    // Product Name (Required)
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it },
-                        label = { Text("اسم المنتج *") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        isError = name.isBlank(),
-                        supportingText = if (name.isBlank()) {
-                            { Text("اسم المنتج مطلوب", color = MaterialTheme.colorScheme.error) }
-                        } else null
-                    )
-
-                    // Price and Stock Quantity (Required)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = price,
-                            onValueChange = { price = it },
-                            label = { Text("السعر *") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                            isError = price.toDoubleOrNull() == null,
-                            supportingText = if (price.toDoubleOrNull() == null) {
-                                { Text("سعر صحيح مطلوب", color = MaterialTheme.colorScheme.error) }
-                            } else null
-                        )
-
-                        OutlinedTextField(
-                            value = stockQuantity,
-                            onValueChange = { stockQuantity = it },
-                            label = { Text("كمية المخزون *") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                            isError = stockQuantity.toIntOrNull() == null,
-                            supportingText = if (stockQuantity.toIntOrNull() == null) {
-                                { Text("كمية صحيحة مطلوبة", color = MaterialTheme.colorScheme.error) }
-                            } else null
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "إغلاق",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 600.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                    // Required Fields Section
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Text(
+                                text = "الحقول المطلوبة",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+
+                            // Product Name (Required)
+                            OutlinedTextField(
+                                value = name,
+                                onValueChange = { name = it },
+                                label = { Text("اسم المنتج *") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Inventory,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                isError = name.isBlank(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                                ),
+                                supportingText = if (name.isBlank()) {
+                                    { Text("اسم المنتج مطلوب", color = MaterialTheme.colorScheme.error) }
+                                } else null
+                            )
+
+                            // Price and Stock Quantity (Required)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = price,
+                                    onValueChange = { price = it },
+                                    label = { Text("السعر *") },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.AttachMoney,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true,
+                                    isError = price.toDoubleOrNull() == null,
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                                    ),
+                                    supportingText = if (price.toDoubleOrNull() == null) {
+                                        { Text("سعر صحيح مطلوب", color = MaterialTheme.colorScheme.error) }
+                                    } else null
+                                )
+
+                                OutlinedTextField(
+                                    value = stockQuantity,
+                                    onValueChange = { stockQuantity = it },
+                                    label = { Text("كمية المخزون *") },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Inventory2,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                                    ),
+                                    isError = stockQuantity.toIntOrNull() == null,
+                                    supportingText = if (stockQuantity.toIntOrNull() == null) {
+                                        { Text("كمية صحيحة مطلوبة", color = MaterialTheme.colorScheme.error) }
+                                    } else null
+                                )
+                            }
+                        }
+                    }
 
                     // Optional Fields Toggle
                     Row(
@@ -1345,17 +1398,37 @@ private fun ComprehensiveProductDialog(
 
                     // Optional Fields (Expandable)
                     if (showOptionalFields) {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                            ),
+                            shape = RoundedCornerShape(12.dp)
                         ) {
-                            // Basic Optional Info
-                            OutlinedTextField(
-                                value = description,
-                                onValueChange = { description = it },
-                                label = { Text("الوصف (اختياري)") },
-                                modifier = Modifier.fillMaxWidth(),
-                                maxLines = 3
-                            )
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                Text(
+                                    text = "معلومات إضافية",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+
+                                // Basic Optional Info
+                                OutlinedTextField(
+                                    value = description,
+                                    onValueChange = { description = it },
+                                    label = { Text("الوصف (اختياري)") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    maxLines = 3,
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                                    )
+                                )
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1578,68 +1651,138 @@ private fun ComprehensiveProductDialog(
                         }
                     }
                 }
+            }
+        },
+        confirmButton = {
+            // Full-width button row with enhanced hover effects
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Cancel Button with Box-based hover effects
+                val cancelInteractionSource = remember { MutableInteractionSource() }
+                val isCancelHovered by cancelInteractionSource.collectIsHoveredAsState()
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Action Buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    TextButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("إلغاء")
-                    }
-
-                    Button(
-                        onClick = {
-                            val productDTO = data.api.ProductDTO(
-                                id = product?.id?.toLong(),
-                                name = name,
-                                description = description.takeIf { it.isNotBlank() },
-                                price = price.toDouble(),
-                                costPrice = costPrice.toDoubleOrNull() ?: 0.0,
-                                stockQuantity = stockQuantity.toInt(),
-                                category = selectedCategory?.name,
-                                categoryId = selectedCategory?.id,
-                                categoryName = selectedCategory?.name,
-                                sku = sku.takeIf { it.isNotBlank() },
-                                brand = brand.takeIf { it.isNotBlank() },
-                                modelNumber = modelNumber.takeIf { it.isNotBlank() },
-                                barcode = barcode.takeIf { it.isNotBlank() },
-                                weight = weight.toDoubleOrNull(),
-                                length = length.toDoubleOrNull(),
-                                width = width.toDoubleOrNull(),
-                                height = height.toDoubleOrNull(),
-                                minStockLevel = minStockLevel.toIntOrNull() ?: 5,
-                                maxStockLevel = maxStockLevel.toIntOrNull() ?: 1000,
-                                reorderPoint = reorderPoint.toIntOrNull() ?: 10,
-                                reorderQuantity = reorderQuantity.toIntOrNull() ?: 50,
-                                supplierName = supplierName.takeIf { it.isNotBlank() },
-                                supplierCode = supplierCode.takeIf { it.isNotBlank() },
-                                warrantyPeriod = warrantyPeriod.toIntOrNull(),
-                                unitOfMeasure = unitOfMeasure,
-                                taxRate = taxRate.toDoubleOrNull() ?: 0.0,
-                                discountPercentage = discountPercentage.toDoubleOrNull() ?: 0.0,
-                                locationInWarehouse = locationInWarehouse.takeIf { it.isNotBlank() },
-                                notes = notes.takeIf { it.isNotBlank() }
-                            )
-                            onSave(productDTO)
-                        },
-                        modifier = Modifier.weight(1f),
-                        enabled = isFormValid,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            color = if (isCancelHovered)
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+                            else
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(12.dp)
                         )
-                    ) {
-                        Text("حفظ")
-                    }
+                        .border(
+                            width = if (isCancelHovered) 1.5.dp else 1.dp,
+                            color = if (isCancelHovered)
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
+                            else
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .clickable(
+                            interactionSource = cancelInteractionSource,
+                            indication = null
+                        ) { onDismiss() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "إلغاء",
+                        color = if (isCancelHovered)
+                            MaterialTheme.colorScheme.onSurface
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+
+                // Save Button with Box-based hover effects
+                val saveInteractionSource = remember { MutableInteractionSource() }
+                val isSaveHovered by saveInteractionSource.collectIsHoveredAsState()
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            color = if (isSaveHovered && isFormValid)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 1f)
+                            else if (isFormValid)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                            else
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .border(
+                            width = if (isSaveHovered && isFormValid) 2.dp else 1.dp,
+                            color = if (isSaveHovered && isFormValid)
+                                MaterialTheme.colorScheme.primary
+                            else if (isFormValid)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                            else
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .clickable(
+                            interactionSource = saveInteractionSource,
+                            indication = null,
+                            enabled = isFormValid
+                        ) {
+                            if (isFormValid) {
+                                val productDTO = data.api.ProductDTO(
+                                    id = product?.id?.toLong(),
+                                    name = name,
+                                    description = description.takeIf { it.isNotBlank() },
+                                    price = price.toDouble(),
+                                    costPrice = costPrice.toDoubleOrNull(),
+                                    stockQuantity = stockQuantity.toInt(),
+                                    category = selectedCategory?.name,
+                                    categoryId = selectedCategory?.id,
+                                    categoryName = selectedCategory?.name,
+                                    sku = sku.takeIf { it.isNotBlank() },
+                                    brand = brand.takeIf { it.isNotBlank() },
+                                    modelNumber = modelNumber.takeIf { it.isNotBlank() },
+                                    barcode = barcode.takeIf { it.isNotBlank() },
+                                    weight = weight.toDoubleOrNull(),
+                                    length = length.toDoubleOrNull(),
+                                    width = width.toDoubleOrNull(),
+                                    height = height.toDoubleOrNull(),
+                                    minStockLevel = minStockLevel.toIntOrNull(),
+                                    maxStockLevel = maxStockLevel.toIntOrNull(),
+                                    reorderPoint = reorderPoint.toIntOrNull(),
+                                    reorderQuantity = reorderQuantity.toIntOrNull(),
+                                    supplierName = supplierName.takeIf { it.isNotBlank() },
+                                    supplierCode = supplierCode.takeIf { it.isNotBlank() },
+                                    warrantyPeriod = warrantyPeriod.toIntOrNull(),
+                                    unitOfMeasure = unitOfMeasure,
+                                    taxRate = taxRate.toDoubleOrNull(),
+                                    discountPercentage = discountPercentage.toDoubleOrNull(),
+                                    locationInWarehouse = locationInWarehouse.takeIf { it.isNotBlank() },
+                                    notes = notes.takeIf { it.isNotBlank() }
+                                )
+                                onSave(productDTO)
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (product != null) "تحديث" else "حفظ",
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
             }
-        }
-    }
+        },
+        dismissButton = { },
+        shape = RoundedCornerShape(20.dp),
+        containerColor = MaterialTheme.colorScheme.surface
+    )
 }
 
 @Composable

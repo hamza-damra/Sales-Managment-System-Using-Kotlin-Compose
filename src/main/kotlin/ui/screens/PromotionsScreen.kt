@@ -1715,22 +1715,12 @@ private fun EnhancedNewPromotionDialog(
     var discountType by remember { mutableStateOf("نسبة مئوية") }
     var discountValue by remember { mutableStateOf("") }
 
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            shape = RoundedCornerShape(24.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-        ) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
             Column(
-                modifier = Modifier.padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Header
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1738,10 +1728,11 @@ private fun EnhancedNewPromotionDialog(
                 ) {
                     Text(
                         text = "إضافة عرض جديد",
-                        style = MaterialTheme.typography.headlineSmall,
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
+
                     IconButton(onClick = onDismiss) {
                         Icon(
                             Icons.Default.Close,
@@ -1751,61 +1742,179 @@ private fun EnhancedNewPromotionDialog(
                     }
                 }
 
-                // Form fields
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    OutlinedTextField(
-                        value = promotionName,
-                        onValueChange = { promotionName = it },
-                        label = { Text("اسم العرض") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 600.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
 
-                    EnhancedFilterDropdown(
-                        label = "نوع الخصم",
-                        value = discountType,
-                        options = listOf("نسبة مئوية", "مبلغ ثابت"),
-                        onValueChange = { discountType = it },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = discountValue,
-                        onValueChange = { discountValue = it },
-                        label = { Text("قيمة الخصم") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                }
-
-                // Action buttons
-                Row(
+                // Promotion Information Section
+                Card(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Text("إلغاء")
-                    }
-                    Button(
-                        onClick = onSave,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("حفظ")
+                        Text(
+                            text = "معلومات العرض",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        OutlinedTextField(
+                            value = promotionName,
+                            onValueChange = { promotionName = it },
+                            label = { Text("اسم العرض") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.LocalOffer,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+
+                        EnhancedFilterDropdown(
+                            label = "نوع الخصم",
+                            value = discountType,
+                            options = listOf("نسبة مئوية", "مبلغ ثابت"),
+                            onValueChange = { discountType = it },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = discountValue,
+                            onValueChange = { discountValue = it },
+                            label = { Text("قيمة الخصم") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Percent,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
                     }
                 }
             }
-        }
-    }
+        },
+        confirmButton = {
+            // Full-width button row with enhanced hover effects
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Cancel Button with Box-based hover effects
+                val cancelInteractionSource = remember { MutableInteractionSource() }
+                val isCancelHovered by cancelInteractionSource.collectIsHoveredAsState()
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            color = if (isCancelHovered)
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+                            else
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .border(
+                            width = if (isCancelHovered) 1.5.dp else 1.dp,
+                            color = if (isCancelHovered)
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
+                            else
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .clickable(
+                            interactionSource = cancelInteractionSource,
+                            indication = null
+                        ) { onDismiss() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "إلغاء",
+                        color = if (isCancelHovered)
+                            MaterialTheme.colorScheme.onSurface
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+
+                // Save Button with Box-based hover effects
+                val saveInteractionSource = remember { MutableInteractionSource() }
+                val isSaveHovered by saveInteractionSource.collectIsHoveredAsState()
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            color = if (isSaveHovered)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 1f)
+                            else
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .border(
+                            width = if (isSaveHovered) 2.dp else 1.dp,
+                            color = if (isSaveHovered)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .clickable(
+                            interactionSource = saveInteractionSource,
+                            indication = null
+                        ) { onSave() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "حفظ",
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        },
+        dismissButton = {},
+        shape = RoundedCornerShape(20.dp),
+        containerColor = MaterialTheme.colorScheme.surface
+    )
+
+
 }
 
 // Enhanced New Coupon Dialog

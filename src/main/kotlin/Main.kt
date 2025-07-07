@@ -30,6 +30,7 @@ import ui.components.RTLProvider
 import ui.screens.*
 import ui.theme.AppTheme
 import ui.theme.AppThemeProvider
+import ui.theme.AppThemeProviderWithPersistence
 import ui.theme.ThemeState
 import java.text.NumberFormat
 import java.util.*
@@ -44,7 +45,9 @@ fun main() = application {
         title = "نظام إدارة المبيعات - Sales Management System",
         state = rememberWindowState(width = 1400.dp, height = 900.dp)
     ) {
-        AppThemeProvider {
+        AppThemeProviderWithPersistence(
+            preferencesManager = AppDependencies.container.themePreferencesManager
+        ) {
             App()
         }
     }
@@ -230,9 +233,28 @@ fun NavigationSidebar(
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // User info and logout
+        // User info and logout - Always show logout when authenticated
         val currentUser = authService.getCurrentUser()
-        if (currentUser != null) {
+        val authState by authService.authState.collectAsState()
+
+        // Enhanced debug logging
+        val displayName = getDisplayName(currentUser ?: authState.user)
+        println("🔍 NavigationSidebar - Auth State: isAuthenticated=${authState.isAuthenticated}")
+        println("🔍 NavigationSidebar - AuthState User: ${authState.user}")
+        println("🔍 NavigationSidebar - AuthState User Username: ${authState.user?.username}")
+        println("🔍 NavigationSidebar - AuthState User FirstName: ${authState.user?.firstName}")
+        println("🔍 NavigationSidebar - AuthState User LastName: ${authState.user?.lastName}")
+        println("🔍 NavigationSidebar - Current User: ${currentUser}")
+        println("🔍 NavigationSidebar - Current User Username: ${currentUser?.username}")
+        println("🔍 NavigationSidebar - Current User FirstName: ${currentUser?.firstName}")
+        println("🔍 NavigationSidebar - Current User LastName: ${currentUser?.lastName}")
+        println("🔍 NavigationSidebar - Display Name: $displayName")
+
+        // Get the best available user data (prioritize currentUser, fallback to authState.user)
+        val bestUser = currentUser ?: authState.user
+
+        // Show user card if we have user info, otherwise show minimal logout section
+        if (bestUser != null) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -251,67 +273,84 @@ fun NavigationSidebar(
                         modifier = Modifier.size(32.dp)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
+
+                    // Dynamic username display with fallback
                     Text(
-                        text = "${currentUser.firstName} ${currentUser.lastName}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        text = getDisplayName(bestUser),
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
                         textAlign = TextAlign.Center
                     )
-                    Text(
-                        text = currentUser.role,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
+
+                    // Show role if available
+                    if (!bestUser.role.isNullOrBlank()) {
+                        Text(
+                            text = bestUser.role,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    val logoutInteractionSource = remember { MutableInteractionSource() }
-                    val isLogoutHovered by logoutInteractionSource.collectIsHoveredAsState()
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                color = if (isLogoutHovered)
-                                    MaterialTheme.colorScheme.error.copy(alpha = 1f)
-                                else
-                                    MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
-                                shape = RoundedCornerShape(8.dp)
-                            )
-                            .clickable(
-                                interactionSource = logoutInteractionSource,
-                                indication = null
-                            ) {
-                                coroutineScope.launch {
-                                    authService.logout()
-                                }
-                            }
-                            .padding(vertical = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                Icons.Default.Logout,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.onError
-                            )
-                            Text(
-                                "تسجيل الخروج",
-                                color = MaterialTheme.colorScheme.onError
-                            )
-                        }
-                    }
+                    // Logout button
+                    LogoutButton(authService)
                 }
             }
+        } else {
+            // Fallback: Always show logout section when in main app (user must be authenticated to reach here)
+            // Try to get user from authState as additional fallback
+            val fallbackUser = authState.user
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        Icons.Default.AccountCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Dynamic username display with fallback (try authState.user as well)
+                    Text(
+                        text = getDisplayName(fallbackUser),
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.Center
+                    )
+
+                    // Show role if available from fallback user
+                    if (!fallbackUser?.role.isNullOrBlank()) {
+                        Text(
+                            text = fallbackUser!!.role,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Logout button - Always visible as fallback
+                    LogoutButton(authService)
+                }
+            }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Footer info
         Card(
@@ -451,6 +490,100 @@ fun FrameWindowScope.CustomTitleBar(
             IconButton(onClick = onClose, modifier = Modifier.size(32.dp)) {
                 Icon(Icons.Default.Close, "إغلاق", tint = AppTheme.colors.error)
             }
+        }
+    }
+}
+
+/**
+ * Helper function to get display name with fallback hierarchy
+ * Priority: username -> firstName lastName -> firstName -> lastName -> static text
+ */
+private fun getDisplayName(user: data.auth.UserDTO?): String {
+    println("🔍 getDisplayName called with user: $user")
+
+    return when {
+        // First priority: username (raw value without prefix)
+        !user?.username.isNullOrBlank() -> {
+            val displayName = user!!.username
+            println("🔍 Using username: $displayName")
+            displayName
+        }
+        // Second priority: first and last name
+        !user?.firstName.isNullOrBlank() && !user?.lastName.isNullOrBlank() -> {
+            val displayName = "${user!!.firstName} ${user.lastName}"
+            println("🔍 Using full name: $displayName")
+            displayName
+        }
+        // Third priority: first name only
+        !user?.firstName.isNullOrBlank() -> {
+            val displayName = user!!.firstName
+            println("🔍 Using first name: $displayName")
+            displayName
+        }
+        // Fourth priority: last name only
+        !user?.lastName.isNullOrBlank() -> {
+            val displayName = user!!.lastName
+            println("🔍 Using last name: $displayName")
+            displayName
+        }
+        // Last resort: static Arabic text
+        else -> {
+            println("🔍 Using fallback text: مستخدم مسجل")
+            "مستخدم مسجل"
+        }
+    }
+}
+
+@Composable
+private fun LogoutButton(authService: data.auth.AuthService) {
+    val coroutineScope = rememberCoroutineScope()
+    val logoutInteractionSource = remember { MutableInteractionSource() }
+    val isLogoutHovered by logoutInteractionSource.collectIsHoveredAsState()
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .border(
+                width = if (isLogoutHovered) 2.dp else 1.dp,
+                color = MaterialTheme.colorScheme.error,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .background(
+                color = if (isLogoutHovered)
+                    MaterialTheme.colorScheme.error
+                else
+                    MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
+                shape = RoundedCornerShape(8.dp)
+            )
+            .clickable(
+                interactionSource = logoutInteractionSource,
+                indication = null
+            ) {
+                coroutineScope.launch {
+                    println("🚪 Logout button clicked")
+                    authService.logout()
+                }
+            }
+            .padding(vertical = 14.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.Logout,
+                contentDescription = "تسجيل الخروج",
+                modifier = Modifier.size(18.dp),
+                tint = Color.White
+            )
+            Text(
+                "تسجيل الخروج",
+                color = Color.White,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
