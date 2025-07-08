@@ -71,7 +71,8 @@ import java.io.File
 fun SalesScreen(
     salesRepository: SalesRepository,
     customerRepository: CustomerRepository,
-    productRepository: ProductRepository
+    productRepository: ProductRepository,
+    notificationService: services.NotificationService
 ) {
     val salesViewModel = remember {
         SalesViewModel(salesRepository, customerRepository, productRepository)
@@ -151,6 +152,7 @@ fun SalesScreen(
                     totalSales = sales.size,
                     pendingSales = sales.count { it.status == "PENDING" },
                     completedSales = sales.count { it.status == "COMPLETED" },
+                    canceledSales = sales.count { it.status == "CANCELLED" },
                     totalRevenue = sales.filter { it.status == "COMPLETED" }.sumOf { it.totalAmount }
                 ),
                 onRefresh = {
@@ -227,6 +229,11 @@ fun SalesScreen(
 
                                 if (result.isSuccess) {
                                     println("🔍 Sale created successfully!")
+                                    println("🔍 lastCompletedSale: ${lastCompletedSale?.id}")
+                                    notificationService.showSuccess(
+                                        message = "تم إنشاء البيع بنجاح",
+                                        title = "نجح العملية"
+                                    )
                                     showSaleSuccess = true
                                     // Auto-switch to sales history to show the new sale
                                     delay(2000)
@@ -234,7 +241,28 @@ fun SalesScreen(
                                 } else if (result.isError) {
                                     val error = (result as NetworkResult.Error).exception
                                     println("🔍 Sale creation failed: ${error.message}")
-                                    // TODO: Show error dialog to user
+
+                                    // Handle specific validation errors
+                                    when {
+                                        error.message?.contains("Customer must be selected") == true -> {
+                                            notificationService.showValidationError(
+                                                message = "يرجى اختيار عميل لإتمام البيع",
+                                                title = "عميل مطلوب"
+                                            )
+                                        }
+                                        error.message?.contains("At least one product must be added") == true -> {
+                                            notificationService.showValidationError(
+                                                message = "يرجى إضافة منتج واحد على الأقل إلى السلة",
+                                                title = "منتجات مطلوبة"
+                                            )
+                                        }
+                                        else -> {
+                                            notificationService.showError(
+                                                message = error.message ?: "حدث خطأ غير متوقع أثناء إنشاء البيع",
+                                                title = "خطأ في إنشاء البيع"
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         },
@@ -313,8 +341,18 @@ fun SalesScreen(
         }
         
         if (showSaleSuccess) {
+            // Use the actual sale total amount instead of cartTotal (which gets cleared)
+            val actualTotal = lastCompletedSale?.totalAmount ?: cartTotal
+
+            println("🔍 SalesScreen - Success Dialog Debug:")
+            println("🔍 showSaleSuccess: $showSaleSuccess")
+            println("🔍 cartTotal: $cartTotal")
+            println("🔍 lastCompletedSale: ${lastCompletedSale?.id}")
+            println("🔍 lastCompletedSale.totalAmount: ${lastCompletedSale?.totalAmount}")
+            println("🔍 actualTotal: $actualTotal")
+
             SaleSuccessDialogImproved(
-                total = cartTotal,
+                total = actualTotal,
                 currencyFormatter = currencyFormatter,
                 saleData = lastCompletedSale,
                 selectedCustomer = selectedCustomer,
@@ -323,6 +361,7 @@ fun SalesScreen(
                 onDismiss = {
                     showSaleSuccess = false
                     salesViewModel.clearCart()
+                    salesViewModel.clearLastCompletedSale()
                 },
                 onViewSale = {
                     showSaleSuccess = false
@@ -333,6 +372,7 @@ fun SalesScreen(
                 onCreateAnother = {
                     showSaleSuccess = false
                     salesViewModel.clearCart()
+                    salesViewModel.clearLastCompletedSale()
                     currentTab = SalesTab.NEW_SALE
                 }
             )
@@ -412,6 +452,7 @@ data class SalesStats(
     val totalSales: Int,
     val pendingSales: Int,
     val completedSales: Int,
+    val canceledSales: Int,
     val totalRevenue: Double
 )
 
@@ -522,6 +563,14 @@ private fun EnhancedSalesHeader(
                     color = MaterialTheme.colorScheme.tertiary
                 )
             }
+            item {
+                StatCard(
+                    title = "مدفوعات ملغية",
+                    value = salesStats.canceledSales.toString(),
+                    icon = Icons.Default.Cancel,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
         }
 
         // Tabs
@@ -630,12 +679,27 @@ private fun StatCard(
     icon: ImageVector,
     color: Color
 ) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = color.copy(alpha = 0.1f)
-        ),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, color.copy(alpha = 0.2f))
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                color = if (isHovered)
+                    color.copy(alpha = 0.15f)
+                else
+                    color.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(12.dp)
+            )
+            .border(
+                BorderStroke(1.dp, color.copy(alpha = 0.2f)),
+                shape = RoundedCornerShape(12.dp)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { /* No action for stats cards */ }
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -885,8 +949,9 @@ private fun EnhancedNewSaleContent(
                 cartTax = cartTax,
                 cartTotal = cartTotal,
                 isProcessingSale = isProcessingSale,
-                canCheckout = selectedProducts.isNotEmpty(),
+                canCheckout = selectedProducts.isNotEmpty() && selectedCustomer != null,
                 currencyFormatter = currencyFormatter,
+                selectedCustomer = selectedCustomer,
                 onCreateSale = onCreateSale
             )
         }
@@ -1511,6 +1576,7 @@ private fun CheckoutSection(
     isProcessingSale: Boolean,
     canCheckout: Boolean,
     currencyFormatter: NumberFormat,
+    selectedCustomer: CustomerDTO?,
     onCreateSale: () -> Unit
 ) {
     Column(
@@ -1610,15 +1676,30 @@ private fun CheckoutSection(
             }
         }
 
-        // Validation message
-        if (!canCheckout) {
-            Text(
-                text = "يرجى إضافة منتجات إلى السلة لإتمام البيع",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
+        // Enhanced validation messages
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            if (selectedCustomer == null) {
+                Text(
+                    text = "⚠️ يرجى اختيار عميل لإتمام البيع",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppTheme.colors.warning,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            if (!canCheckout && selectedCustomer != null) {
+                Text(
+                    text = "يرجى إضافة منتجات إلى السلة لإتمام البيع",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 }
@@ -2373,6 +2454,18 @@ private fun SaleSuccessDialogImproved(
     var showError by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
+    // Debug logging for button state
+    LaunchedEffect(saleData, isGeneratingPdf, total) {
+        println("🔍 SaleSuccessDialog - State Debug:")
+        println("🔍 total parameter: $total")
+        println("🔍 saleData: ${saleData?.id}")
+        println("🔍 saleData.totalAmount: ${saleData?.totalAmount}")
+        println("🔍 isGeneratingPdf: $isGeneratingPdf")
+        println("🔍 Button enabled: ${!isGeneratingPdf && saleData != null}")
+        println("🔍 selectedProducts count: ${selectedProducts.size}")
+        println("🔍 selectedCustomer: ${selectedCustomer?.name}")
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
@@ -2412,7 +2505,97 @@ private fun SaleSuccessDialogImproved(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Print Button
+                // Generate Invoice Button
+                val generateInteractionSource = remember { MutableInteractionSource() }
+                val isGenerateHovered by generateInteractionSource.collectIsHoveredAsState()
+
+                Box(
+                    modifier = Modifier
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                ) {
+                    Button(
+                        onClick = {
+                            println("🔍 Generate Invoice Button Clicked!")
+                            println("🔍 saleData: ${saleData?.id}")
+                            println("🔍 saleData != null: ${saleData != null}")
+                            println("🔍 isGeneratingPdf: $isGeneratingPdf")
+
+                            if (saleData != null) {
+                                coroutineScope.launch {
+                                    isGeneratingPdf = true
+                                    showError = null
+                                    try {
+                                        println("🔍 Starting PDF generation...")
+                                        val receiptsDir = CanvasPdfReceiptService.getReceiptsDirectory()
+                                        val fileName = CanvasPdfReceiptService.generateReceiptFilename((saleData.id ?: 0L).toInt())
+                                        val pdfFile = File(receiptsDir, fileName)
+
+                                        // Convert SaleDTO to Sale for PDF generation
+                                        val sale = convertSaleDTOToSale(saleData, selectedCustomer, selectedProducts, selectedPaymentMethod)
+                                        println("🔍 Converted sale data, generating PDF...")
+                                        val success = CanvasPdfReceiptService.generateReceipt(sale, pdfFile, useArabicIndic = false)
+                                        if (success) {
+                                            println("🔍 PDF generated successfully!")
+                                            generatedPdfFile = pdfFile
+                                            showPdfViewer = true
+                                        } else {
+                                            println("🔍 PDF generation failed!")
+                                            showError = "فشل في إنشاء الفاتورة"
+                                        }
+                                    } catch (e: Exception) {
+                                        println("🔍 PDF generation exception: ${e.message}")
+                                        showError = "خطأ في إنشاء الفاتورة: ${e.message}"
+                                        e.printStackTrace()
+                                    } finally {
+                                        isGeneratingPdf = false
+                                    }
+                                }
+                            } else {
+                                println("🔍 saleData is null!")
+                                showError = "بيانات البيع غير متوفرة"
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isGenerateHovered)
+                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.9f)
+                            else
+                                MaterialTheme.colorScheme.secondary
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        interactionSource = generateInteractionSource,
+                        enabled = !isGeneratingPdf && saleData != null
+                    ) {
+                        if (isGeneratingPdf) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            )
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Receipt,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = Color.White
+                                )
+                                Text(
+                                    "إنشاء فاتورة",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Print Invoice Button
                 val printInteractionSource = remember { MutableInteractionSource() }
                 val isPrintHovered by printInteractionSource.collectIsHoveredAsState()
 
@@ -2423,10 +2606,15 @@ private fun SaleSuccessDialogImproved(
                 ) {
                     Button(
                         onClick = {
+                            println("🔍 Print Invoice Button Clicked!")
+                            println("🔍 saleData: ${saleData?.id}")
+
                             if (saleData != null) {
                                 coroutineScope.launch {
                                     isGeneratingPdf = true
+                                    showError = null
                                     try {
+                                        println("🔍 Starting PDF generation for printing...")
                                         val receiptsDir = CanvasPdfReceiptService.getReceiptsDirectory()
                                         val fileName = CanvasPdfReceiptService.generateReceiptFilename((saleData.id ?: 0L).toInt())
                                         val pdfFile = File(receiptsDir, fileName)
@@ -2435,27 +2623,34 @@ private fun SaleSuccessDialogImproved(
                                         val sale = convertSaleDTOToSale(saleData, selectedCustomer, selectedProducts, selectedPaymentMethod)
                                         val success = CanvasPdfReceiptService.generateReceipt(sale, pdfFile, useArabicIndic = false)
                                         if (success) {
+                                            println("🔍 PDF generated, attempting to print...")
                                             val printResult = FileDialogUtils.printFile(pdfFile)
                                             when (printResult) {
                                                 is FileDialogUtils.PrintResult.Success -> {
-                                                    // Print successful
+                                                    println("🔍 Print successful!")
                                                 }
                                                 is FileDialogUtils.PrintResult.NoAssociatedApp,
                                                 is FileDialogUtils.PrintResult.NotSupported,
                                                 is FileDialogUtils.PrintResult.Error -> {
-                                                    // Fallback: open file for manual printing
+                                                    println("🔍 Print failed, opening file manually...")
                                                     FileDialogUtils.openWithSystemDefault(pdfFile)
                                                 }
                                             }
                                         } else {
+                                            println("🔍 PDF generation failed!")
                                             showError = "فشل في إنشاء الفاتورة"
                                         }
                                     } catch (e: Exception) {
+                                        println("🔍 Print exception: ${e.message}")
                                         showError = "خطأ في طباعة الفاتورة: ${e.message}"
+                                        e.printStackTrace()
                                     } finally {
                                         isGeneratingPdf = false
                                     }
                                 }
+                            } else {
+                                println("🔍 saleData is null for print!")
+                                showError = "بيانات البيع غير متوفرة"
                             }
                         },
                         modifier = Modifier.fillMaxSize(),
@@ -2487,9 +2682,10 @@ private fun SaleSuccessDialogImproved(
                                     tint = Color.White
                                 )
                                 Text(
-                                    "طباعة",
+                                    "طباعة فاتورة",
                                     color = Color.White,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.bodyMedium
                                 )
                             }
                         }
@@ -2498,23 +2694,75 @@ private fun SaleSuccessDialogImproved(
 
                 // View Sale Button (if callback provided)
                 onViewSale?.let { viewCallback ->
-                    OutlinedButton(
-                        onClick = viewCallback,
-                        modifier = Modifier.height(56.dp),
-                        shape = RoundedCornerShape(12.dp)
+                    val viewInteractionSource = remember { MutableInteractionSource() }
+                    val isViewHovered by viewInteractionSource.collectIsHoveredAsState()
+
+                    Box(
+                        modifier = Modifier
+                            .height(56.dp)
+                            .clip(RoundedCornerShape(12.dp))
                     ) {
-                        Text("عرض التفاصيل")
+                        OutlinedButton(
+                            onClick = viewCallback,
+                            modifier = Modifier.fillMaxSize(),
+                            shape = RoundedCornerShape(12.dp),
+                            interactionSource = viewInteractionSource,
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = if (isViewHovered)
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                                else
+                                    MaterialTheme.colorScheme.primary
+                            ),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isViewHovered)
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                                else
+                                    MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Text(
+                                "عرض التفاصيل",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
 
                 // Create Another Button (if callback provided)
                 onCreateAnother?.let { createCallback ->
-                    OutlinedButton(
-                        onClick = createCallback,
-                        modifier = Modifier.height(56.dp),
-                        shape = RoundedCornerShape(12.dp)
+                    val createInteractionSource = remember { MutableInteractionSource() }
+                    val isCreateHovered by createInteractionSource.collectIsHoveredAsState()
+
+                    Box(
+                        modifier = Modifier
+                            .height(56.dp)
+                            .clip(RoundedCornerShape(12.dp))
                     ) {
-                        Text("بيع آخر")
+                        OutlinedButton(
+                            onClick = createCallback,
+                            modifier = Modifier.fillMaxSize(),
+                            shape = RoundedCornerShape(12.dp),
+                            interactionSource = createInteractionSource,
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = if (isCreateHovered)
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                                else
+                                    MaterialTheme.colorScheme.primary
+                            ),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isCreateHovered)
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                                else
+                                    MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Text(
+                                "بيع آخر",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
@@ -2710,16 +2958,8 @@ private fun SaleSuccessDialogImproved(
                     }
                 },
                 onDownload = {
-                    coroutineScope.launch {
-                        val selectedFile = FileDialogUtils.selectPdfSaveFile(pdfFile.name)
-                        if (selectedFile != null) {
-                            try {
-                                pdfFile.copyTo(selectedFile, overwrite = true)
-                            } catch (e: Exception) {
-                                showError = "خطأ في حفظ الملف: ${e.message}"
-                            }
-                        }
-                    }
+                    // Use the PdfViewerDialog's internal save functionality instead
+                    // This callback is not used since PdfViewerDialog handles its own save button
                 }
             )
         }
