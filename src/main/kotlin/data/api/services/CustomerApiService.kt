@@ -65,6 +65,15 @@ class CustomerApiService(private val httpClient: HttpClient) {
             httpClient.delete(fullUrl)
         }
     }
+
+    suspend fun deleteCustomerWithCascade(id: Long): NetworkResult<Unit> {
+        return safeApiCall {
+            val fullUrl = "${ApiConfig.BASE_URL}${ApiConfig.Endpoints.customerById(id)}"
+            httpClient.delete(fullUrl) {
+                parameter("cascade", "true")
+            }
+        }
+    }
     
     suspend fun searchCustomers(
         query: String,

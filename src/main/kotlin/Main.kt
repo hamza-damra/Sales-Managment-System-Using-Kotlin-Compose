@@ -27,6 +27,7 @@ import data.SalesDataManager
 import data.di.AppContainer
 import data.di.AppDependencies
 import ui.components.RTLProvider
+import ui.components.NotificationOverlay
 import ui.screens.*
 import ui.theme.AppTheme
 import ui.theme.AppThemeProvider
@@ -134,11 +135,14 @@ fun MainAppContent(appContainer: AppContainer) {
     var currentScreen by remember { mutableStateOf(Screen.DASHBOARD) }
 
     RTLProvider {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
         ) {
+            Row(
+                modifier = Modifier.fillMaxSize()
+            ) {
             // Main Content - العرض الرئيسي على اليمين في RTL
             Box(
                 modifier = Modifier
@@ -158,7 +162,8 @@ fun MainAppContent(appContainer: AppContainer) {
                     Screen.SALES -> SalesScreen(
                         salesRepository = appContainer.salesRepository,
                         customerRepository = appContainer.customerRepository,
-                        productRepository = appContainer.productRepository
+                        productRepository = appContainer.productRepository,
+                        notificationService = appContainer.notificationService
                     )
                     Screen.PRODUCTS -> ProductsScreen(
                         productViewModel = appContainer.productViewModel
@@ -178,11 +183,17 @@ fun MainAppContent(appContainer: AppContainer) {
                 }
             }
 
-            // Navigation Sidebar - شريط التنقل على اليسار في RTL
-            NavigationSidebar(
-                currentScreen = currentScreen,
-                onScreenSelected = { currentScreen = it },
-                authService = appContainer.authService
+                // Navigation Sidebar - شريط التنقل على اليسار في RTL
+                NavigationSidebar(
+                    currentScreen = currentScreen,
+                    onScreenSelected = { currentScreen = it },
+                    authService = appContainer.authService
+                )
+            }
+
+            // Global notification overlay
+            NotificationOverlay(
+                notificationService = appContainer.notificationService
             )
         }
     }

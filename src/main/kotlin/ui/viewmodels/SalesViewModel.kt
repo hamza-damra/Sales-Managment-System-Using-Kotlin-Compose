@@ -180,6 +180,10 @@ class SalesViewModel(
         _selectedProducts.value = emptyList()
         _selectedCustomer.value = null
         _selectedPaymentMethod.value = "CASH"
+        // Don't clear lastCompletedSale here - it's needed for the success dialog
+    }
+
+    fun clearLastCompletedSale() {
         _lastCompletedSale.value = null
     }
     
@@ -261,8 +265,11 @@ class SalesViewModel(
         val result = salesRepository.createSale(saleDTO)
         
         result.onSuccess { createdSale ->
+            println("🔍 SalesViewModel - Sale created successfully:")
+            println("🔍 Created Sale ID: ${createdSale.id}")
+            println("🔍 Created Sale Total: ${createdSale.totalAmount}")
             _lastCompletedSale.value = createdSale
-            clearCart()
+            // Don't clear cart immediately - let the success dialog handle it
         }
         
         _isProcessingSale.value = false

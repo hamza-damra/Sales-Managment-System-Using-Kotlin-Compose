@@ -7,6 +7,7 @@ import data.auth.TokenManager
 import data.preferences.ThemePreferencesManager
 import data.repository.*
 import ui.viewmodels.*
+import services.NotificationService
 import io.ktor.client.*
 
 /**
@@ -19,6 +20,11 @@ class AppContainer {
 
     val themePreferencesManager: ThemePreferencesManager by lazy {
         ThemePreferencesManager()
+    }
+
+    // Notification service
+    val notificationService: NotificationService by lazy {
+        NotificationService()
     }
 
     val httpClient: HttpClient by lazy {

@@ -86,15 +86,31 @@ class CustomerRepository(private val customerApiService: CustomerApiService) {
     suspend fun deleteCustomer(id: Long): NetworkResult<Unit> {
         _isLoading.value = true
         _error.value = null
-        
+
         val result = customerApiService.deleteCustomer(id)
-        
+
         result.onSuccess {
             _customers.value = _customers.value.filter { it.id != id }
         }.onError { exception ->
             _error.value = exception.message
         }
-        
+
+        _isLoading.value = false
+        return result
+    }
+
+    suspend fun deleteCustomerWithCascade(id: Long): NetworkResult<Unit> {
+        _isLoading.value = true
+        _error.value = null
+
+        val result = customerApiService.deleteCustomerWithCascade(id)
+
+        result.onSuccess {
+            _customers.value = _customers.value.filter { it.id != id }
+        }.onError { exception ->
+            _error.value = exception.message
+        }
+
         _isLoading.value = false
         return result
     }

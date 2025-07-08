@@ -43,6 +43,7 @@ import androidx.compose.ui.window.Dialog
 import data.*
 import data.api.*
 import ui.components.*
+import data.di.AppDependencies
 import ui.theme.AppTheme
 import ui.theme.CardStyles
 import ui.viewmodels.CustomerViewModel
@@ -76,7 +77,10 @@ fun CustomersScreen() {
         var showCustomerDetails by remember { mutableStateOf(false) }
         var selectedCustomer by remember { mutableStateOf<CustomerDTO?>(null) }
         var showDeleteConfirmation by remember { mutableStateOf(false) }
+        var showForeignKeyWarning by remember { mutableStateOf(false) }
+        var showCascadeDeleteConfirmation by remember { mutableStateOf(false) }
         var customerToDelete by remember { mutableStateOf<CustomerDTO?>(null) }
+        var foreignKeyError by remember { mutableStateOf<ApiException.ForeignKeyConstraintError?>(null) }
         val coroutineScope = rememberCoroutineScope()
 
         // Currency formatter for Arabic locale
@@ -500,12 +504,105 @@ fun CustomersScreen() {
                         if (result.isSuccess) {
                             showDeleteConfirmation = false
                             customerToDelete = null
+                            AppDependencies.container.notificationService.showSuccess(
+                                message = "تم حذف العميل بنجاح",
+                                title = "تم الحذف"
+                            )
+                        } else if (result.isError) {
+                            val exception = (result as NetworkResult.Error).exception
+                            println("🔍 Delete error type: ${exception::class.simpleName}")
+                            println("🔍 Delete error message: ${exception.message}")
+
+                            if (exception is ApiException.ForeignKeyConstraintError) {
+                                println("✅ Detected foreign key constraint error")
+                                println("🔍 Referenced table: ${exception.referencedTable}")
+                                println("🔍 Original message: ${exception.originalMessage}")
+
+                                foreignKeyError = exception
+                                showDeleteConfirmation = false
+                                showForeignKeyWarning = true
+                            } else {
+                                println("❌ Not a foreign key constraint error, showing generic error")
+                                AppDependencies.container.notificationService.showError(
+                                    message = exception.message ?: "حدث خطأ أثناء حذف العميل",
+                                    title = "خطأ في الحذف"
+                                )
+                            }
                         }
                     }
                 },
                 onDismiss = {
                     showDeleteConfirmation = false
                     customerToDelete = null
+                }
+            )
+        }
+
+        // Foreign Key Constraint Warning Dialog
+        if (showForeignKeyWarning && customerToDelete != null && foreignKeyError != null) {
+            ForeignKeyWarningDialog(
+                customerName = customerToDelete!!.name,
+                referencedTable = foreignKeyError!!.referencedTable,
+                foreignKeyError = foreignKeyError,
+                onCascadeDelete = {
+                    showForeignKeyWarning = false
+                    showCascadeDeleteConfirmation = true
+                },
+                onDismiss = {
+                    showForeignKeyWarning = false
+                    customerToDelete = null
+                    foreignKeyError = null
+                }
+            )
+        }
+
+        // Cascade Delete Confirmation Dialog
+        if (showCascadeDeleteConfirmation && customerToDelete != null) {
+            CascadeDeleteConfirmationDialog(
+                customerName = customerToDelete!!.name,
+                foreignKeyError = foreignKeyError,
+                isLoading = isDeletingCustomer,
+                onConfirm = {
+                    coroutineScope.launch {
+                        val result = customerViewModel.deleteCustomerWithCascade(customerToDelete!!.id!!)
+                        if (result.isSuccess) {
+                            showCascadeDeleteConfirmation = false
+                            val deletedCustomerName = customerToDelete!!.name
+                            customerToDelete = null
+
+                            // Create specific success message based on what was deleted
+                            val errorMessage = foreignKeyError?.originalMessage ?: ""
+                            val countMatch = "they have (\\d+) associated".toRegex().find(errorMessage)
+                            val count = countMatch?.groupValues?.get(1) ?: ""
+                            val referencedTable = foreignKeyError?.referencedTable ?: ""
+
+                            val specificMessage = when {
+                                count.isNotEmpty() && referencedTable == "sales" ->
+                                    "تم حذف العميل \"$deletedCustomerName\" مع $count من المبيعات المرتبطة بنجاح"
+                                count.isNotEmpty() && referencedTable == "returns" ->
+                                    "تم حذف العميل \"$deletedCustomerName\" مع $count من المرتجعات المرتبطة بنجاح"
+                                else ->
+                                    "تم حذف العميل \"$deletedCustomerName\" وجميع البيانات المرتبطة بنجاح"
+                            }
+
+                            foreignKeyError = null
+                            AppDependencies.container.notificationService.showSuccess(
+                                message = specificMessage,
+                                title = "تم الحذف الكامل"
+                            )
+                        } else if (result.isError) {
+                            val exception = (result as NetworkResult.Error).exception
+                            AppDependencies.container.notificationService.showError(
+                                message = exception.message ?: "حدث خطأ أثناء حذف العميل",
+                                title = "خطأ في الحذف"
+                            )
+                        }
+                    }
+                },
+                onDismiss = {
+                    showCascadeDeleteConfirmation = false
+                    customerToDelete = null
+                    foreignKeyError = null
                 }
             )
         }
@@ -1927,6 +2024,394 @@ private fun EnhancedLoadingIndicator(
             )
         }
     }
+}
+
+// Foreign Key Warning Dialog Component
+@Composable
+private fun ForeignKeyWarningDialog(
+    customerName: String,
+    referencedTable: String,
+    foreignKeyError: ApiException.ForeignKeyConstraintError? = null,
+    onCascadeDelete: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = AppTheme.colors.warning,
+                    modifier = Modifier.size(24.dp)
+                )
+                Text(
+                    text = "تحذير: لا يمكن حذف العميل",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Extract count from error message first
+                val errorMessage = foreignKeyError?.originalMessage ?: ""
+                println("🔍 Parsing error message: $errorMessage")
+
+                // Try multiple patterns to extract the count
+                val countPatterns = listOf(
+                    "they have (\\d+) associated".toRegex(),
+                    "because they have (\\d+)".toRegex(),
+                    "(\\d+) associated".toRegex()
+                )
+
+                var count = "عدة"
+                for (pattern in countPatterns) {
+                    val match = pattern.find(errorMessage)
+                    if (match != null) {
+                        count = match.groupValues[1]
+                        println("✅ Extracted count: $count")
+                        break
+                    }
+                }
+
+                if (count == "عدة") {
+                    println("⚠️ Could not extract specific count, using default")
+                }
+
+                val tableDisplayName = when (referencedTable) {
+                    "returns" -> "المرتجعات"
+                    "sales" -> "المبيعات"
+                    else -> "البيانات المرتبطة"
+                }
+
+                // Create a more specific and professional error message
+                val specificMessage = if (count != "عدة" && referencedTable == "sales") {
+                    "لا يمكن حذف العميل \"$customerName\" لأنه مرتبط بـ $count من المبيعات في النظام."
+                } else if (count != "عدة" && referencedTable == "returns") {
+                    "لا يمكن حذف العميل \"$customerName\" لأنه مرتبط بـ $count من المرتجعات في النظام."
+                } else {
+                    "لا يمكن حذف العميل \"$customerName\" لأنه مرتبط ببيانات أخرى في النظام."
+                }
+
+                Text(
+                    text = specificMessage,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = AppTheme.colors.warning.copy(alpha = 0.1f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "البيانات المرتبطة:",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = AppTheme.colors.warning
+                        )
+                        Text(
+                            text = "• $count من $tableDisplayName",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+
+                        // Show backend suggestion if available
+                        if (referencedTable == "sales") {
+                            Text(
+                                text = "💡 اقتراح النظام:",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = AppTheme.colors.primary
+                            )
+                            Text(
+                                text = "يجب إكمال أو إلغاء أو إعادة تعيين جميع مبيعات العميل قبل حذفه.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
+                Text(
+                    text = "الخيارات المتاحة:",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "• إلغاء العملية والاحتفاظ بالعميل",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "• حذف العميل مع جميع البيانات المرتبطة (غير قابل للتراجع)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AppTheme.colors.error
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val interactionSource1 = remember { MutableInteractionSource() }
+                val isHovered1 by interactionSource1.collectIsHoveredAsState()
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .background(
+                            color = if (isHovered1) AppTheme.colors.error.copy(alpha = 0.1f) else Color.Transparent,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .border(
+                            BorderStroke(1.dp, AppTheme.colors.error.copy(alpha = 0.2f)),
+                            RoundedCornerShape(12.dp)
+                        )
+                        .clickable(
+                            interactionSource = interactionSource1,
+                            indication = null
+                        ) { onCascadeDelete() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "حذف مع البيانات المرتبطة",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = AppTheme.colors.error
+                    )
+                }
+
+                val interactionSource2 = remember { MutableInteractionSource() }
+                val isHovered2 by interactionSource2.collectIsHoveredAsState()
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .background(
+                            color = if (isHovered2) MaterialTheme.colorScheme.outline.copy(alpha = 0.1f) else Color.Transparent,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .border(
+                            BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+                            RoundedCornerShape(12.dp)
+                        )
+                        .clickable(
+                            interactionSource = interactionSource2,
+                            indication = null
+                        ) { onDismiss() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "إلغاء",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        shape = RoundedCornerShape(20.dp)
+    )
+}
+
+// Cascade Delete Confirmation Dialog Component
+@Composable
+private fun CascadeDeleteConfirmationDialog(
+    customerName: String,
+    foreignKeyError: ApiException.ForeignKeyConstraintError? = null,
+    isLoading: Boolean = false,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = if (!isLoading) onDismiss else {{}},
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.DeleteForever,
+                    contentDescription = null,
+                    tint = AppTheme.colors.error,
+                    modifier = Modifier.size(24.dp)
+                )
+                Text(
+                    text = "تأكيد الحذف الكامل",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = AppTheme.colors.error
+                )
+            }
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "هل أنت متأكد من حذف العميل \"$customerName\" مع جميع البيانات المرتبطة؟",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = AppTheme.colors.error.copy(alpha = 0.1f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "⚠️ تحذير: سيتم حذف:",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = AppTheme.colors.error
+                        )
+                        Text(
+                            text = "• بيانات العميل الأساسية",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+
+                        // Show specific information based on the error
+                        val errorMessage = foreignKeyError?.originalMessage ?: ""
+                        val countMatch = "they have (\\d+) associated".toRegex().find(errorMessage)
+                        val count = countMatch?.groupValues?.get(1) ?: "جميع"
+
+                        when (foreignKeyError?.referencedTable) {
+                            "sales" -> {
+                                Text(
+                                    text = "• $count من المبيعات المرتبطة",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Medium,
+                                    color = AppTheme.colors.error
+                                )
+                            }
+                            "returns" -> {
+                                Text(
+                                    text = "• $count من المرتجعات المرتبطة",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Medium,
+                                    color = AppTheme.colors.error
+                                )
+                            }
+                            else -> {
+                                Text(
+                                    text = "• جميع المبيعات المرتبطة",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                Text(
+                                    text = "• جميع المرتجعات المرتبطة",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Text(
+                    text = "هذا الإجراء لا يمكن التراجع عنه!",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = AppTheme.colors.error
+                )
+            }
+        },
+        confirmButton = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val interactionSource1 = remember { MutableInteractionSource() }
+                val isHovered1 by interactionSource1.collectIsHoveredAsState()
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .background(
+                            color = if (isHovered1) AppTheme.colors.error.copy(alpha = 0.1f) else AppTheme.colors.error,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .clickable(
+                            interactionSource = interactionSource1,
+                            indication = null,
+                            enabled = !isLoading
+                        ) { onConfirm() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White
+                        )
+                    } else {
+                        Text(
+                            text = "حذف نهائي",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+
+                val interactionSource2 = remember { MutableInteractionSource() }
+                val isHovered2 by interactionSource2.collectIsHoveredAsState()
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .background(
+                            color = if (isHovered2) MaterialTheme.colorScheme.outline.copy(alpha = 0.1f) else Color.Transparent,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .border(
+                            BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+                            RoundedCornerShape(12.dp)
+                        )
+                        .clickable(
+                            interactionSource = interactionSource2,
+                            indication = null,
+                            enabled = !isLoading
+                        ) { onDismiss() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "إلغاء",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        shape = RoundedCornerShape(20.dp)
+    )
 }
 
 // Delete Confirmation Dialog Component

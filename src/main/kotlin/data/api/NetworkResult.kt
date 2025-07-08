@@ -69,7 +69,13 @@ sealed class ApiException(
     data class ValidationError(
         val errors: Map<String, List<String>>
     ) : ApiException("Validation failed: ${errors.values.flatten().joinToString(", ")}")
-    
+
+    data class ForeignKeyConstraintError(
+        val constraintName: String,
+        val referencedTable: String,
+        val originalMessage: String
+    ) : ApiException("Cannot delete: Record has related data in $referencedTable")
+
     data class ServerError(
         val originalMessage: String
     ) : ApiException("Server error: $originalMessage")
@@ -119,6 +125,36 @@ fun Throwable.toApiException(): ApiException {
                     println("⚠️ Validation Error (400) - Bad request")
                     ApiException.ValidationError(emptyMap()) // TODO: Parse validation errors from response body
                 }
+                HttpStatusCode.Conflict.value -> {
+                    println("⚠️ Conflict Error (409) - Data integrity violation")
+                    val errorMessage = message ?: ""
+                    println("🔍 409 Error message: $errorMessage")
+
+                    // Check if it's a foreign key constraint error
+                    if (errorMessage.contains("Cannot delete customer because they have", ignoreCase = true) ||
+                        errorMessage.contains("CUSTOMER_HAS_SALES", ignoreCase = true) ||
+                        errorMessage.contains("Data Integrity Violation", ignoreCase = true)) {
+
+                        println("✅ Detected foreign key constraint violation")
+
+                        val referencedTable = when {
+                            errorMessage.contains("sale", ignoreCase = true) -> "sales"
+                            errorMessage.contains("return", ignoreCase = true) -> "returns"
+                            else -> "related records"
+                        }
+
+                        println("🔍 Referenced table: $referencedTable")
+
+                        ApiException.ForeignKeyConstraintError(
+                            constraintName = "CUSTOMER_HAS_SALES",
+                            referencedTable = referencedTable,
+                            originalMessage = errorMessage
+                        )
+                    } else {
+                        println("❌ Not a recognized foreign key constraint pattern")
+                        ApiException.HttpError(409, "Conflict", errorMessage)
+                    }
+                }
                 HttpStatusCode.NotFound.value -> {
                     println("🔍 Not Found Error (404) - Endpoint not found: $url")
                     if (url.contains("/api/")) {
@@ -139,7 +175,29 @@ fun Throwable.toApiException(): ApiException {
         }
         is ServerResponseException -> {
             println("🔥 Server Error: ${response.status.value} ${response.status.description}")
-            ApiException.ServerError("Server error: ${response.status.description}")
+
+            // Check if it's a foreign key constraint error
+            val errorMessage = message ?: ""
+            if (errorMessage.contains("foreign key constraint", ignoreCase = true) ||
+                errorMessage.contains("constraint", ignoreCase = true) &&
+                (errorMessage.contains("returns", ignoreCase = true) ||
+                 errorMessage.contains("sales", ignoreCase = true))) {
+
+                val referencedTable = when {
+                    errorMessage.contains("returns", ignoreCase = true) -> "returns"
+                    errorMessage.contains("sales", ignoreCase = true) -> "sales"
+                    else -> "related records"
+                }
+
+                val constraintName = extractConstraintName(errorMessage)
+                ApiException.ForeignKeyConstraintError(
+                    constraintName = constraintName,
+                    referencedTable = referencedTable,
+                    originalMessage = errorMessage
+                )
+            } else {
+                ApiException.ServerError("Server error: ${response.status.description}")
+            }
         }
         is RedirectResponseException -> {
             ApiException.HttpError(
@@ -164,6 +222,28 @@ fun Throwable.toApiException(): ApiException {
             ApiException.UnknownError(message ?: "Unknown error: ${this::class.simpleName}", this)
         }
     }
+}
+
+/**
+ * Helper function to extract constraint name from error message
+ */
+private fun extractConstraintName(errorMessage: String): String {
+    // Try to extract constraint name from common patterns
+    val patterns = listOf(
+        "constraint `([^`]+)`".toRegex(),
+        "constraint \"([^\"]+)\"".toRegex(),
+        "constraint '([^']+)'".toRegex(),
+        "constraint ([a-zA-Z0-9_]+)".toRegex()
+    )
+
+    for (pattern in patterns) {
+        val match = pattern.find(errorMessage)
+        if (match != null) {
+            return match.groupValues[1]
+        }
+    }
+
+    return "unknown_constraint"
 }
 
 /**

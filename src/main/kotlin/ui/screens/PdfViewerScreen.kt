@@ -51,29 +51,27 @@ fun PdfViewerDialog(
 
     // Load PDF pages as images
     LaunchedEffect(pdfFile) {
-        coroutineScope.launch {
-            try {
-                isLoading = true
-                errorMessage = null
+        try {
+            isLoading = true
+            errorMessage = null
 
-                val document = PDDocument.load(pdfFile)
-                val renderer = PDFRenderer(document)
-                val images = mutableListOf<BufferedImage>()
+            val document = PDDocument.load(pdfFile)
+            val renderer = PDFRenderer(document)
+            val images = mutableListOf<BufferedImage>()
 
-                for (page in 0 until document.numberOfPages) {
-                    val image = renderer.renderImageWithDPI(page, 200f) // Increased DPI for better quality
-                    images.add(image)
-                }
-
-                document.close()
-                pdfImages = images
-                isLoading = false
-
-            } catch (e: Exception) {
-                errorMessage = "خطأ في تحميل ملف PDF: ${e.message}"
-                isLoading = false
-                println("PDF loading error: ${e.printStackTrace()}")
+            for (page in 0 until document.numberOfPages) {
+                val image = renderer.renderImageWithDPI(page, 200f) // Increased DPI for better quality
+                images.add(image)
             }
+
+            document.close()
+            pdfImages = images
+            isLoading = false
+
+        } catch (e: Exception) {
+            errorMessage = "خطأ في تحميل ملف PDF: ${e.message}"
+            isLoading = false
+            println("PDF loading error: ${e.printStackTrace()}")
         }
     }
 
@@ -403,30 +401,47 @@ fun PdfViewerDialog(
                                 // Enhanced Save PDF button with loading state
                                 OutlinedButton(
                                     onClick = {
-                                        coroutineScope.launch {
-                                            isDownloading = true
-                                            try {
-                                                // Generate default filename based on current PDF name
-                                                val defaultFileName = pdfFile.nameWithoutExtension + "_copy.pdf"
-                                                val selectedFile = FileDialogUtils.selectPdfSaveFile(defaultFileName)
+                                        // Use a simple approach to avoid coroutine conflicts
+                                        try {
+                                            // Generate default filename based on current PDF name
+                                            val defaultFileName = pdfFile.nameWithoutExtension + "_copy.pdf"
+                                            val selectedFile = FileDialogUtils.selectPdfSaveFile(defaultFileName)
 
-                                                if (selectedFile != null) {
-                                                    // Copy the PDF file to the selected location
-                                                    pdfFile.copyTo(selectedFile, overwrite = true)
-                                                    showSuccessMessage = "تم حفظ الملف بنجاح في: ${selectedFile.name}"
-
-                                                    // Open the saved location
+                                            if (selectedFile != null) {
+                                                isDownloading = true
+                                                // Perform file operations in a background thread
+                                                Thread {
                                                     try {
-                                                        FileDialogUtils.openFolder(selectedFile.parentFile)
+                                                        // Copy the PDF file to the selected location
+                                                        pdfFile.copyTo(selectedFile, overwrite = true)
+
+                                                        // Update UI on main thread
+                                                        kotlinx.coroutines.runBlocking {
+                                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                                showSuccessMessage = "تم حفظ الملف بنجاح في: ${selectedFile.name}"
+                                                                isDownloading = false
+                                                            }
+                                                        }
+
+                                                        // Open the saved location
+                                                        try {
+                                                            FileDialogUtils.openFolder(selectedFile.parentFile)
+                                                        } catch (e: Exception) {
+                                                            // Ignore if can't open folder
+                                                        }
                                                     } catch (e: Exception) {
-                                                        // Ignore if can't open folder
+                                                        kotlinx.coroutines.runBlocking {
+                                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                                errorMessage = "خطأ في حفظ الملف: ${e.message}"
+                                                                isDownloading = false
+                                                            }
+                                                        }
                                                     }
-                                                }
-                                            } catch (e: Exception) {
-                                                errorMessage = "خطأ في حفظ الملف: ${e.message}"
-                                            } finally {
-                                                isDownloading = false
+                                                }.start()
                                             }
+                                        } catch (e: Exception) {
+                                            errorMessage = "خطأ في حفظ الملف: ${e.message}"
+                                            isDownloading = false
                                         }
                                     },
                                     modifier = Modifier

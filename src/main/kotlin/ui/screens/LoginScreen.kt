@@ -4,12 +4,15 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -83,18 +86,19 @@ fun LoginScreen(
                 modifier = Modifier
                     .align(Alignment.Center)
                     .width(420.dp)
+                    .wrapContentHeight()
                     .padding(20.dp),
                 colors = CardStyles.elevatedCardColors(),
                 elevation = CardStyles.elevatedCardElevation(),
                 shape = RoundedCornerShape(20.dp)
             ) {
                 Box(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     // Subtle gradient background within card
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
+                            .fillMaxWidth()
                             .background(
                                 brush = Brush.verticalGradient(
                                     colors = listOf(
@@ -107,6 +111,7 @@ fun LoginScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
                             .padding(36.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(20.dp)
@@ -392,6 +397,9 @@ fun LoginScreen(
                                 lastName = ""
                             }
                         )
+
+                        // Add bottom spacing to ensure content is not cut off
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
             }
@@ -427,39 +435,28 @@ private fun EnhancedAuthButton(
                 },
                 shape = RoundedCornerShape(12.dp)
             )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = enabled
+            ) {
+                if (enabled) onClick()
+            },
+        contentAlignment = Alignment.Center
     ) {
-        Button(
-            onClick = onClick,
-            modifier = Modifier.fillMaxSize(),
-            enabled = enabled,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color.Transparent,
-                contentColor = if (enabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                disabledContainerColor = Color.Transparent,
-                disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-            ),
-            shape = RoundedCornerShape(12.dp),
-            elevation = ButtonDefaults.buttonElevation(
-                defaultElevation = if (isHovered && enabled) 4.dp else 2.dp,
-                hoveredElevation = 6.dp,
-                pressedElevation = 1.dp,
-                disabledElevation = 0.dp
-            ),
-            interactionSource = interactionSource
-        ) {
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    strokeWidth = 2.dp
-                )
-            } else {
-                Text(
-                    text = text,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                color = if (enabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                strokeWidth = 2.dp
+            )
+        } else {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = if (enabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            )
         }
     }
 }

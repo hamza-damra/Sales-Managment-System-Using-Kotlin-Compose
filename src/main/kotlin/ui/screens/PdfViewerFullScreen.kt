@@ -213,26 +213,44 @@ fun PdfViewerFullScreen(
 
                             IconButton(
                                 onClick = {
-                                    coroutineScope.launch {
-                                        isDownloading = true
-                                        try {
-                                            val defaultFileName = pdfFile.nameWithoutExtension + "_copy.pdf"
-                                            val selectedFile = FileDialogUtils.selectPdfSaveFile(defaultFileName)
+                                    // Use a simple approach to avoid coroutine conflicts
+                                    try {
+                                        val defaultFileName = pdfFile.nameWithoutExtension + "_copy.pdf"
+                                        val selectedFile = FileDialogUtils.selectPdfSaveFile(defaultFileName)
 
-                                            if (selectedFile != null) {
-                                                pdfFile.copyTo(selectedFile, overwrite = true)
-                                                showSuccessMessage = "تم حفظ الملف بنجاح"
+                                        if (selectedFile != null) {
+                                            isDownloading = true
+                                            // Perform file operations in a background thread
+                                            Thread {
                                                 try {
-                                                    FileDialogUtils.openFolder(selectedFile.parentFile)
+                                                    pdfFile.copyTo(selectedFile, overwrite = true)
+
+                                                    // Update UI on main thread
+                                                    kotlinx.coroutines.runBlocking {
+                                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                            showSuccessMessage = "تم حفظ الملف بنجاح"
+                                                            isDownloading = false
+                                                        }
+                                                    }
+
+                                                    try {
+                                                        FileDialogUtils.openFolder(selectedFile.parentFile)
+                                                    } catch (e: Exception) {
+                                                        // Ignore if can't open folder
+                                                    }
                                                 } catch (e: Exception) {
-                                                    // Ignore if can't open folder
+                                                    kotlinx.coroutines.runBlocking {
+                                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                            errorMessage = "خطأ في حفظ الملف: ${e.message}"
+                                                            isDownloading = false
+                                                        }
+                                                    }
                                                 }
-                                            }
-                                        } catch (e: Exception) {
-                                            errorMessage = "خطأ في حفظ الملف: ${e.message}"
-                                        } finally {
-                                            isDownloading = false
+                                            }.start()
                                         }
+                                    } catch (e: Exception) {
+                                        errorMessage = "خطأ في حفظ الملف: ${e.message}"
+                                        isDownloading = false
                                     }
                                 },
                                 enabled = !isDownloading && !isPrinting

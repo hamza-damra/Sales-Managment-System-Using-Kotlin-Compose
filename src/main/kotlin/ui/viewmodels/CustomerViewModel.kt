@@ -170,14 +170,28 @@ class CustomerViewModel(
     
     suspend fun deleteCustomer(id: Long): NetworkResult<Unit> {
         _isDeletingCustomer.value = true
-        
+
         val result = customerRepository.deleteCustomer(id)
-        
+
         result.onSuccess {
             // Refresh the customer list to remove deleted customer
             loadCustomers(refresh = true)
         }
-        
+
+        _isDeletingCustomer.value = false
+        return result
+    }
+
+    suspend fun deleteCustomerWithCascade(id: Long): NetworkResult<Unit> {
+        _isDeletingCustomer.value = true
+
+        val result = customerRepository.deleteCustomerWithCascade(id)
+
+        result.onSuccess {
+            // Refresh the customer list to remove deleted customer
+            loadCustomers(refresh = true)
+        }
+
         _isDeletingCustomer.value = false
         return result
     }
