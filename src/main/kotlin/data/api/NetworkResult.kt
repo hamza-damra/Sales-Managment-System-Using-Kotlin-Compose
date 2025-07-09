@@ -1,8 +1,12 @@
 package data.api
 
 import io.ktor.client.plugins.*
+import io.ktor.client.call.*
 import io.ktor.http.*
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import utils.ErrorMessageTranslator
+import kotlinx.coroutines.runBlocking
 
 /**
  * Wrapper class for API responses that handles success, error, and loading states
@@ -95,7 +99,19 @@ data class ErrorResponse(
     val status: Int? = null,
     val timestamp: String? = null,
     val path: String? = null,
-    val errors: Map<String, List<String>>? = null
+    val errors: Map<String, List<String>>? = null,
+    val error: String? = null,
+    val errorCode: String? = null,
+    val suggestions: String? = null,
+    val validationErrors: Map<String, List<String>>? = null,
+    val details: ErrorDetails? = null
+)
+
+@Serializable
+data class ErrorDetails(
+    val resourceId: Long? = null,
+    val dependentResource: String? = null,
+    val resourceType: String? = null
 )
 
 /**
@@ -115,60 +131,153 @@ fun Throwable.toApiException(): ApiException {
             when (statusCode) {
                 HttpStatusCode.Unauthorized.value -> {
                     println("🔐 Authentication Error (401) - Token invalid, expired, or missing")
-                    ApiException.AuthenticationError("Authentication failed - Token invalid, expired, or missing. Please login again.")
+                    val arabicMessage = ErrorMessageTranslator.translateToArabic("Authentication failed - Token invalid, expired, or missing. Please login again.")
+                    ApiException.AuthenticationError(arabicMessage)
                 }
                 HttpStatusCode.Forbidden.value -> {
                     println("🚫 Authorization Error (403) - Access forbidden")
-                    ApiException.AuthenticationError("Access forbidden - Insufficient permissions for this operation")
+                    val arabicMessage = ErrorMessageTranslator.translateToArabic("Access forbidden - Insufficient permissions for this operation")
+                    ApiException.AuthenticationError(arabicMessage)
                 }
                 HttpStatusCode.BadRequest.value -> {
                     println("⚠️ Validation Error (400) - Bad request")
-                    ApiException.ValidationError(emptyMap()) // TODO: Parse validation errors from response body
+
+                    // Try to get the response body for more detailed error information
+                    val responseBody = try {
+                        runBlocking { response.body<String>() }
+                    } catch (e: Exception) {
+                        println("⚠️ Could not get response body: ${e.message}")
+                        message ?: ""
+                    }
+
+                    println("🔍 400 Error response body: $responseBody")
+
+                    // Check for specific promotion endpoint routing issues
+                    if (responseBody.contains("Invalid Parameter Type", ignoreCase = true) &&
+                        responseBody.contains("Expected a valid long", ignoreCase = true) &&
+                        (url.contains("/promotions/expired") || url.contains("/promotions/scheduled"))) {
+
+                        println("🔍 Detected promotion endpoint routing issue")
+                        val arabicMessage = "خطأ في توجيه نقطة النهاية للعروض الترويجية. الخادم يفسر 'expired' أو 'scheduled' كمعرف بدلاً من مسار نقطة النهاية. يرجى التحقق من إعدادات الخادم."
+                        ApiException.HttpError(400, "Promotion Endpoint Routing Error", arabicMessage)
+                    } else {
+                        val arabicMessage = ErrorMessageTranslator.translateToArabic("Validation failed")
+                        ApiException.ValidationError(emptyMap()) // TODO: Parse validation errors from response body
+                    }
                 }
                 HttpStatusCode.Conflict.value -> {
                     println("⚠️ Conflict Error (409) - Data integrity violation")
                     val errorMessage = message ?: ""
                     println("🔍 409 Error message: $errorMessage")
 
-                    // Check if it's a foreign key constraint error
-                    if (errorMessage.contains("Cannot delete customer because they have", ignoreCase = true) ||
-                        errorMessage.contains("CUSTOMER_HAS_SALES", ignoreCase = true) ||
-                        errorMessage.contains("Data Integrity Violation", ignoreCase = true)) {
+                    // Try to get the response body for JSON parsing
+                    val responseBody = try {
+                        runBlocking { response.body<String>() }
+                    } catch (e: Exception) {
+                        println("⚠️ Could not get response body: ${e.message}")
+                        errorMessage
+                    }
 
-                        println("✅ Detected foreign key constraint violation")
+                    println("🔍 Response body: $responseBody")
 
-                        val referencedTable = when {
-                            errorMessage.contains("sale", ignoreCase = true) -> "sales"
-                            errorMessage.contains("return", ignoreCase = true) -> "returns"
-                            else -> "related records"
-                        }
+                    // Try to parse JSON error response
+                    val errorResponse = try {
+                        Json.decodeFromString<ErrorResponse>(responseBody)
+                    } catch (e: Exception) {
+                        println("⚠️ Could not parse JSON error response: ${e.message}")
+                        null
+                    }
 
-                        println("🔍 Referenced table: $referencedTable")
+                    if (errorResponse != null) {
+                        println("✅ Parsed JSON error response")
+                        println("🔍 Error code: ${errorResponse.errorCode}")
+                        println("🔍 Error message: ${errorResponse.message}")
+                        println("🔍 Suggestions: ${errorResponse.suggestions}")
+                        println("🔍 Details: ${errorResponse.details}")
 
-                        ApiException.ForeignKeyConstraintError(
-                            constraintName = "CUSTOMER_HAS_SALES",
-                            referencedTable = referencedTable,
-                            originalMessage = errorMessage
+                        // Translate the error message to Arabic
+                        val arabicMessage = ErrorMessageTranslator.translateToArabic(
+                            errorMessage = errorResponse.message,
+                            errorCode = errorResponse.errorCode,
+                            suggestions = errorResponse.suggestions,
+                            details = errorResponse.details
                         )
+
+                        println("✅ Arabic message: $arabicMessage")
+
+                        // Check if it's a foreign key constraint error or business logic error
+                        if (errorResponse.errorCode?.contains("HAS_", ignoreCase = true) == true ||
+                            errorResponse.errorCode == "CUSTOMER_HAS_SALES" ||
+                            errorResponse.errorCode == "CUSTOMER_HAS_RETURNS" ||
+                            errorResponse.errorCode == "BUSINESS_LOGIC_ERROR") {
+
+                            val referencedTable = when {
+                                errorResponse.errorCode.contains("SALES", ignoreCase = true) -> "sales"
+                                errorResponse.errorCode.contains("RETURNS", ignoreCase = true) -> "returns"
+                                errorResponse.errorCode.contains("PRODUCTS", ignoreCase = true) -> "products"
+                                else -> "related records"
+                            }
+
+                            println("✅ Creating ForeignKeyConstraintError with Arabic message")
+                            ApiException.ForeignKeyConstraintError(
+                                constraintName = errorResponse.errorCode,
+                                referencedTable = referencedTable,
+                                originalMessage = arabicMessage
+                            )
+                        } else {
+                            println("⚠️ Creating HttpError with Arabic message")
+                            ApiException.HttpError(409, "Conflict", arabicMessage)
+                        }
                     } else {
-                        println("❌ Not a recognized foreign key constraint pattern")
-                        ApiException.HttpError(409, "Conflict", errorMessage)
+                        // Fallback to original logic if JSON parsing fails
+                        // Check both the response body and the original error message
+                        val fullErrorText = "$responseBody $errorMessage"
+
+                        if (fullErrorText.contains("Cannot delete customer because they have", ignoreCase = true) ||
+                            fullErrorText.contains("CUSTOMER_HAS_SALES", ignoreCase = true) ||
+                            fullErrorText.contains("Data Integrity Violation", ignoreCase = true)) {
+
+                            // Extract count from the error message
+                            val count = extractNumberFromMessage(fullErrorText)
+                            val arabicMessage = if (count != null) {
+                                "لا يمكن حذف العميل لأنه مرتبط بـ $count من المبيعات. يرجى إكمال أو إلغاء جميع المبيعات المرتبطة بهذا العميل أولاً."
+                            } else {
+                                "لا يمكن حذف العميل لأنه مرتبط بمبيعات في النظام. يرجى إكمال أو إلغاء جميع المبيعات المرتبطة بهذا العميل أولاً."
+                            }
+
+                            val referencedTable = when {
+                                fullErrorText.contains("sale", ignoreCase = true) -> "sales"
+                                fullErrorText.contains("return", ignoreCase = true) -> "returns"
+                                else -> "related records"
+                            }
+
+                            ApiException.ForeignKeyConstraintError(
+                                constraintName = "CUSTOMER_HAS_SALES",
+                                referencedTable = referencedTable,
+                                originalMessage = arabicMessage
+                            )
+                        } else {
+                            val arabicMessage = ErrorMessageTranslator.translateToArabic(fullErrorText)
+                            ApiException.HttpError(409, "Conflict", arabicMessage)
+                        }
                     }
                 }
                 HttpStatusCode.NotFound.value -> {
                     println("🔍 Not Found Error (404) - Endpoint not found: $url")
-                    if (url.contains("/api/")) {
-                        ApiException.HttpError(404, "API endpoint not found", "The endpoint '$url' does not exist. Check if the backend is running and the endpoint is implemented.")
+                    val arabicMessage = if (url.contains("/api/")) {
+                        "نقطة النهاية '$url' غير موجودة. تأكد من أن الخادم يعمل وأن نقطة النهاية مُنفذة."
                     } else {
-                        ApiException.HttpError(404, "Resource not found", "The requested resource was not found")
+                        ErrorMessageTranslator.translateToArabic("Resource not found")
                     }
+                    ApiException.HttpError(404, "Not Found", arabicMessage)
                 }
                 else -> {
                     println("⚠️ Client Error ($statusCode) - $statusText")
+                    val arabicMessage = ErrorMessageTranslator.translateToArabic(message ?: statusText)
                     ApiException.HttpError(
                         statusCode = statusCode,
                         statusText = statusText,
-                        errorBody = message
+                        errorBody = arabicMessage
                     )
                 }
             }
@@ -176,50 +285,77 @@ fun Throwable.toApiException(): ApiException {
         is ServerResponseException -> {
             println("🔥 Server Error: ${response.status.value} ${response.status.description}")
 
-            // Check if it's a foreign key constraint error
             val errorMessage = message ?: ""
-            if (errorMessage.contains("foreign key constraint", ignoreCase = true) ||
-                errorMessage.contains("constraint", ignoreCase = true) &&
-                (errorMessage.contains("returns", ignoreCase = true) ||
-                 errorMessage.contains("sales", ignoreCase = true))) {
 
-                val referencedTable = when {
-                    errorMessage.contains("returns", ignoreCase = true) -> "returns"
-                    errorMessage.contains("sales", ignoreCase = true) -> "sales"
-                    else -> "related records"
-                }
+            // Try to parse JSON error response first
+            val errorResponse = try {
+                Json.decodeFromString<ErrorResponse>(errorMessage)
+            } catch (e: Exception) {
+                null
+            }
 
-                val constraintName = extractConstraintName(errorMessage)
-                ApiException.ForeignKeyConstraintError(
-                    constraintName = constraintName,
-                    referencedTable = referencedTable,
-                    originalMessage = errorMessage
+            if (errorResponse != null) {
+                val arabicMessage = ErrorMessageTranslator.translateToArabic(
+                    errorMessage = errorResponse.message,
+                    errorCode = errorResponse.errorCode,
+                    suggestions = errorResponse.suggestions,
+                    details = errorResponse.details
                 )
+                ApiException.ServerError(arabicMessage)
             } else {
-                ApiException.ServerError("Server error: ${response.status.description}")
+                // Check if it's a foreign key constraint error
+                if (errorMessage.contains("foreign key constraint", ignoreCase = true) ||
+                    errorMessage.contains("constraint", ignoreCase = true) &&
+                    (errorMessage.contains("returns", ignoreCase = true) ||
+                     errorMessage.contains("sales", ignoreCase = true))) {
+
+                    val referencedTable = when {
+                        errorMessage.contains("returns", ignoreCase = true) -> "returns"
+                        errorMessage.contains("sales", ignoreCase = true) -> "sales"
+                        else -> "related records"
+                    }
+
+                    val constraintName = extractConstraintName(errorMessage)
+                    val arabicMessage = ErrorMessageTranslator.translateToArabic(errorMessage)
+
+                    ApiException.ForeignKeyConstraintError(
+                        constraintName = constraintName,
+                        referencedTable = referencedTable,
+                        originalMessage = arabicMessage
+                    )
+                } else {
+                    val arabicMessage = ErrorMessageTranslator.translateToArabic("Server error: ${response.status.description}")
+                    ApiException.ServerError(arabicMessage)
+                }
             }
         }
         is RedirectResponseException -> {
+            val arabicMessage = ErrorMessageTranslator.translateToArabic("Redirect: ${response.status.description}")
             ApiException.HttpError(
                 statusCode = response.status.value,
-                statusText = response.status.description
+                statusText = response.status.description,
+                errorBody = arabicMessage
             )
         }
         is HttpRequestTimeoutException -> {
             println("⏰ Request timeout")
-            ApiException.NetworkError("Request timeout - server may be down", this)
+            val arabicMessage = ErrorMessageTranslator.translateToArabic("Request timeout - server may be down")
+            ApiException.NetworkError(arabicMessage, this)
         }
         is java.net.ConnectException -> {
             println("🔌 Connection refused")
-            ApiException.NetworkError("Cannot connect to server. Make sure backend is running on localhost:8081", this)
+            val arabicMessage = ErrorMessageTranslator.translateToArabic("Cannot connect to server. Make sure backend is running on localhost:8081")
+            ApiException.NetworkError(arabicMessage, this)
         }
         is java.net.UnknownHostException -> {
             println("🌐 Unknown host")
-            ApiException.NetworkError("Cannot resolve server address", this)
+            val arabicMessage = ErrorMessageTranslator.translateToArabic("Cannot resolve server address")
+            ApiException.NetworkError(arabicMessage, this)
         }
         else -> {
             println("❓ Unknown error: ${this::class.simpleName}")
-            ApiException.UnknownError(message ?: "Unknown error: ${this::class.simpleName}", this)
+            val arabicMessage = ErrorMessageTranslator.translateToArabic(message ?: "Unknown error: ${this::class.simpleName}")
+            ApiException.UnknownError(arabicMessage, this)
         }
     }
 }
@@ -244,6 +380,26 @@ private fun extractConstraintName(errorMessage: String): String {
     }
 
     return "unknown_constraint"
+}
+
+/**
+ * Helper function to extract numbers from error messages
+ */
+private fun extractNumberFromMessage(message: String): String? {
+    val patterns = listOf(
+        "they have (\\d+) associated".toRegex(),
+        "because they have (\\d+)".toRegex(),
+        "(\\d+) associated".toRegex(),
+        "with (\\d+)".toRegex()
+    )
+
+    for (pattern in patterns) {
+        val match = pattern.find(message)
+        if (match != null) {
+            return match.groupValues[1]
+        }
+    }
+    return null
 }
 
 /**

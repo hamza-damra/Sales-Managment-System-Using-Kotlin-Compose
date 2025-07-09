@@ -4,6 +4,7 @@ import data.api.*
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import io.ktor.http.*
 
 /**
@@ -81,6 +82,87 @@ class PromotionApiService(private val httpClient: HttpClient) {
         return safeApiCall {
             val response = httpClient.get("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.PROMOTIONS_ACTIVE}")
             response.body<List<PromotionDTO>>()
+        }
+    }
+
+    suspend fun getAvailablePromotions(): NetworkResult<List<PromotionDTO>> {
+        return safeApiCall {
+            val response = httpClient.get("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.PROMOTIONS_AVAILABLE}")
+            response.body<List<PromotionDTO>>()
+        }
+    }
+
+    suspend fun getExpiredPromotions(): NetworkResult<List<PromotionDTO>> {
+        return safeApiCall {
+            val url = "${ApiConfig.BASE_URL}${ApiConfig.Endpoints.PROMOTIONS_EXPIRED}"
+            println("🔍 PromotionApiService - Calling getExpiredPromotions URL: $url")
+
+            val response = httpClient.get(url)
+
+            println("🔍 PromotionApiService - getExpiredPromotions response status: ${response.status}")
+            if (response.status.value >= 400) {
+                val errorBody = response.bodyAsText()
+                println("🔍 PromotionApiService - getExpiredPromotions error response: $errorBody")
+            }
+
+            response.body<List<PromotionDTO>>()
+        }
+    }
+
+    suspend fun getScheduledPromotions(): NetworkResult<List<PromotionDTO>> {
+        return safeApiCall {
+            val url = "${ApiConfig.BASE_URL}${ApiConfig.Endpoints.PROMOTIONS_SCHEDULED}"
+            println("🔍 PromotionApiService - Calling getScheduledPromotions URL: $url")
+
+            val response = httpClient.get(url)
+
+            println("🔍 PromotionApiService - getScheduledPromotions response status: ${response.status}")
+            if (response.status.value >= 400) {
+                val errorBody = response.bodyAsText()
+                println("🔍 PromotionApiService - getScheduledPromotions error response: $errorBody")
+            }
+
+            response.body<List<PromotionDTO>>()
+        }
+    }
+
+    suspend fun searchPromotions(
+        query: String,
+        page: Int = ApiConfig.Pagination.DEFAULT_PAGE,
+        size: Int = ApiConfig.Pagination.DEFAULT_SIZE,
+        sortBy: String = ApiConfig.Pagination.DEFAULT_SORT_BY,
+        sortDir: String = "desc"
+    ): NetworkResult<PageResponse<PromotionDTO>> {
+        return safeApiCall {
+            val response = httpClient.get("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.PROMOTIONS_SEARCH}") {
+                parameter("query", query)
+                parameter("page", page)
+                parameter("size", size)
+                parameter("sortBy", sortBy)
+                parameter("sortDir", sortDir)
+            }
+            response.body<PageResponse<PromotionDTO>>()
+        }
+    }
+
+    suspend fun getPromotionsByType(type: String): NetworkResult<List<PromotionDTO>> {
+        return safeApiCall {
+            val response = httpClient.get("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.promotionsByType(type)}")
+            response.body<List<PromotionDTO>>()
+        }
+    }
+
+    suspend fun getPromotionsByEligibility(eligibility: String): NetworkResult<List<PromotionDTO>> {
+        return safeApiCall {
+            val response = httpClient.get("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.promotionsByEligibility(eligibility)}")
+            response.body<List<PromotionDTO>>()
+        }
+    }
+
+    suspend fun validateCouponCode(couponCode: String): NetworkResult<PromotionDTO> {
+        return safeApiCall {
+            val response = httpClient.get("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.validateCoupon(couponCode)}")
+            response.body<PromotionDTO>()
         }
     }
 }
