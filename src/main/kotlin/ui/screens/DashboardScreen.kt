@@ -127,10 +127,17 @@ fun DashboardScreen(
                                 style = MaterialTheme.typography.headlineSmall,
                                 color = MaterialTheme.colorScheme.error
                             )
+                            val errorMessage = uiState.error ?: "حدث خطأ غير معروف"
+                            val isAuthError = errorMessage.contains("تسجيل الدخول") ||
+                                            errorMessage.contains("Authentication", ignoreCase = true)
+
                             Text(
-                                text = uiState.error ?: "حدث خطأ غير معروف",
+                                text = errorMessage,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = if (isAuthError)
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
                             )
                             val retryInteractionSource = remember { MutableInteractionSource() }
@@ -173,16 +180,50 @@ fun DashboardScreen(
                 }
                 uiState.hasData -> {
                     // Success state with data
-                    DashboardContent(
-                        dashboardSummary = uiState.dashboardSummary!!,
-                        currencyFormatter = currencyFormatter,
-                        onRefresh = { dashboardViewModel.refreshData() },
-                        onNavigateToSales = onNavigateToSales,
-                        onNavigateToProducts = onNavigateToProducts,
-                        onNavigateToCustomers = onNavigateToCustomers,
-                        onNavigateToInventory = onNavigateToInventory,
-                        onNavigateToReports = onNavigateToReports
-                    )
+                    Column {
+                        // Show mock data notification if applicable
+                        if (uiState.isUsingMockData) {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Text(
+                                        text = "يتم عرض بيانات تجريبية - الخادم غير متاح حالياً",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
+                        }
+
+                        DashboardContent(
+                            dashboardSummary = uiState.dashboardSummary!!,
+                            currencyFormatter = currencyFormatter,
+                            onRefresh = { dashboardViewModel.refreshData() },
+                            onNavigateToSales = onNavigateToSales,
+                            onNavigateToProducts = onNavigateToProducts,
+                            onNavigateToCustomers = onNavigateToCustomers,
+                            onNavigateToInventory = onNavigateToInventory,
+                            onNavigateToReports = onNavigateToReports
+                        )
+                    }
                 }
                 else -> {
                     // Empty state
@@ -304,42 +345,54 @@ private fun DashboardContent(
                     modifier = Modifier.height(400.dp)
                 ) {
                     item {
+                        val totalRevenue = dashboardSummary.sales?.totalRevenue ?: 0.0
+                        val totalSales = dashboardSummary.sales?.totalSales ?: 0
+                        val growthRate = dashboardSummary.sales?.growthRate ?: 0.0
+
                         ModernStatCard(
                             title = "إجمالي المبيعات",
-                            value = currencyFormatter.format(dashboardSummary.sales?.totalRevenue ?: 0.0),
-                            subtitle = "${dashboardSummary.sales?.totalSales ?: 0} معاملة",
+                            value = if (totalRevenue > 0) currencyFormatter.format(totalRevenue) else "0 ر.س",
+                            subtitle = "$totalSales معاملة",
                             icon = Icons.Default.AttachMoney,
                             iconColor = AppTheme.colors.success,
-                            trend = "+${String.format("%.1f", dashboardSummary.sales?.growthRate ?: 0.0)}%"
+                            trend = if (growthRate > 0) "+${String.format("%.1f", growthRate)}%" else "0%"
                         )
                     }
                     item {
+                        val averageOrderValue = dashboardSummary.sales?.averageOrderValue ?: 0.0
+                        val growthRate = dashboardSummary.sales?.growthRate ?: 0.0
+
                         ModernStatCard(
                             title = "متوسط قيمة الطلب",
-                            value = currencyFormatter.format(dashboardSummary.sales?.averageOrderValue ?: 0.0),
+                            value = if (averageOrderValue > 0) currencyFormatter.format(averageOrderValue) else "0 ر.س",
                             subtitle = "لكل معاملة",
                             icon = Icons.AutoMirrored.Filled.TrendingUp,
                             iconColor = AppTheme.colors.info,
-                            trend = "+${String.format("%.1f", dashboardSummary.sales?.growthRate ?: 0.0)}%"
+                            trend = if (growthRate > 0) "+${String.format("%.1f", growthRate)}%" else "0%"
                         )
                     }
                     item {
+                        val totalCustomers = dashboardSummary.customers?.totalCustomers ?: 0
+                        val newCustomers = dashboardSummary.customers?.newCustomers ?: 0
+                        val retentionRate = dashboardSummary.customers?.retentionRate ?: 0.0
+
                         ModernStatCard(
                             title = "إجمالي العملاء",
-                            value = (dashboardSummary.customers?.totalCustomers ?: 0).toString(),
-                            subtitle = "${dashboardSummary.customers?.newCustomers ?: 0} عميل جديد",
+                            value = totalCustomers.toString(),
+                            subtitle = "$newCustomers عميل جديد",
                             icon = Icons.Default.People,
                             iconColor = MaterialTheme.colorScheme.primary,
-                            trend = "+${String.format("%.1f", dashboardSummary.customers?.retentionRate ?: 0.0)}%"
+                            trend = if (retentionRate > 0) "+${String.format("%.1f", retentionRate)}%" else "0%"
                         )
                     }
                     item {
+                        val totalProducts = dashboardSummary.inventory?.totalProducts ?: 0
                         val lowStockAlerts = dashboardSummary.inventory?.lowStockAlerts ?: 0
                         val outOfStockProducts = dashboardSummary.inventory?.outOfStockProducts ?: 0
 
                         ModernStatCard(
                             title = "المخزون",
-                            value = (dashboardSummary.inventory?.totalProducts ?: 0).toString(),
+                            value = totalProducts.toString(),
                             subtitle = "$lowStockAlerts تنبيه مخزون",
                             icon = Icons.Default.Inventory,
                             iconColor = if (lowStockAlerts > 0)
@@ -382,9 +435,14 @@ private fun DashboardContent(
 
                             // Calculate current month revenue or total from the map
                             val monthlyRevenueValue = dashboardSummary.revenue?.monthlyRevenue?.values?.sum() ?: 0.0
+                            val displayValue = if (monthlyRevenueValue > 0) {
+                                currencyFormatter.format(monthlyRevenueValue)
+                            } else {
+                                "0 ر.س"
+                            }
 
                             Text(
-                                text = currencyFormatter.format(monthlyRevenueValue),
+                                text = displayValue,
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
@@ -398,10 +456,11 @@ private fun DashboardContent(
                                 text = "هامش الربح",
                                 style = MaterialTheme.typography.bodyMedium
                             )
+                            val profitMargin = dashboardSummary.revenue?.profitMargin ?: 0.0
                             Text(
-                                text = "${String.format("%.1f", dashboardSummary.revenue?.profitMargin ?: 0.0)}%",
+                                text = "${String.format("%.1f", profitMargin)}%",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = AppTheme.colors.success
+                                color = if (profitMargin > 0) AppTheme.colors.success else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Row(

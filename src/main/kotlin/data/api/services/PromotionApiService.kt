@@ -165,4 +165,11 @@ class PromotionApiService(private val httpClient: HttpClient) {
             response.body<PromotionDTO>()
         }
     }
+
+    suspend fun checkCouponCodeUniqueness(couponCode: String): NetworkResult<Boolean> {
+        return safeApiCall {
+            val response = httpClient.get("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.PROMOTIONS}/check-coupon/$couponCode")
+            response.body<Boolean>()
+        }
+    }
 }

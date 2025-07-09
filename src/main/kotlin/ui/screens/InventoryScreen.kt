@@ -11,8 +11,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
@@ -36,15 +41,19 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.window.Dialog
 import data.*
+import data.api.*
+import data.api.services.StockMovementDTO
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import UiUtils
 import ui.components.*
 import ui.components.RTLProvider
 import ui.components.RTLRow
+import ui.components.EnhancedFilterDropdown
 import ui.theme.CardStyles
 import ui.theme.AppTheme
 import ui.utils.ColorUtils
+import ui.viewmodels.InventoryViewModel
 
 // Inventory Tab Enum
 enum class InventoryTab(val title: String) {
@@ -57,29 +66,43 @@ enum class InventoryTab(val title: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InventoryScreen(
-    salesDataManager: SalesDataManager,
+    inventoryViewModel: InventoryViewModel,
     inventoryExportService: InventoryExportService? = null
 ) {
     RTLProvider {
+        // Collect ViewModel state
+        val uiState by inventoryViewModel.uiState.collectAsState()
+        val inventories = uiState.inventories
+        val isLoading = uiState.isLoading
+        val error = uiState.error
+
         // Enhanced state management
         var selectedTab by remember { mutableStateOf(InventoryTab.OVERVIEW) }
-        var searchQuery by remember { mutableStateOf("") }
+        var searchQuery by inventoryViewModel.searchQuery
         var selectedCategory by remember { mutableStateOf("الكل") }
         var selectedWarehouse by remember { mutableStateOf("الكل") }
-        var selectedStatus by remember { mutableStateOf("الكل") }
-        var sortBy by remember { mutableStateOf("name") }
+        var selectedStatus by inventoryViewModel.selectedStatus
+        var sortBy by inventoryViewModel.sortBy
         var showLowStockOnly by remember { mutableStateOf(false) }
         var showExpiringOnly by remember { mutableStateOf(false) }
         var isExporting by remember { mutableStateOf(false) }
         var exportMessage by remember { mutableStateOf<String?>(null) }
 
+        // Load data on first composition
+        LaunchedEffect(Unit) {
+            inventoryViewModel.loadInventories()
+            inventoryViewModel.loadCategories()
+        }
+
         // Dialog states
-        var showAddItemDialog by remember { mutableStateOf(false) }
-        var editingItem by remember { mutableStateOf<InventoryItem?>(null) }
+        var showAddWarehouseDialog by inventoryViewModel.showCreateDialog
+        var editingWarehouse by inventoryViewModel.selectedInventory
+        var showEditWarehouseDialog by inventoryViewModel.showEditDialog
+        var showDeleteWarehouseDialog by inventoryViewModel.showDeleteDialog
         var selectedItem by remember { mutableStateOf<InventoryItem?>(null) }
         var showItemDetails by remember { mutableStateOf(false) }
-        var showDeleteConfirmation by remember { mutableStateOf(false) }
-        var itemToDelete by remember { mutableStateOf<InventoryItem?>(null) }
+
+
 
         // For desktop application, we'll use window size detection
         val isTablet = true // Assume tablet/desktop for now
@@ -194,7 +217,9 @@ fun InventoryScreen(
                             )
 
                             Button(
-                                onClick = { showAddItemDialog = true },
+                                onClick = {
+                                    inventoryViewModel.openCreateDialog()
+                                },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.primary
                                 ),
@@ -205,7 +230,7 @@ fun InventoryScreen(
                             ) {
                                 Icon(Icons.Default.Add, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("إضافة عنصر جديد")
+                                Text("اضافة مستودع جديد")
                             }
                         }
 
@@ -245,20 +270,32 @@ fun InventoryScreen(
                             )
 
                             // Category Filter
-                            EnhancedFilterDropdown(
+                            EnhancedFilterDropdownWithData(
                                 label = "الفئة",
                                 value = selectedCategory,
-                                options = listOf("الكل", "إلكترونيات", "ملابس", "مواد غذائية", "أدوات"),
+                                options = inventoryViewModel.getCategoryOptions(),
+                                isLoading = uiState.isLoadingCategories,
+                                error = uiState.categoriesError,
                                 onValueChange = { selectedCategory = it },
+                                onRetry = {
+                                    inventoryViewModel.clearCategoriesError()
+                                    inventoryViewModel.loadCategories()
+                                },
                                 modifier = Modifier.weight(0.7f)
                             )
 
                             // Warehouse Filter
-                            EnhancedFilterDropdown(
+                            EnhancedFilterDropdownWithData(
                                 label = "المستودع",
                                 value = selectedWarehouse,
-                                options = listOf("الكل", "المستودع الرئيسي", "مستودع فرعي 1", "مستودع فرعي 2"),
+                                options = inventoryViewModel.getWarehouseOptions(),
+                                isLoading = uiState.isLoading,
+                                error = uiState.error,
                                 onValueChange = { selectedWarehouse = it },
+                                onRetry = {
+                                    inventoryViewModel.clearError()
+                                    inventoryViewModel.loadInventories()
+                                },
                                 modifier = Modifier.weight(0.7f)
                             )
                         }
@@ -474,7 +511,8 @@ fun InventoryScreen(
                         // Content based on selected tab
                         when (selectedTab) {
                             InventoryTab.OVERVIEW -> EnhancedInventoryOverviewContent(
-                                salesDataManager = salesDataManager,
+                                inventoryViewModel = inventoryViewModel,
+                                inventories = inventories,
                                 searchQuery = searchQuery,
                                 selectedCategory = selectedCategory,
                                 selectedWarehouse = selectedWarehouse,
@@ -487,6 +525,7 @@ fun InventoryScreen(
                                 }
                             )
                             InventoryTab.PRODUCTS -> EnhancedInventoryProductsContent(
+                                inventoryViewModel = inventoryViewModel,
                                 searchQuery = searchQuery,
                                 selectedCategory = selectedCategory,
                                 selectedWarehouse = selectedWarehouse,
@@ -495,24 +534,29 @@ fun InventoryScreen(
                                 onItemClick = { item ->
                                     selectedItem = item
                                     showItemDetails = true
-                                },
-                                onEditItem = { item ->
-                                    editingItem = item
-                                },
-                                onDeleteItem = { item ->
-                                    itemToDelete = item
-                                    showDeleteConfirmation = true
                                 }
                             )
                             InventoryTab.MOVEMENTS -> EnhancedStockMovementsContent(
+                                inventoryViewModel = inventoryViewModel,
                                 searchQuery = searchQuery,
                                 selectedWarehouse = selectedWarehouse
                             )
                             InventoryTab.WAREHOUSES -> EnhancedWarehousesContent(
+                                inventoryViewModel = inventoryViewModel,
+                                inventories = inventories,
                                 searchQuery = searchQuery,
                                 onWarehouseClick = { warehouse ->
                                     selectedWarehouse = warehouse
                                     selectedTab = InventoryTab.PRODUCTS
+                                },
+                                onAddWarehouse = {
+                                    inventoryViewModel.openCreateDialog()
+                                },
+                                onEditWarehouse = { inventory ->
+                                    inventoryViewModel.openEditDialog(inventory)
+                                },
+                                onDeleteWarehouse = { inventory ->
+                                    inventoryViewModel.openDeleteDialog(inventory)
                                 }
                             )
                         }
@@ -551,12 +595,11 @@ fun InventoryScreen(
                             EnhancedInventoryItemDetailsPanel(
                                 item = item,
                                 onEdit = {
-                                    editingItem = item
+                                    // Handle item edit - placeholder for future implementation
                                     showItemDetails = false
                                 },
                                 onDelete = {
-                                    itemToDelete = item
-                                    showDeleteConfirmation = true
+                                    // Handle item delete - placeholder for future implementation
                                     showItemDetails = false
                                 },
                                 onClose = {
@@ -619,51 +662,82 @@ fun InventoryScreen(
             )
         }
 
-        // Dialogs
-        if (showAddItemDialog) {
-            InventoryItemDialog(
-                item = null,
-                onDismiss = { showAddItemDialog = false },
-                onSave = { item ->
-                    // Handle adding new inventory item
-                    showAddItemDialog = false
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar("تم إضافة العنصر بنجاح")
-                    }
-                }
-            )
-        }
-
-        if (editingItem != null) {
-            InventoryItemDialog(
-                item = editingItem,
-                onDismiss = { editingItem = null },
-                onSave = { item ->
-                    // Handle updating inventory item
-                    editingItem = null
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar("تم تحديث العنصر بنجاح")
-                    }
-                }
-            )
-        }
-
-        if (showDeleteConfirmation && itemToDelete != null) {
-            AlertDialog(
-                onDismissRequest = {
-                    showDeleteConfirmation = false
-                    itemToDelete = null
+        // Warehouse Dialogs
+        if (showAddWarehouseDialog) {
+            WarehouseDialog(
+                inventory = null,
+                isLoading = isLoading,
+                onDismiss = {
+                    inventoryViewModel.closeCreateDialog()
                 },
+                onSave = { request ->
+                    coroutineScope.launch {
+                        val result = inventoryViewModel.createInventory(request)
+                        result.onSuccess {
+                            snackbarHostState.showSnackbar("تم إضافة المستودع بنجاح")
+                            inventoryViewModel.closeCreateDialog()
+                            inventoryViewModel.loadInventories() // Refresh the list
+                        }.onError { exception ->
+                            snackbarHostState.showSnackbar("خطأ: ${exception.message}")
+                        }
+                    }
+                }
+            )
+        }
+
+        if (showEditWarehouseDialog && editingWarehouse != null) {
+            WarehouseDialog(
+                inventory = editingWarehouse,
+                isLoading = isLoading,
+                onDismiss = { inventoryViewModel.closeEditDialog() },
+                onSave = { request ->
+                    coroutineScope.launch {
+                        // Convert InventoryCreateRequest to InventoryUpdateRequest
+                        val updateRequest = InventoryUpdateRequest(
+                            name = request.name,
+                            description = request.description,
+                            location = request.location,
+                            address = request.address,
+                            managerName = request.managerName,
+                            managerPhone = request.managerPhone,
+                            managerEmail = request.managerEmail,
+                            capacity = request.capacity,
+                            currentStockCount = request.currentStockCount,
+                            warehouseCode = request.warehouseCode,
+                            isMainWarehouse = request.isMainWarehouse,
+                            operatingHours = request.operatingHours,
+                            contactPhone = request.contactPhone,
+                            contactEmail = request.contactEmail,
+                            notes = request.notes
+                        )
+                        val result = inventoryViewModel.updateInventory(editingWarehouse!!.id, updateRequest)
+                        result.onSuccess {
+                            snackbarHostState.showSnackbar("تم تحديث المستودع بنجاح")
+                            inventoryViewModel.closeEditDialog()
+                        }.onError { exception ->
+                            snackbarHostState.showSnackbar("خطأ: ${exception.message}")
+                        }
+                    }
+                }
+            )
+        }
+
+        if (showDeleteWarehouseDialog && editingWarehouse != null) {
+            AlertDialog(
+                onDismissRequest = { inventoryViewModel.closeDeleteDialog() },
                 title = { Text("تأكيد الحذف") },
-                text = { Text("هل أنت متأكد من حذف هذا العنصر من المخزون؟") },
+                text = { Text("هل أنت متأكد من حذف هذا المستودع؟ لا يمكن التراجع عن هذا الإجراء.") },
                 confirmButton = {
                     Button(
                         onClick = {
-                            // Handle deleting inventory item
-                            showDeleteConfirmation = false
-                            itemToDelete = null
                             coroutineScope.launch {
-                                snackbarHostState.showSnackbar("تم حذف العنصر بنجاح")
+                                val result = inventoryViewModel.deleteInventory(editingWarehouse!!.id)
+                                result.onSuccess {
+                                    snackbarHostState.showSnackbar("تم حذف المستودع بنجاح")
+                                    inventoryViewModel.closeDeleteDialog()
+                                }.onError { exception ->
+                                    snackbarHostState.showSnackbar("خطأ: ${exception.message}")
+                                }
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
@@ -675,10 +749,7 @@ fun InventoryScreen(
                 },
                 dismissButton = {
                     OutlinedButton(
-                        onClick = {
-                            showDeleteConfirmation = false
-                            itemToDelete = null
-                        }
+                        onClick = { inventoryViewModel.closeDeleteDialog() }
                     ) {
                         Text("إلغاء")
                     }
@@ -741,53 +812,82 @@ private fun EnhancedTabRow(
     }
 }
 
-// Enhanced Filter Dropdown Component
+
+
+// Enhanced Filter Dropdown Component with Data Loading Support
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun EnhancedFilterDropdown(
+private fun EnhancedFilterDropdownWithData(
     label: String,
     value: String,
     options: List<String>,
+    isLoading: Boolean = false,
+    error: String? = null,
     onValueChange: (String) -> Unit,
+    onRetry: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
 
     ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = !expanded },
+        expanded = expanded && !isLoading && error == null,
+        onExpandedChange = {
+            if (!isLoading && error == null) {
+                expanded = !expanded
+            }
+        },
         modifier = modifier
     ) {
         OutlinedTextField(
-            value = value,
+            value = if (isLoading) "جاري التحميل..." else if (error != null) "خطأ في التحميل" else value,
             onValueChange = { },
             readOnly = true,
             label = { Text(label) },
             trailingIcon = {
-                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                when {
+                    isLoading -> CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp
+                    )
+                    error != null -> IconButton(
+                        onClick = onRetry,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "إعادة المحاولة",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    else -> ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                }
             },
             modifier = Modifier
                 .menuAnchor(MenuAnchorType.PrimaryNotEditable)
                 .fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-            )
+                focusedBorderColor = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+            ),
+            isError = error != null
         )
 
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            options.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option) },
-                    onClick = {
-                        onValueChange(option)
-                        expanded = false
-                    }
-                )
+        if (!isLoading && error == null) {
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                options.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option) },
+                        onClick = {
+                            onValueChange(option)
+                            expanded = false
+                        }
+                    )
+                }
             }
         }
     }
@@ -795,7 +895,8 @@ private fun EnhancedFilterDropdown(
 // Enhanced Inventory Overview Content
 @Composable
 private fun EnhancedInventoryOverviewContent(
-    salesDataManager: SalesDataManager,
+    inventoryViewModel: InventoryViewModel,
+    inventories: List<InventoryDTO>,
     searchQuery: String,
     selectedCategory: String,
     selectedWarehouse: String,
@@ -815,18 +916,18 @@ private fun EnhancedInventoryOverviewContent(
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 EnhancedStatCard(
-                    title = "إجمالي المنتجات",
-                    value = "1,234",
-                    subtitle = "منتج متاح",
+                    title = "إجمالي المستودعات",
+                    value = inventoryViewModel.totalInventories.value.toString(),
+                    subtitle = "مستودع مسجل",
                     icon = Icons.Default.Inventory,
                     iconColor = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.weight(1f)
                 )
 
                 EnhancedStatCard(
-                    title = "مخزون منخفض",
-                    value = "23",
-                    subtitle = "منتج يحتاج تجديد",
+                    title = "قريب من السعة القصوى",
+                    value = inventoryViewModel.nearCapacityInventories.value.toString(),
+                    subtitle = "مستودع يحتاج انتباه",
                     icon = Icons.Default.Warning,
                     iconColor = AppTheme.colors.warning,
                     modifier = Modifier.weight(1f)
@@ -840,18 +941,18 @@ private fun EnhancedInventoryOverviewContent(
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 EnhancedStatCard(
-                    title = "قارب على الانتهاء",
-                    value = "8",
-                    subtitle = "منتج ينتهي قريباً",
+                    title = "المستودعات النشطة",
+                    value = inventoryViewModel.activeInventories.value.toString(),
+                    subtitle = "مستودع نشط",
                     icon = Icons.Default.Schedule,
-                    iconColor = AppTheme.colors.error,
+                    iconColor = AppTheme.colors.success,
                     modifier = Modifier.weight(1f)
                 )
 
                 EnhancedStatCard(
-                    title = "المستودعات",
-                    value = "4",
-                    subtitle = "مستودع نشط",
+                    title = "المستودعات الرئيسية",
+                    value = inventoryViewModel.mainWarehouses.value.toString(),
+                    subtitle = "مستودع رئيسي",
                     icon = Icons.Default.Warehouse,
                     iconColor = AppTheme.colors.info,
                     modifier = Modifier.weight(1f)
@@ -894,44 +995,93 @@ private fun EnhancedInventoryOverviewContent(
 // Enhanced Inventory Products Content
 @Composable
 private fun EnhancedInventoryProductsContent(
+    inventoryViewModel: InventoryViewModel,
     searchQuery: String,
     selectedCategory: String,
     selectedWarehouse: String,
     showLowStockOnly: Boolean,
     sortBy: String,
-    onItemClick: (InventoryItem) -> Unit,
-    onEditItem: (InventoryItem) -> Unit,
-    onDeleteItem: (InventoryItem) -> Unit
+    onItemClick: (InventoryItem) -> Unit
 ) {
-    // Filter and sort inventory items
-    val filteredItems = remember(searchQuery, selectedCategory, selectedWarehouse, showLowStockOnly, sortBy) {
-        // Sample data - in real app, this would come from ViewModel
-        val sampleItems = (0..20).map { index ->
-            InventoryItem(
-                productId = index,
-                warehouseId = 1,
-                currentStock = if (index % 5 == 0) 5 else 50 + index,
-                reservedStock = index % 3,
-                minimumStock = 10,
-                maximumStock = 100,
-                reorderPoint = 15,
-                lastUpdated = LocalDateTime(2024, 1, 1, 10, 0),
-                expiryDate = if (index % 7 == 0) LocalDate(2024, 12, 15) else null
-            )
+    // Collect ViewModel state
+    val uiState by inventoryViewModel.uiState.collectAsState()
+    val products = uiState.products
+    val isLoadingProducts = uiState.isLoadingProducts
+    val productsError = uiState.productsError
+
+    // Load products when the composable is first created
+    LaunchedEffect(Unit) {
+        inventoryViewModel.loadProducts(refresh = true)
+    }
+
+    // Filter and sort products based on current filters
+    val filteredItems = remember(products, searchQuery, selectedCategory, selectedWarehouse, showLowStockOnly, sortBy) {
+        var filtered = products
+
+        // Apply search filter
+        if (searchQuery.isNotBlank()) {
+            filtered = filtered.filter { product ->
+                product.name.contains(searchQuery, ignoreCase = true) ||
+                product.description?.contains(searchQuery, ignoreCase = true) == true ||
+                product.sku?.contains(searchQuery, ignoreCase = true) == true ||
+                product.barcode?.contains(searchQuery, ignoreCase = true) == true
+            }
         }
 
-        var filtered = sampleItems
+        // Apply category filter
+        if (selectedCategory.isNotBlank() && selectedCategory != "الكل") {
+            filtered = filtered.filter { product ->
+                product.categoryName?.equals(selectedCategory, ignoreCase = true) == true ||
+                product.category?.equals(selectedCategory, ignoreCase = true) == true
+            }
+        }
 
-        // Apply filters
+        // Apply warehouse filter
+        // Note: ProductDTO doesn't contain warehouse information directly
+        // In a real implementation, you would need to either:
+        // 1. Add warehouse info to ProductDTO, or
+        // 2. Create a separate API endpoint that returns products with warehouse data
+        // For now, warehouse filter is available but doesn't affect product filtering
+        if (selectedWarehouse.isNotBlank() && selectedWarehouse != "الكل") {
+            // TODO: Implement warehouse filtering when warehouse data is available in ProductDTO
+            // This would require either modifying the ProductDTO or creating a new endpoint
+        }
+
+        // Apply low stock filter
         if (showLowStockOnly) {
-            filtered = filtered.filter { it.currentStock <= it.minimumStock }
+            filtered = filtered.filter { product ->
+                val currentStock = product.stockQuantity ?: 0
+                val minStock = product.minStockLevel ?: 10
+                currentStock <= minStock
+            }
         }
 
         // Apply sorting
         when (sortBy) {
-            "stock" -> filtered.sortedBy { it.currentStock }
-            "warehouse" -> filtered.sortedBy { it.warehouseId }
-            else -> filtered.sortedBy { it.productId }
+            "stock" -> filtered.sortedBy { it.stockQuantity ?: 0 }
+            "name" -> filtered.sortedBy { it.name }
+            "category" -> filtered.sortedBy { it.categoryName ?: it.category ?: "" }
+            "price" -> filtered.sortedBy { it.price }
+            else -> filtered.sortedBy { it.name }
+        }
+    }
+
+    // Convert ProductDTO to InventoryItem for display
+    val inventoryItems = remember(filteredItems) {
+        filteredItems.mapIndexed { index, product ->
+            InventoryItem(
+                productId = product.id?.toInt() ?: index,
+                warehouseId = 1, // Default warehouse ID
+                currentStock = product.stockQuantity ?: 0,
+                reservedStock = 0, // Not available in ProductDTO
+                minimumStock = product.minStockLevel ?: 10,
+                maximumStock = product.maxStockLevel ?: 100,
+                reorderPoint = product.reorderPoint ?: 15,
+                lastUpdated = LocalDateTime(2024, 1, 1, 10, 0), // Default value
+                expiryDate = product.expiryDate?.let {
+                    try { LocalDate.parse(it.substring(0, 10)) } catch (e: Exception) { null }
+                }
+            )
         }
     }
 
@@ -939,51 +1089,256 @@ private fun EnhancedInventoryProductsContent(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(filteredItems) { item ->
-            EnhancedInventoryItemCard(
-                item = item,
-                productName = "منتج ${item.productId}",
-                categoryName = if (item.productId % 3 == 0) "إلكترونيات" else "ملابس",
-                warehouseName = "المستودع الرئيسي",
-                onClick = onItemClick,
-                onEdit = onEditItem,
-                onDelete = onDeleteItem,
-                showActions = true
-            )
+        // Show loading state
+        if (isLoadingProducts && products.isEmpty()) {
+            item {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+        }
+
+        // Show error state
+        else if (productsError != null) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            Icons.Default.Error,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "خطأ في تحميل المنتجات",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Text(
+                            text = productsError,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = {
+                                inventoryViewModel.clearProductsError()
+                                inventoryViewModel.loadProducts(refresh = true)
+                            }
+                        ) {
+                            Text("إعادة المحاولة")
+                        }
+                    }
+                }
+            }
+        }
+
+        // Show empty state
+        else if (inventoryItems.isEmpty() && !isLoadingProducts) {
+            item {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Inventory,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+                        Text(
+                            text = "لا توجد منتجات",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        // Show products
+        else {
+            items(inventoryItems.zip(filteredItems)) { (inventoryItem, product) ->
+                // Get warehouse name from selected warehouse or use main warehouse
+                val warehouseName = if (selectedWarehouse != "الكل") {
+                    selectedWarehouse
+                } else {
+                    // Use main warehouse from inventories or default
+                    val mainWarehouse = uiState.inventories.find { it.isMainWarehouse }
+                    mainWarehouse?.name ?: "المستودع الرئيسي"
+                }
+
+                EnhancedInventoryItemCard(
+                    item = inventoryItem,
+                    productName = product.name,
+                    categoryName = product.categoryName ?: product.category ?: "غير محدد",
+                    warehouseName = warehouseName,
+                    onClick = onItemClick,
+                    showActions = false
+                )
+            }
         }
     }
 }
 // Enhanced Stock Movements Content
 @Composable
 private fun EnhancedStockMovementsContent(
+    inventoryViewModel: InventoryViewModel,
     searchQuery: String,
     selectedWarehouse: String
 ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    val uiState by inventoryViewModel.uiState.collectAsState()
+    val stockMovements = uiState.stockMovements
+    val isLoading = uiState.isLoadingMovements
+    val error = uiState.movementsError
+
+    // Load stock movements on first composition
+    LaunchedEffect(Unit) {
+        inventoryViewModel.loadStockMovements()
+    }
+
+    // Reload when search query changes
+    LaunchedEffect(searchQuery) {
+        if (searchQuery.isNotBlank()) {
+            inventoryViewModel.searchStockMovements(searchQuery)
+        } else {
+            inventoryViewModel.loadStockMovements(refresh = true)
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize()
     ) {
-        // Sample stock movements
-        items(15) { index ->
-            EnhancedStockMovementCard(
-                movement = StockMovement(
-                    id = index,
-                    productId = index,
-                    warehouseId = 1,
-                    movementType = when (index % 4) {
-                        0 -> MovementType.PURCHASE
-                        1 -> MovementType.SALE
-                        2 -> MovementType.RETURN
-                        else -> MovementType.ADJUSTMENT
-                    },
-                    quantity = (index + 1) * 5,
-                    date = LocalDateTime(2024, 1, index + 1, 10, 0),
-                    reference = "REF-${1000 + index}",
-                    notes = "ملاحظة حول الحركة $index"
-                ),
-                productName = "منتج $index",
-                warehouseName = "المستودع الرئيسي"
+        // Header with refresh button
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "حركات المخزون",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
             )
+
+            IconButton(
+                onClick = { inventoryViewModel.refreshStockMovements() }
+            ) {
+                Icon(
+                    Icons.Default.Refresh,
+                    contentDescription = "تحديث",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Content
+        when {
+            isLoading -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+
+            error != null -> {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            Icons.Default.Error,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "خطأ في تحميل حركات المخزون",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Text(
+                            text = error,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = { inventoryViewModel.refreshStockMovements() }
+                        ) {
+                            Text("إعادة المحاولة")
+                        }
+                    }
+                }
+            }
+
+            stockMovements.isEmpty() -> {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            Icons.Default.Inventory,
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "لا توجد حركات مخزون",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "لم يتم العثور على أي حركات مخزون",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            else -> {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(stockMovements) { movement ->
+                        EnhancedStockMovementCard(
+                            movement = movement,
+                            onClick = { /* Handle movement click if needed */ }
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -991,25 +1346,65 @@ private fun EnhancedStockMovementsContent(
 // Enhanced Warehouses Content
 @Composable
 private fun EnhancedWarehousesContent(
+    inventoryViewModel: InventoryViewModel,
+    inventories: List<InventoryDTO>,
     searchQuery: String,
-    onWarehouseClick: (String) -> Unit
+    onWarehouseClick: (String) -> Unit,
+    onAddWarehouse: () -> Unit,
+    onEditWarehouse: (InventoryDTO) -> Unit,
+    onDeleteWarehouse: (InventoryDTO) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Sample warehouses
-        items(4) { index ->
+        // Add Warehouse Button
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onAddWarehouse() },
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "إضافة مستودع",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "إضافة مستودع جديد",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+        }
+
+        // Filter inventories based on search query
+        val filteredInventories = inventories.filter { inventory ->
+            searchQuery.isBlank() ||
+            inventory.name.contains(searchQuery, ignoreCase = true) ||
+            inventory.location.contains(searchQuery, ignoreCase = true) ||
+            inventory.managerName?.contains(searchQuery, ignoreCase = true) == true
+        }
+
+        // Real warehouses from API
+        items(filteredInventories) { inventory ->
             EnhancedWarehouseCard(
-                warehouse = Warehouse(
-                    id = index,
-                    name = "المستودع ${if (index == 0) "الرئيسي" else "الفرعي $index"}",
-                    location = "الموقع $index",
-                    manager = "مدير المستودع $index"
-                ),
-                totalProducts = 100 + index * 50,
-                lowStockItems = index * 2,
-                onClick = { onWarehouseClick("المستودع ${if (index == 0) "الرئيسي" else "الفرعي $index"}") }
+                inventory = inventory,
+                onClick = { onWarehouseClick(inventory.name) },
+                onEdit = { onEditWarehouse(inventory) },
+                onDelete = { onDeleteWarehouse(inventory) }
             )
         }
     }
@@ -1291,13 +1686,14 @@ private fun EnhancedInventoryItemCard(
 // Enhanced Stock Movement Card Component
 @Composable
 private fun EnhancedStockMovementCard(
-    movement: StockMovement,
-    productName: String,
-    warehouseName: String,
+    movement: StockMovementDTO,
+    onClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
@@ -1321,7 +1717,7 @@ private fun EnhancedStockMovementCard(
             ) {
                 Column {
                     Text(
-                        text = productName,
+                        text = movement.productName,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -1384,7 +1780,7 @@ private fun EnhancedStockMovementCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = warehouseName,
+                        text = movement.warehouseName,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -1397,8 +1793,38 @@ private fun EnhancedStockMovementCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "${movement.date.dayOfMonth}/${movement.date.monthNumber}",
+                        text = movement.date.substring(0, 10), // Extract date part from ISO string
                         style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
+            // Add notes if available
+            if (movement.notes.isNotBlank()) {
+                Text(
+                    text = movement.notes,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            // Add value information if available
+            if (movement.totalValue != 0.0) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "القيمة الإجمالية:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${String.format("%.2f", movement.totalValue)} ر.س",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
@@ -1407,13 +1833,13 @@ private fun EnhancedStockMovementCard(
     }
 }
 
-// Enhanced Warehouse Card Component
+// Enhanced Warehouse Card Component (New API Version)
 @Composable
 private fun EnhancedWarehouseCard(
-    warehouse: Warehouse,
-    totalProducts: Int,
-    lowStockItems: Int,
+    inventory: InventoryDTO,
     onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Enhanced hover effect with complete coverage
@@ -1453,26 +1879,82 @@ private fun EnhancedWarehouseCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = inventory.name,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        if (inventory.isMainWarehouse) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                ),
+                                modifier = Modifier.padding(horizontal = 4.dp)
+                            ) {
+                                Text(
+                                    text = "رئيسي",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
                     Text(
-                        text = warehouse.name,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = warehouse.location,
+                        text = inventory.location,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    inventory.warehouseCode?.let { code ->
+                        Text(
+                            text = "كود: $code",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
-                Icon(
-                    Icons.Default.Warehouse,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(32.dp)
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Status indicator
+                    val statusColor = when (inventory.status) {
+                        InventoryStatus.ACTIVE -> AppTheme.colors.success
+                        InventoryStatus.INACTIVE -> AppTheme.colors.warning
+                        InventoryStatus.MAINTENANCE -> AppTheme.colors.info
+                        InventoryStatus.ARCHIVED -> AppTheme.colors.error
+                    }
+
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = statusColor.copy(alpha = 0.1f)
+                        )
+                    ) {
+                        Text(
+                            text = when (inventory.status) {
+                                InventoryStatus.ACTIVE -> "نشط"
+                                InventoryStatus.INACTIVE -> "غير نشط"
+                                InventoryStatus.MAINTENANCE -> "صيانة"
+                                InventoryStatus.ARCHIVED -> "مؤرشف"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = statusColor,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+
+                    Icon(
+                        Icons.Default.Warehouse,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
             }
 
             Row(
@@ -1481,43 +1963,112 @@ private fun EnhancedWarehouseCard(
             ) {
                 Column {
                     Text(
-                        text = "إجمالي المنتجات",
+                        text = "المخزون الحالي",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "$totalProducts",
+                        text = "${inventory.currentStockCount}",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
 
-                Column {
-                    Text(
-                        text = "مخزون منخفض",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "$lowStockItems",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (lowStockItems > 0) MaterialTheme.colorScheme.error else AppTheme.colors.success
-                    )
+                inventory.capacity?.let { capacity ->
+                    Column {
+                        Text(
+                            text = "السعة القصوى",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "$capacity",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
 
                 Column {
                     Text(
-                        text = "المدير",
+                        text = "نسبة الاستخدام",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = warehouse.manager,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        text = "${String.format("%.1f", inventory.capacityUtilization)}%",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (inventory.isNearCapacity) MaterialTheme.colorScheme.error else AppTheme.colors.success
                     )
+                }
+            }
+
+            // Manager information
+            inventory.managerName?.let { manager ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "المدير",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = manager,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    inventory.managerPhone?.let { phone ->
+                        Text(
+                            text = phone,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // Action buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onEdit,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("تعديل")
+                }
+
+                OutlinedButton(
+                    onClick = onDelete,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("حذف")
                 }
             }
         }
@@ -1991,7 +2542,618 @@ private fun InventoryItemDialog(
         shape = RoundedCornerShape(20.dp),
         containerColor = MaterialTheme.colorScheme.surface
     )
+}
 
+// Enhanced Warehouse Dialog Component
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WarehouseDialog(
+    inventory: InventoryDTO?,
+    isLoading: Boolean = false,
+    onDismiss: () -> Unit,
+    onSave: (InventoryCreateRequest) -> Unit
+) {
+    var name by remember { mutableStateOf(inventory?.name ?: "") }
+    var description by remember { mutableStateOf(inventory?.description ?: "") }
+    var location by remember { mutableStateOf(inventory?.location ?: "") }
+    var address by remember { mutableStateOf(inventory?.address ?: "") }
+    var managerName by remember { mutableStateOf(inventory?.managerName ?: "") }
+    var managerPhone by remember { mutableStateOf(inventory?.managerPhone ?: "") }
+    var managerEmail by remember { mutableStateOf(inventory?.managerEmail ?: "") }
+    var capacity by remember { mutableStateOf(inventory?.capacity?.toString() ?: "") }
+    var warehouseCode by remember { mutableStateOf(inventory?.warehouseCode ?: "") }
+    var isMainWarehouse by remember { mutableStateOf(inventory?.isMainWarehouse ?: false) }
+    var operatingHours by remember { mutableStateOf(inventory?.operatingHours ?: "") }
+    var contactPhone by remember { mutableStateOf(inventory?.contactPhone ?: "") }
+    var contactEmail by remember { mutableStateOf(inventory?.contactEmail ?: "") }
+    var notes by remember { mutableStateOf(inventory?.notes ?: "") }
 
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (inventory != null) "تعديل المستودع" else "إضافة مستودع جديد",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "إغلاق",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 600.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+
+                // Basic Information Section
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "المعلومات الأساسية",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        OutlinedTextField(
+                            value = name,
+                            onValueChange = { name = it },
+                            label = { Text("اسم المستودع *") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Warehouse,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isLoading,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+
+                        OutlinedTextField(
+                            value = location,
+                            onValueChange = { location = it },
+                            label = { Text("الموقع *") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.LocationOn,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isLoading,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+
+                        OutlinedTextField(
+                            value = description,
+                            onValueChange = { description = it },
+                            label = { Text("الوصف") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Description,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            maxLines = 2,
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isLoading,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+
+                        OutlinedTextField(
+                            value = address,
+                            onValueChange = { address = it },
+                            label = { Text("العنوان") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Home,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            maxLines = 2,
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isLoading,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+                    }
+                }
+
+                // Capacity and Code Section
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "معلومات السعة والكود",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = capacity,
+                                onValueChange = { capacity = it },
+                                label = { Text("السعة القصوى") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Inventory,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                enabled = !isLoading,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                                )
+                            )
+
+                            OutlinedTextField(
+                                value = warehouseCode,
+                                onValueChange = { warehouseCode = it },
+                                label = { Text("كود المستودع") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.QrCode,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                enabled = !isLoading,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                                )
+                            )
+                        }
+
+                        // Main Warehouse Checkbox
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = isMainWarehouse,
+                                onCheckedChange = { isMainWarehouse = it },
+                                enabled = !isLoading,
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "مستودع رئيسي",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+
+                // Manager Information Section
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "معلومات المدير",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        OutlinedTextField(
+                            value = managerName,
+                            onValueChange = { managerName = it },
+                            label = { Text("اسم المدير") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isLoading,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = managerPhone,
+                                onValueChange = { managerPhone = it },
+                                label = { Text("هاتف المدير") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Phone,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                enabled = !isLoading,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                                )
+                            )
+
+                            OutlinedTextField(
+                                value = managerEmail,
+                                onValueChange = { managerEmail = it },
+                                label = { Text("بريد المدير") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Email,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                enabled = !isLoading,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                                )
+                            )
+                        }
+                    }
+                }
+
+                // Contact Information Section
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "معلومات الاتصال",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = contactPhone,
+                                onValueChange = { contactPhone = it },
+                                label = { Text("هاتف المستودع") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Phone,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                enabled = !isLoading,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                                )
+                            )
+
+                            OutlinedTextField(
+                                value = contactEmail,
+                                onValueChange = { contactEmail = it },
+                                label = { Text("بريد المستودع") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Email,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                enabled = !isLoading,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                                )
+                            )
+                        }
+
+                        OutlinedTextField(
+                            value = operatingHours,
+                            onValueChange = { operatingHours = it },
+                            label = { Text("ساعات العمل") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Schedule,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isLoading,
+                            placeholder = { Text("مثال: 8:00 ص - 6:00 م") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+                    }
+                }
+
+                // Notes Section
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "ملاحظات إضافية",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        OutlinedTextField(
+                            value = notes,
+                            onValueChange = { notes = it },
+                            label = { Text("ملاحظات") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Notes,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            maxLines = 3,
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isLoading,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+                    }
+                }
+            }
+        },
+
+        confirmButton = {
+            // Full-width button row with enhanced hover effects
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                val isValid = name.isNotBlank() && location.isNotBlank()
+
+                // Cancel Button with Box-based hover effects
+                val cancelInteractionSource = remember { MutableInteractionSource() }
+                val isCancelHovered by cancelInteractionSource.collectIsHoveredAsState()
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            color = if (isCancelHovered)
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+                            else
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .border(
+                            width = if (isCancelHovered) 1.5.dp else 1.dp,
+                            color = if (isCancelHovered)
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
+                            else
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .clickable(
+                            interactionSource = cancelInteractionSource,
+                            indication = null
+                        ) { onDismiss() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "إلغاء",
+                        color = if (isCancelHovered)
+                            MaterialTheme.colorScheme.onSurface
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+
+                // Save Button with Box-based hover effects
+                val saveInteractionSource = remember { MutableInteractionSource() }
+                val isSaveHovered by saveInteractionSource.collectIsHoveredAsState()
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            color = if (isSaveHovered && isValid && !isLoading)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 1f)
+                            else if (isValid && !isLoading)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                            else
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .border(
+                            width = if (isSaveHovered && isValid && !isLoading) 2.dp else 1.dp,
+                            color = if (isSaveHovered && isValid && !isLoading)
+                                MaterialTheme.colorScheme.primary
+                            else if (isValid && !isLoading)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                            else
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .clickable(
+                            interactionSource = saveInteractionSource,
+                            indication = null,
+                            enabled = isValid && !isLoading
+                        ) {
+                            if (isValid && !isLoading) {
+                                val request = InventoryCreateRequest(
+                                    name = name.trim(),
+                                    description = description.trim().takeIf { it.isNotBlank() },
+                                    location = location.trim(),
+                                    address = address.trim().takeIf { it.isNotBlank() },
+                                    managerName = managerName.trim().takeIf { it.isNotBlank() },
+                                    managerPhone = managerPhone.trim().takeIf { it.isNotBlank() },
+                                    managerEmail = managerEmail.trim().takeIf { it.isNotBlank() },
+                                    capacity = capacity.toIntOrNull(),
+                                    warehouseCode = warehouseCode.trim().takeIf { it.isNotBlank() },
+                                    isMainWarehouse = isMainWarehouse,
+                                    operatingHours = operatingHours.trim().takeIf { it.isNotBlank() },
+                                    contactPhone = contactPhone.trim().takeIf { it.isNotBlank() },
+                                    contactEmail = contactEmail.trim().takeIf { it.isNotBlank() },
+                                    notes = notes.trim().takeIf { it.isNotBlank() }
+                                )
+                                onSave(request)
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text(
+                            text = if (inventory != null) "تحديث" else "إضافة",
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+        },
+        dismissButton = {},
+        shape = RoundedCornerShape(20.dp),
+        containerColor = MaterialTheme.colorScheme.surface
+    )
 }
 

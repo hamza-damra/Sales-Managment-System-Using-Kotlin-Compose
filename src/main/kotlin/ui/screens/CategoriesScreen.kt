@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package ui.screens
 
 import androidx.compose.foundation.BorderStroke
@@ -34,16 +36,20 @@ import androidx.compose.foundation.text.KeyboardOptions
 import data.Category
 import data.CategoryStatus
 import data.api.CategoryDTO
+import data.api.InventoryDTO
 import ui.components.RTLProvider
 import ui.components.RTLRow
 import ui.theme.AppTheme
 import ui.viewmodels.CategoryViewModel
+import ui.viewmodels.InventoryViewModel
 import ui.utils.ColorUtils
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CategoriesScreen(categoryViewModel: CategoryViewModel) {
+fun CategoriesScreen(
+    categoryViewModel: CategoryViewModel,
+    inventoryViewModel: InventoryViewModel
+) {
     RTLProvider {
         var searchQuery by remember { mutableStateOf("") }
         var showAddCategoryDialog by remember { mutableStateOf(false) }
@@ -58,10 +64,15 @@ fun CategoriesScreen(categoryViewModel: CategoryViewModel) {
         val searchQueryState by categoryViewModel.searchQuery.collectAsState()
         val selectedStatusState by categoryViewModel.selectedStatus.collectAsState()
 
-        // Load categories when screen is first displayed
+        // Collect inventory state
+        val inventoryUiState by inventoryViewModel.uiState.collectAsState()
+        val inventories = inventoryUiState.inventories
+
+        // Load categories and inventories when screen is first displayed
         LaunchedEffect(Unit) {
             categoryViewModel.loadCategories()
             categoryViewModel.loadActiveCategories()
+            inventoryViewModel.loadInventories()
         }
 
         // Handle success states
@@ -350,6 +361,7 @@ fun CategoriesScreen(categoryViewModel: CategoryViewModel) {
                                 items(uiState.categories) { category ->
                                     ModernCategoryItem(
                                         category = category,
+                                        inventories = inventories,
                                         onEdit = { editingCategory = it },
                                         onDelete = { categoryViewModel.deleteCategory(it.id) },
                                         onStatusChange = { cat, status ->
@@ -452,7 +464,8 @@ fun CategoriesScreen(categoryViewModel: CategoryViewModel) {
         if (showAddCategoryDialog || editingCategory != null) {
             CategoryDialog(
                 category = editingCategory,
-                onDismiss = { 
+                inventoryViewModel = inventoryViewModel,
+                onDismiss = {
                     showAddCategoryDialog = false
                     editingCategory = null
                 },
@@ -569,6 +582,7 @@ fun ModernCategorySummaryCard(
 @Composable
 fun ModernCategoryItem(
     category: Category,
+    inventories: List<InventoryDTO>,
     onEdit: (Category) -> Unit,
     onDelete: (Category) -> Unit,
     onStatusChange: (Category, CategoryStatus) -> Unit,
@@ -666,6 +680,39 @@ fun ModernCategoryItem(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(top = 4.dp)
                         )
+                    }
+
+                    // Show inventory information if available
+                    category.inventoryId?.let { inventoryId ->
+                        val inventory = inventories.find { it.id == inventoryId }
+                        inventory?.let {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.padding(top = 4.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Warehouse,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = it.name,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (it.isMainWarehouse) {
+                                    Text(
+                                        text = "• رئيسي",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -889,6 +936,7 @@ fun QuickActionButton(
 @Composable
 fun CategoryDialog(
     category: Category? = null,
+    inventoryViewModel: InventoryViewModel,
     onDismiss: () -> Unit,
     onSave: (CategoryDTO) -> Unit
 ) {
@@ -898,6 +946,17 @@ fun CategoryDialog(
     var colorCode by remember { mutableStateOf(category?.colorCode ?: "#007bff") }
     var icon by remember { mutableStateOf(category?.icon ?: "") }
     var imageUrl by remember { mutableStateOf(category?.imageUrl ?: "") }
+    var selectedInventoryId by remember { mutableStateOf(category?.inventoryId) }
+    var showInventoryDropdown by remember { mutableStateOf(false) }
+
+    // Collect inventory data
+    val inventoryUiState by inventoryViewModel.uiState.collectAsState()
+    val inventories = inventoryUiState.inventories
+
+    // Load inventories when dialog opens
+    LaunchedEffect(Unit) {
+        inventoryViewModel.loadInventories()
+    }
 
     val isEditing = category != null
     val title = if (isEditing) "تعديل الفئة" else "إضافة فئة جديدة"
@@ -1004,6 +1063,107 @@ fun CategoryDialog(
                                 unfocusedBorderColor = MaterialTheme.colorScheme.outline
                             )
                         )
+
+                        // Inventory Selection Dropdown (Required)
+                        ExposedDropdownMenuBox(
+                            expanded = showInventoryDropdown,
+                            onExpandedChange = { showInventoryDropdown = it },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            OutlinedTextField(
+                                value = inventories.find { it.id == selectedInventoryId }?.name ?: "اختر المستودع",
+                                onValueChange = { },
+                                readOnly = true,
+                                label = { Text("المستودع المرتبط *") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Warehouse,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                trailingIcon = {
+                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = showInventoryDropdown)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                                isError = selectedInventoryId == null,
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                                )
+                            )
+
+                            ExposedDropdownMenu(
+                                expanded = showInventoryDropdown,
+                                onDismissRequest = { showInventoryDropdown = false }
+                            ) {
+                                inventories.forEach { inventory ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text(
+                                                    text = inventory.name,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                                Text(
+                                                    text = inventory.location,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                if (inventory.isMainWarehouse) {
+                                                    Text(
+                                                        text = "مستودع رئيسي",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        onClick = {
+                                            selectedInventoryId = inventory.id
+                                            showInventoryDropdown = false
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Default.Warehouse,
+                                                contentDescription = null,
+                                                tint = if (inventory.isMainWarehouse)
+                                                    MaterialTheme.colorScheme.primary
+                                                else
+                                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    )
+                                }
+
+                                if (inventories.isEmpty()) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = "لا توجد مستودعات متاحة",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        },
+                                        onClick = { },
+                                        enabled = false
+                                    )
+                                }
+                            }
+                        }
+
+                        if (selectedInventoryId == null) {
+                            Text(
+                                text = "يجب اختيار مستودع للفئة",
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                            )
+                        }
 
                         // Display Order Field
                         OutlinedTextField(
@@ -1154,7 +1314,7 @@ fun CategoryDialog(
                 // Save Button with Box-based hover effects
                 val saveInteractionSource = remember { MutableInteractionSource() }
                 val isSaveHovered by saveInteractionSource.collectIsHoveredAsState()
-                val isValid = name.isNotBlank()
+                val isValid = name.isNotBlank() && selectedInventoryId != null
 
                 Box(
                     modifier = Modifier
@@ -1194,7 +1354,8 @@ fun CategoryDialog(
                                     status = category?.status?.name ?: "ACTIVE",
                                     imageUrl = imageUrl.trim().takeIf { it.isNotEmpty() },
                                     icon = icon.trim().takeIf { it.isNotEmpty() },
-                                    colorCode = colorCode.trim().takeIf { it.isNotEmpty() }
+                                    colorCode = colorCode.trim().takeIf { it.isNotEmpty() },
+                                    inventoryId = selectedInventoryId
                                 )
                                 onSave(categoryDTO)
                             }

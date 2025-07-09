@@ -500,12 +500,22 @@ fun CustomersScreen() {
                 isLoading = isDeletingCustomer,
                 onConfirm = {
                     coroutineScope.launch {
-                        val result = customerViewModel.deleteCustomer(customerToDelete!!.id!!)
+                        // Use soft delete by default with current user info
+                        val currentUser = AppDependencies.container.authService.getCurrentUser()
+                        val deletedBy = currentUser?.username ?: "API_USER"
+                        val reason = "Customer deletion requested via UI"
+
+                        val result = customerViewModel.deleteCustomer(
+                            id = customerToDelete!!.id!!,
+                            deletedBy = deletedBy,
+                            reason = reason
+                        )
+
                         if (result.isSuccess) {
                             showDeleteConfirmation = false
                             customerToDelete = null
                             AppDependencies.container.notificationService.showSuccess(
-                                message = "تم حذف العميل بنجاح",
+                                message = "تم حذف العميل بنجاح (حذف مؤقت)",
                                 title = "تم الحذف"
                             )
                         } else if (result.isError) {
@@ -513,6 +523,8 @@ fun CustomersScreen() {
                             println("🔍 Delete error type: ${exception::class.simpleName}")
                             println("🔍 Delete error message: ${exception.message}")
 
+                            // The new backend API should not return foreign key errors for soft delete
+                            // But we still handle them for backward compatibility
                             if (exception is ApiException.ForeignKeyConstraintError) {
                                 println("✅ Detected foreign key constraint error")
                                 println("🔍 Referenced table: ${exception.referencedTable}")
@@ -522,7 +534,7 @@ fun CustomersScreen() {
                                 showDeleteConfirmation = false
                                 showForeignKeyWarning = true
                             } else {
-                                println("❌ Not a foreign key constraint error, showing generic error")
+                                println("❌ Showing error message in Arabic")
                                 AppDependencies.container.notificationService.showError(
                                     message = exception.message ?: "حدث خطأ أثناء حذف العميل",
                                     title = "خطأ في الحذف"

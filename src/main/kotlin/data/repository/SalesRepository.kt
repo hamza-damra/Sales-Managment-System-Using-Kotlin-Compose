@@ -60,18 +60,18 @@ class SalesRepository(private val salesApiService: SalesApiService) {
         return salesApiService.getSalesByCustomer(customerId, page, size)
     }
     
-    suspend fun createSale(sale: SaleDTO): NetworkResult<SaleDTO> {
+    suspend fun createSale(sale: SaleDTO, couponCode: String? = null): NetworkResult<SaleDTO> {
         _isLoading.value = true
         _error.value = null
-        
-        val result = salesApiService.createSale(sale)
-        
+
+        val result = salesApiService.createSale(sale, couponCode)
+
         result.onSuccess { newSale ->
             _sales.value = listOf(newSale) + _sales.value
         }.onError { exception ->
             _error.value = exception.message
         }
-        
+
         _isLoading.value = false
         return result
     }
@@ -151,5 +151,46 @@ class SalesRepository(private val salesApiService: SalesApiService) {
     
     fun getTotalRevenue(): Double {
         return _sales.value.sumOf { it.totalAmount }
+    }
+
+    // Promotion-related methods
+    suspend fun applyPromotionToSale(saleId: Long, couponCode: String): NetworkResult<SaleDTO> {
+        _isLoading.value = true
+        _error.value = null
+
+        val result = salesApiService.applyPromotionToSale(saleId, couponCode)
+
+        result.onSuccess { updatedSale ->
+            _sales.value = _sales.value.map {
+                if (it.id == saleId) updatedSale else it
+            }
+        }.onError { exception ->
+            _error.value = exception.message
+        }
+
+        _isLoading.value = false
+        return result
+    }
+
+    suspend fun removePromotionFromSale(saleId: Long, promotionId: Long): NetworkResult<SaleDTO> {
+        _isLoading.value = true
+        _error.value = null
+
+        val result = salesApiService.removePromotionFromSale(saleId, promotionId)
+
+        result.onSuccess { updatedSale ->
+            _sales.value = _sales.value.map {
+                if (it.id == saleId) updatedSale else it
+            }
+        }.onError { exception ->
+            _error.value = exception.message
+        }
+
+        _isLoading.value = false
+        return result
+    }
+
+    suspend fun getEligiblePromotionsForSale(saleId: Long): NetworkResult<List<PromotionDTO>> {
+        return salesApiService.getEligiblePromotionsForSale(saleId)
     }
 }

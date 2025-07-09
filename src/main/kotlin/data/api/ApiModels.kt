@@ -94,6 +94,7 @@ data class CategoryDTO(
     val imageUrl: String? = null,
     val icon: String? = null,
     val colorCode: String? = null,
+    val inventoryId: Long? = null, // Associated inventory/warehouse ID
     val createdAt: String? = null,
     val updatedAt: String? = null,
     val productCount: Int? = null
@@ -168,6 +169,24 @@ data class SaleDTO(
     val subtotal: Double? = null,
     val discountAmount: Double? = null,
     val discountPercentage: Double? = null,
+
+    // Enhanced promotion fields to match backend
+    val promotionId: Long? = null, // Primary promotion ID
+    val couponCode: String? = null, // Coupon code used
+    val originalTotal: Double? = null, // Total before promotions
+    val finalTotal: Double? = null, // Total after promotions
+    val promotionDiscountAmount: Double? = null, // Total discount from promotions
+    val appliedPromotions: List<AppliedPromotionDTO>? = null, // List of all applied promotions
+    val promotionDetails: PromotionDTO? = null, // Details of primary promotion
+    val totalSavings: Double? = null, // Total amount saved from all promotions
+    val hasPromotions: Boolean? = null, // Boolean indicating if promotions are applied
+    val promotionCount: Int? = null, // Number of promotions applied
+
+    // Legacy promotion fields (for backward compatibility)
+    val appliedPromotionId: Long? = null,
+    val appliedPromotionCode: String? = null,
+    val appliedPromotionName: String? = null,
+
     val taxAmount: Double? = null,
     val taxPercentage: Double? = null,
     val shippingCost: Double? = null,
@@ -367,7 +386,7 @@ data class PromotionDTO(
     val usageLimit: Int? = null,
     val usageCount: Int? = null,
     val customerEligibility: String? = null, // ALL, VIP_ONLY, NEW_CUSTOMERS
-    val couponCode: String? = null,
+    val couponCode: String,
     val autoApply: Boolean? = null,
     val stackable: Boolean? = null,
     val statusDisplay: String? = null,
@@ -384,6 +403,28 @@ data class PromotionDTO(
     val updatedAt: String? = null // ISO datetime
 )
 
+// Applied Promotion DTO - tracks individual promotion applications to sales
+@Serializable
+data class AppliedPromotionDTO(
+    val id: Long? = null,
+    val saleId: Long? = null,
+    val promotionId: Long,
+    val promotionName: String,
+    val promotionType: String, // PERCENTAGE, FIXED_AMOUNT, BUY_X_GET_Y, FREE_SHIPPING
+    val couponCode: String? = null,
+    val discountAmount: Double,
+    val discountPercentage: Double? = null,
+    val originalAmount: Double? = null,
+    val finalAmount: Double? = null,
+    val isAutoApplied: Boolean? = false,
+    val appliedAt: String? = null, // ISO datetime
+    val displayText: String? = null, // e.g., "Summer Sale 2024 (10.0% off)"
+    val typeDisplay: String? = null, // e.g., "Percentage Discount"
+    val savingsAmount: Double? = null, // Same as discountAmount for convenience
+    val isPercentageDiscount: Boolean? = null,
+    val isFixedAmountDiscount: Boolean? = null
+)
+
 // Dashboard and Report DTOs
 @Serializable
 data class DashboardSummaryDTO(
@@ -393,6 +434,107 @@ data class DashboardSummaryDTO(
     val customers: DashboardCustomersDTO? = null,
     val inventory: DashboardInventoryDTO? = null,
     val revenue: DashboardRevenueDTO? = null
+)
+
+// API Response wrapper for the actual backend structure
+@Serializable
+data class DashboardApiResponseDTO(
+    val success: Boolean? = null,
+    val message: String? = null,
+    val data: DashboardDataDTO? = null,
+    val metadata: DashboardMetadataDTO? = null,
+    val errorCode: String? = null,
+    val errorDetails: String? = null
+)
+
+@Serializable
+data class DashboardDataDTO(
+    val summary: DashboardSummaryDataDTO? = null,
+    val salesOverview: DashboardSalesOverviewDTO? = null,
+    val topProducts: DashboardTopProductsDTO? = null,
+    val quickStats: DashboardQuickStatsDTO? = null,
+    val recentSales: DashboardRecentSalesDTO? = null
+)
+
+@Serializable
+data class DashboardSalesOverviewDTO(
+    // Add specific fields as needed, for now empty since the API returns {}
+    val placeholder: String? = null
+)
+
+@Serializable
+data class DashboardSummaryDataDTO(
+    val period: DashboardPeriodDTO? = null,
+    val averageOrderValue: Double? = null,
+    val totalRevenue: Double? = null,
+    val totalSales: Int? = null
+)
+
+@Serializable
+data class DashboardPeriodDTO(
+    val endDate: String? = null,
+    val startDate: String? = null
+)
+
+@Serializable
+data class DashboardQuickStatsDTO(
+    val totalCustomers: Int? = null,
+    val lowStockItems: Int? = null,
+    val totalProducts: Int? = null,
+    val todaysSales: Int? = null,
+    val todaysRevenue: Double? = null
+)
+
+@Serializable
+data class DashboardTopProductsDTO(
+    val topProducts: List<DashboardTopProductDTO>? = null
+)
+
+@Serializable
+data class DashboardTopProductDTO(
+    val revenue: Double? = null,
+    val quantitySold: Int? = null,
+    val productName: String? = null
+)
+
+@Serializable
+data class DashboardRecentSalesDTO(
+    val count: Int? = null,
+    val sales: List<DashboardRecentSaleDTO>? = null
+)
+
+@Serializable
+data class DashboardRecentSaleDTO(
+    val totalAmount: Double? = null,
+    val id: Int? = null,
+    val saleDate: String? = null,
+    val customerName: String? = null
+)
+
+@Serializable
+data class DashboardMetadataDTO(
+    val reportType: String? = null,
+    val reportName: String? = null,
+    val generatedAt: String? = null,
+    val generatedBy: String? = null,
+    val period: String? = null,
+    val appliedFilters: DashboardAppliedFiltersDTO? = null,
+    val pagination: String? = null,
+    val totalRecords: Int? = null,
+    val executionTimeMs: Int? = null,
+    val version: String? = null,
+    val fromCache: Boolean? = null,
+    val cacheExpiry: String? = null
+)
+
+@Serializable
+data class DashboardAppliedFiltersDTO(
+    val days: Int? = null,
+    // Add other filter fields as needed
+    val startDate: String? = null,
+    val endDate: String? = null,
+    val category: String? = null,
+    val customer: String? = null
 )
 
 @Serializable
@@ -444,3 +586,81 @@ data class ErrorResponseDTO(
     val error: String? = null,
     val path: String? = null
 )
+
+// Inventory Management DTOs
+@Serializable
+data class InventoryDTO(
+    val id: Long,
+    val name: String,
+    val description: String? = null,
+    val location: String,
+    val address: String? = null,
+    val managerName: String? = null,
+    val managerPhone: String? = null,
+    val managerEmail: String? = null,
+    val capacity: Int? = null,
+    val currentStockCount: Int = 0,
+    val status: InventoryStatus = InventoryStatus.ACTIVE,
+    val warehouseCode: String? = null,
+    val isMainWarehouse: Boolean = false,
+    val operatingHours: String? = null,
+    val contactPhone: String? = null,
+    val contactEmail: String? = null,
+    val notes: String? = null,
+    val createdAt: String? = null, // ISO datetime
+    val updatedAt: String? = null, // ISO datetime
+    val categoryCount: Int = 0,
+    val capacityUtilization: Double = 0.0,
+    val isNearCapacity: Boolean = false
+)
+
+@Serializable
+data class InventoryCreateRequest(
+    val name: String,
+    val description: String? = null,
+    val location: String,
+    val address: String? = null,
+    val managerName: String? = null,
+    val managerPhone: String? = null,
+    val managerEmail: String? = null,
+    val capacity: Int? = null,
+    val currentStockCount: Int = 0,
+    val warehouseCode: String? = null,
+    val isMainWarehouse: Boolean = false,
+    val operatingHours: String? = null,
+    val contactPhone: String? = null,
+    val contactEmail: String? = null,
+    val notes: String? = null
+)
+
+@Serializable
+data class InventoryUpdateRequest(
+    val name: String,
+    val description: String? = null,
+    val location: String,
+    val address: String? = null,
+    val managerName: String? = null,
+    val managerPhone: String? = null,
+    val managerEmail: String? = null,
+    val capacity: Int? = null,
+    val currentStockCount: Int = 0,
+    val warehouseCode: String? = null,
+    val isMainWarehouse: Boolean = false,
+    val operatingHours: String? = null,
+    val contactPhone: String? = null,
+    val contactEmail: String? = null,
+    val notes: String? = null
+)
+
+@Serializable
+data class InventoryStatusUpdateRequest(
+    val status: InventoryStatus
+)
+
+@Serializable
+enum class InventoryStatus {
+    ACTIVE,
+    INACTIVE,
+    ARCHIVED,
+    MAINTENANCE
+}

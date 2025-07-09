@@ -2,7 +2,12 @@ package ui.viewmodels
 
 import androidx.compose.runtime.*
 import data.api.*
+import data.api.services.StockMovementDTO
+import data.*
 import data.repository.InventoryRepository
+import data.repository.StockMovementRepository
+import data.repository.ProductRepository
+import data.repository.CategoryRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -13,14 +18,26 @@ import kotlinx.coroutines.launch
  */
 class InventoryViewModel(
     private val inventoryRepository: InventoryRepository,
+    private val stockMovementRepository: StockMovementRepository,
+    private val productRepository: ProductRepository,
+    private val categoryRepository: CategoryRepository,
     private val viewModelScope: CoroutineScope = CoroutineScope(Dispatchers.Main)
 ) {
-    
+
     // UI State
     data class InventoryUiState(
         val inventories: List<InventoryDTO> = emptyList(),
+        val stockMovements: List<StockMovementDTO> = emptyList(),
+        val products: List<ProductDTO> = emptyList(),
+        val categories: List<CategoryDTO> = emptyList(),
         val isLoading: Boolean = false,
+        val isLoadingMovements: Boolean = false,
+        val isLoadingProducts: Boolean = false,
+        val isLoadingCategories: Boolean = false,
         val error: String? = null,
+        val movementsError: String? = null,
+        val productsError: String? = null,
+        val categoriesError: String? = null,
         val searchQuery: String = "",
         val selectedStatus: String = "الكل",
         val sortBy: String = "name",
@@ -43,16 +60,35 @@ class InventoryViewModel(
                 _uiState.value = _uiState.value.copy(inventories = inventories)
             }
         }
-        
+
         viewModelScope.launch {
             inventoryRepository.isLoading.collect { isLoading ->
                 _uiState.value = _uiState.value.copy(isLoading = isLoading)
             }
         }
-        
+
         viewModelScope.launch {
             inventoryRepository.error.collect { error ->
                 _uiState.value = _uiState.value.copy(error = error)
+            }
+        }
+
+        // Collect stock movement repository state
+        viewModelScope.launch {
+            stockMovementRepository.stockMovements.collect { movements ->
+                _uiState.value = _uiState.value.copy(stockMovements = movements)
+            }
+        }
+
+        viewModelScope.launch {
+            stockMovementRepository.isLoading.collect { isLoading ->
+                _uiState.value = _uiState.value.copy(isLoadingMovements = isLoading)
+            }
+        }
+
+        viewModelScope.launch {
+            stockMovementRepository.error.collect { error ->
+                _uiState.value = _uiState.value.copy(movementsError = error)
             }
         }
     }
@@ -196,34 +232,218 @@ class InventoryViewModel(
             inventoryRepository.loadInventoriesNearCapacity(threshold)
         }
     }
+
+    /**
+     * Load stock movements
+     */
+    fun loadStockMovements(
+        page: Int = 0,
+        size: Int = 20,
+        sortBy: String = "date",
+        sortDir: String = "desc",
+        warehouseId: Long? = null,
+        productId: Long? = null,
+        movementType: MovementType? = null,
+        refresh: Boolean = false
+    ) {
+        viewModelScope.launch {
+            stockMovementRepository.loadStockMovements(
+                page = page,
+                size = size,
+                sortBy = sortBy,
+                sortDir = sortDir,
+                warehouseId = warehouseId,
+                productId = productId,
+                movementType = movementType,
+                refresh = refresh
+            )
+        }
+    }
+
+    /**
+     * Load products for inventory display
+     */
+    fun loadProducts(
+        page: Int = 0,
+        size: Int = 50,
+        sortBy: String = "name",
+        sortDir: String = "asc",
+        category: String? = null,
+        refresh: Boolean = false
+    ) {
+        if (refresh) {
+            _uiState.value = _uiState.value.copy(currentPage = 0)
+        }
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingProducts = true, productsError = null)
+
+            val result = productRepository.loadProducts(
+                page = page,
+                size = size,
+                sortBy = sortBy,
+                sortDir = sortDir,
+                category = category
+            )
+
+            result.onSuccess { pageResponse ->
+                _uiState.value = _uiState.value.copy(
+                    products = if (page == 0) pageResponse.content else _uiState.value.products + pageResponse.content,
+                    hasMorePages = !pageResponse.last,
+                    currentPage = if (page == 0) 0 else page,
+                    isLoadingProducts = false
+                )
+            }.onError { exception ->
+                _uiState.value = _uiState.value.copy(
+                    productsError = exception.message,
+                    isLoadingProducts = false
+                )
+            }
+        }
+    }
+
+    /**
+     * Search products
+     */
+    fun searchProducts(query: String) {
+        searchQuery.value = query
+        _uiState.value = _uiState.value.copy(searchQuery = query)
+
+        if (query.isBlank()) {
+            loadProducts(refresh = true)
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingProducts = true, productsError = null)
+
+            val result = productRepository.searchProducts(
+                query = query,
+                page = 0,
+                size = 50
+            )
+
+            result.onSuccess { pageResponse ->
+                _uiState.value = _uiState.value.copy(
+                    products = pageResponse.content,
+                    isLoadingProducts = false
+                )
+            }.onError { exception ->
+                _uiState.value = _uiState.value.copy(
+                    productsError = exception.message,
+                    isLoadingProducts = false
+                )
+            }
+        }
+    }
+
+    /**
+     * Get low stock products
+     */
+    fun getLowStockProducts(threshold: Int = 10): List<ProductDTO> {
+        return _uiState.value.products.filter {
+            (it.stockQuantity ?: 0) <= threshold
+        }
+    }
+
+    /**
+     * Clear products error
+     */
+    fun clearProductsError() {
+        _uiState.value = _uiState.value.copy(productsError = null)
+    }
+
+    /**
+     * Load categories for dropdown
+     */
+    fun loadCategories() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingCategories = true, categoriesError = null)
+
+            val result = categoryRepository.loadActiveCategories()
+
+            result.onSuccess { categories ->
+                _uiState.value = _uiState.value.copy(
+                    categories = categories,
+                    isLoadingCategories = false
+                )
+            }.onError { exception ->
+                _uiState.value = _uiState.value.copy(
+                    categoriesError = exception.message,
+                    isLoadingCategories = false
+                )
+            }
+        }
+    }
+
+    /**
+     * Get category options for dropdown
+     */
+    fun getCategoryOptions(): List<String> {
+        val categories = _uiState.value.categories
+        return listOf("الكل") + categories.map { it.name }
+    }
+
+    /**
+     * Get warehouse options for dropdown
+     */
+    fun getWarehouseOptions(): List<String> {
+        val inventories = _uiState.value.inventories
+        return listOf("الكل") + inventories.map { it.name }
+    }
+
+    /**
+     * Clear categories error
+     */
+    fun clearCategoriesError() {
+        _uiState.value = _uiState.value.copy(categoriesError = null)
+    }
+
+    /**
+     * Search stock movements
+     */
+    fun searchStockMovements(query: String) {
+        viewModelScope.launch {
+            stockMovementRepository.searchStockMovements(query)
+        }
+    }
+
+    /**
+     * Refresh stock movements
+     */
+    fun refreshStockMovements() {
+        viewModelScope.launch {
+            stockMovementRepository.refresh()
+        }
+    }
     
     /**
      * UI Actions
      */
-    fun showCreateDialog() {
+    fun openCreateDialog() {
         showCreateDialog.value = true
     }
-    
-    fun hideCreateDialog() {
+
+    fun closeCreateDialog() {
         showCreateDialog.value = false
     }
     
-    fun showEditDialog(inventory: InventoryDTO) {
+    fun openEditDialog(inventory: InventoryDTO) {
         selectedInventory.value = inventory
         showEditDialog.value = true
     }
-    
-    fun hideEditDialog() {
+
+    fun closeEditDialog() {
         showEditDialog.value = false
         selectedInventory.value = null
     }
-    
-    fun showDeleteDialog(inventory: InventoryDTO) {
+
+    fun openDeleteDialog(inventory: InventoryDTO) {
         selectedInventory.value = inventory
         showDeleteDialog.value = true
     }
-    
-    fun hideDeleteDialog() {
+
+    fun closeDeleteDialog() {
         showDeleteDialog.value = false
         selectedInventory.value = null
     }

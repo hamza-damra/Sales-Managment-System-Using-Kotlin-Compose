@@ -59,6 +59,16 @@ dependencies {
     // Logging dependencies to fix warnings
     implementation("org.slf4j:slf4j-simple:2.0.9")
     implementation("org.apache.logging.log4j:log4j-core:2.21.1")
+
+    // Test dependencies
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.1")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+    testImplementation("io.ktor:ktor-client-mock:2.3.7")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 compose.desktop {

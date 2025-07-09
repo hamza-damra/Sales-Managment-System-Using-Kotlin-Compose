@@ -168,10 +168,17 @@ class CustomerViewModel(
         return result
     }
     
-    suspend fun deleteCustomer(id: Long): NetworkResult<Unit> {
+    /**
+     * Soft delete customer (recommended approach)
+     */
+    suspend fun deleteCustomer(
+        id: Long,
+        deletedBy: String? = null,
+        reason: String? = null
+    ): NetworkResult<Unit> {
         _isDeletingCustomer.value = true
 
-        val result = customerRepository.deleteCustomer(id)
+        val result = customerRepository.deleteCustomer(id, deletedBy, reason)
 
         result.onSuccess {
             // Refresh the customer list to remove deleted customer
@@ -182,6 +189,9 @@ class CustomerViewModel(
         return result
     }
 
+    /**
+     * Hard delete customer with cascade (removes all associated data)
+     */
     suspend fun deleteCustomerWithCascade(id: Long): NetworkResult<Unit> {
         _isDeletingCustomer.value = true
 
@@ -194,6 +204,113 @@ class CustomerViewModel(
 
         _isDeletingCustomer.value = false
         return result
+    }
+
+    /**
+     * Force delete customer (legacy compatibility)
+     */
+    suspend fun forceDeleteCustomer(id: Long): NetworkResult<Unit> {
+        _isDeletingCustomer.value = true
+
+        val result = customerRepository.forceDeleteCustomer(id)
+
+        result.onSuccess {
+            // Refresh the customer list to remove deleted customer
+            loadCustomers(refresh = true)
+        }
+
+        _isDeletingCustomer.value = false
+        return result
+    }
+
+    /**
+     * Restore a soft-deleted customer
+     */
+    suspend fun restoreCustomer(id: Long): NetworkResult<CustomerDTO> {
+        _isUpdatingCustomer.value = true
+
+        val result = customerRepository.restoreCustomer(id)
+
+        result.onSuccess {
+            // Refresh the customer list to show restored customer
+            loadCustomers(refresh = true)
+        }
+
+        _isUpdatingCustomer.value = false
+        return result
+    }
+
+    /**
+     * Get paginated list of soft-deleted customers
+     */
+    suspend fun getDeletedCustomers(
+        page: Int = 0,
+        size: Int = 20,
+        sortBy: String = "deletedAt",
+        sortDir: String = "desc"
+    ): NetworkResult<PageResponse<CustomerDTO>> {
+        return customerRepository.getDeletedCustomers(page, size, sortBy, sortDir)
+    }
+
+    /**
+     * Debug method to check if customers were accidentally soft-deleted
+     */
+    suspend fun debugCustomerStatus() {
+        println("🔍 CustomerViewModel - Starting debug check...")
+        println("🔍 CustomerViewModel - Current customers count: ${customers.value.size}")
+
+        // Try to load deleted customers
+        val deletedResult = getDeletedCustomers()
+        deletedResult.onSuccess { deletedPage ->
+            println("🔍 CustomerViewModel - Found ${deletedPage.content.size} deleted customers")
+            if (deletedPage.content.isNotEmpty()) {
+                println("⚠️ CustomerViewModel - There are soft-deleted customers! This might explain the empty list.")
+                deletedPage.content.take(3).forEach { customer ->
+                    println("🔍 Deleted customer: ${customer.name} (ID: ${customer.id})")
+                }
+            }
+        }.onError { exception ->
+            println("❌ CustomerViewModel - Error loading deleted customers: ${exception.message}")
+        }
+
+        // Try to reload active customers
+        println("🔍 CustomerViewModel - Attempting to reload active customers...")
+        loadCustomers(refresh = true)
+    }
+
+    /**
+     * Emergency method to restore all soft-deleted customers
+     * Use this if customers were accidentally soft-deleted during testing
+     */
+    suspend fun restoreAllDeletedCustomers(): Int {
+        println("🔧 CustomerViewModel - Starting emergency restore of all deleted customers...")
+        var restoredCount = 0
+
+        val deletedResult = getDeletedCustomers(size = 100) // Get up to 100 deleted customers
+        deletedResult.onSuccess { deletedPage ->
+            println("🔧 Found ${deletedPage.content.size} deleted customers to restore")
+
+            for (customer in deletedPage.content) {
+                try {
+                    val restoreResult = restoreCustomer(customer.id!!)
+                    if (restoreResult.isSuccess) {
+                        restoredCount++
+                        println("✅ Restored customer: ${customer.name}")
+                    } else {
+                        println("❌ Failed to restore customer: ${customer.name}")
+                    }
+                } catch (e: Exception) {
+                    println("❌ Exception restoring customer ${customer.name}: ${e.message}")
+                }
+            }
+        }
+
+        println("🔧 Emergency restore completed. Restored $restoredCount customers.")
+        if (restoredCount > 0) {
+            loadCustomers(refresh = true)
+        }
+
+        return restoredCount
     }
     
     // UI State management

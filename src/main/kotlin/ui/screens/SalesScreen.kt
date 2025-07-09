@@ -72,10 +72,11 @@ fun SalesScreen(
     salesRepository: SalesRepository,
     customerRepository: CustomerRepository,
     productRepository: ProductRepository,
+    promotionRepository: PromotionRepository,
     notificationService: services.NotificationService
 ) {
     val salesViewModel = remember {
-        SalesViewModel(salesRepository, customerRepository, productRepository)
+        SalesViewModel(salesRepository, customerRepository, productRepository, promotionRepository)
     }
     
     // Collect state from ViewModel
@@ -94,6 +95,13 @@ fun SalesScreen(
     val cartTax by salesViewModel.cartTax.collectAsState()
     val filteredSales by salesViewModel.filteredSales.collectAsState()
     val searchQuery by salesViewModel.searchQuery.collectAsState()
+
+    // Promotion state
+    val appliedPromotion by salesViewModel.appliedPromotion.collectAsState()
+    val promotionCode by salesViewModel.promotionCode.collectAsState()
+    val promotionDiscount by salesViewModel.promotionDiscount.collectAsState()
+    val isValidatingPromotion by salesViewModel.isValidatingPromotion.collectAsState()
+    val promotionError by salesViewModel.promotionError.collectAsState()
     
     // Enhanced UI State
     var currentTab by remember { mutableStateOf(SalesTab.NEW_SALE) }
@@ -204,6 +212,11 @@ fun SalesScreen(
                         cartTotal = cartTotal,
                         cartSubtotal = cartSubtotal,
                         cartTax = cartTax,
+                        promotionDiscount = promotionDiscount,
+                        appliedPromotion = appliedPromotion,
+                        promotionCode = promotionCode,
+                        isValidatingPromotion = isValidatingPromotion,
+                        promotionError = promotionError,
                         isProcessingSale = isProcessingSale,
                         currencyFormatter = currencyFormatter,
                         availableProducts = products,
@@ -217,14 +230,29 @@ fun SalesScreen(
                         onRemoveFromCart = { productId ->
                             salesViewModel.removeFromCart(productId)
                         },
+                        onPromotionCodeChange = { code ->
+                            salesViewModel.updatePromotionCode(code)
+                        },
+                        onApplyPromotion = { code ->
+                            coroutineScope.launch {
+                                salesViewModel.validateAndApplyPromotion(code)
+                            }
+                        },
+                        onClearPromotion = {
+                            salesViewModel.clearPromotion()
+                        },
                         onCreateSale = {
                             coroutineScope.launch {
                                 println("🔍 SalesScreen - Create Sale button clicked!")
                                 println("🔍 Selected Customer: ${selectedCustomer?.name}")
                                 println("🔍 Selected Products: ${selectedProducts.size}")
                                 println("🔍 Cart Total: $cartTotal")
+                                println("🔍 Applied Promotion: ${appliedPromotion?.name}")
+                                println("🔍 Promotion Code: $promotionCode")
 
-                                val result = salesViewModel.createSale()
+                                // Pass the coupon code if a promotion is applied
+                                val couponCode = if (appliedPromotion != null) promotionCode.takeIf { it.isNotBlank() } else null
+                                val result = salesViewModel.createSale(couponCode)
                                 println("🔍 Create Sale Result: ${if (result.isSuccess) "SUCCESS" else "ERROR"}")
 
                                 if (result.isSuccess) {
@@ -889,6 +917,11 @@ private fun EnhancedNewSaleContent(
     cartTotal: Double,
     cartSubtotal: Double,
     cartTax: Double,
+    promotionDiscount: Double,
+    appliedPromotion: PromotionDTO?,
+    promotionCode: String,
+    isValidatingPromotion: Boolean,
+    promotionError: String?,
     isProcessingSale: Boolean,
     currencyFormatter: NumberFormat,
     availableProducts: List<ProductDTO>,
@@ -898,8 +931,11 @@ private fun EnhancedNewSaleContent(
     onPaymentMethodChange: (String) -> Unit,
     onQuantityChange: (Long, Int) -> Unit,
     onRemoveFromCart: (Long) -> Unit,
+    onPromotionCodeChange: (String) -> Unit,
+    onApplyPromotion: (String) -> Unit,
+    onClearPromotion: () -> Unit,
     onCreateSale: () -> Unit,
-    onAddToCartAnimation: () -> Unit
+    onAddToCartAnimation: () -> Unit = {}
 ) {
     Row(
         modifier = Modifier.fillMaxSize(),
@@ -948,10 +984,18 @@ private fun EnhancedNewSaleContent(
                 cartSubtotal = cartSubtotal,
                 cartTax = cartTax,
                 cartTotal = cartTotal,
+                promotionDiscount = promotionDiscount,
+                appliedPromotion = appliedPromotion,
+                promotionCode = promotionCode,
+                isValidatingPromotion = isValidatingPromotion,
+                promotionError = promotionError,
                 isProcessingSale = isProcessingSale,
                 canCheckout = selectedProducts.isNotEmpty() && selectedCustomer != null,
                 currencyFormatter = currencyFormatter,
                 selectedCustomer = selectedCustomer,
+                onPromotionCodeChange = onPromotionCodeChange,
+                onApplyPromotion = onApplyPromotion,
+                onClearPromotion = onClearPromotion,
                 onCreateSale = onCreateSale
             )
         }
@@ -1573,15 +1617,34 @@ private fun CheckoutSection(
     cartSubtotal: Double,
     cartTax: Double,
     cartTotal: Double,
+    promotionDiscount: Double,
+    appliedPromotion: PromotionDTO?,
+    promotionCode: String,
+    isValidatingPromotion: Boolean,
+    promotionError: String?,
     isProcessingSale: Boolean,
     canCheckout: Boolean,
     currencyFormatter: NumberFormat,
     selectedCustomer: CustomerDTO?,
+    onPromotionCodeChange: (String) -> Unit,
+    onApplyPromotion: (String) -> Unit,
+    onClearPromotion: () -> Unit,
     onCreateSale: () -> Unit
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Promotion Code Input
+        PromotionCodeSection(
+            promotionCode = promotionCode,
+            appliedPromotion = appliedPromotion,
+            isValidatingPromotion = isValidatingPromotion,
+            promotionError = promotionError,
+            onPromotionCodeChange = onPromotionCodeChange,
+            onApplyPromotion = onApplyPromotion,
+            onClearPromotion = onClearPromotion
+        )
+
         // Totals card
         Card(
             colors = CardDefaults.cardColors(
@@ -1598,6 +1661,16 @@ private fun CheckoutSection(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 TotalRow("المجموع الفرعي", currencyFormatter.format(cartSubtotal))
+
+                // Show promotion discount if applied
+                if (promotionDiscount > 0) {
+                    TotalRow(
+                        "خصم العرض (${appliedPromotion?.name ?: ""})",
+                        "-${currencyFormatter.format(promotionDiscount)}",
+                        textColor = MaterialTheme.colorScheme.error
+                    )
+                }
+
                 TotalRow("الضريبة (15%)", currencyFormatter.format(cartTax))
                 HorizontalDivider(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
@@ -1705,10 +1778,149 @@ private fun CheckoutSection(
 }
 
 @Composable
+private fun PromotionCodeSection(
+    promotionCode: String,
+    appliedPromotion: PromotionDTO?,
+    isValidatingPromotion: Boolean,
+    promotionError: String?,
+    onPromotionCodeChange: (String) -> Unit,
+    onApplyPromotion: (String) -> Unit,
+    onClearPromotion: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "كود العرض",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            if (appliedPromotion != null) {
+                // Show applied promotion
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = appliedPromotion.name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "كود: ${appliedPromotion.couponCode}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onClearPromotion,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "إزالة العرض",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            } else {
+                // Show promotion code input
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = promotionCode,
+                        onValueChange = onPromotionCodeChange,
+                        label = { Text("أدخل كود العرض") },
+                        placeholder = { Text("مثال: SUMMER2024") },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.LocalOffer,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(64.dp),
+                        singleLine = true,
+                        isError = promotionError != null,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                        )
+                    )
+
+                    Button(
+                        onClick = { onApplyPromotion(promotionCode) },
+                        enabled = promotionCode.isNotBlank() && !isValidatingPromotion,
+                        modifier = Modifier
+                            .height(64.dp)
+                            .defaultMinSize(minHeight = 1.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        ),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+                        elevation = ButtonDefaults.buttonElevation(
+                            defaultElevation = 0.dp,
+                            pressedElevation = 0.dp,
+                            disabledElevation = 0.dp
+                        )
+                    ) {
+                        if (isValidatingPromotion) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text("تطبيق")
+                        }
+                    }
+                }
+
+                // Show error message if any
+                promotionError?.let { error ->
+                    Text(
+                        text = error,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun TotalRow(
     label: String,
     value: String,
-    isTotal: Boolean = false
+    isTotal: Boolean = false,
+    textColor: Color = MaterialTheme.colorScheme.onSurface
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1719,13 +1931,13 @@ private fun TotalRow(
             text = label,
             style = if (isTotal) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
             fontWeight = if (isTotal) FontWeight.Bold else FontWeight.Medium,
-            color = if (isTotal) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+            color = if (isTotal) MaterialTheme.colorScheme.onSurface else textColor
         )
         Text(
             text = value,
             style = if (isTotal) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Bold,
-            color = if (isTotal) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+            color = if (isTotal) MaterialTheme.colorScheme.primary else textColor
         )
     }
 }

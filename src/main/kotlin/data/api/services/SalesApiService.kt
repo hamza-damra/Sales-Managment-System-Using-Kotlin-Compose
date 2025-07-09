@@ -56,7 +56,7 @@ class SalesApiService(private val httpClient: HttpClient) {
         }
     }
     
-    suspend fun createSale(sale: SaleDTO): NetworkResult<SaleDTO> {
+    suspend fun createSale(sale: SaleDTO, couponCode: String? = null): NetworkResult<SaleDTO> {
         return safeApiCall {
             val url = "${ApiConfig.BASE_URL}${ApiConfig.Endpoints.SALES}"
             println("🔍 Creating sale at URL: $url")
@@ -64,6 +64,7 @@ class SalesApiService(private val httpClient: HttpClient) {
             println("🔍 Sale items count: ${sale.items.size}")
             println("🔍 Customer ID: ${sale.customerId}")
             println("🔍 Total amount: ${sale.totalAmount}")
+            println("🔍 Coupon code: $couponCode")
 
             // Validate required fields before sending
             if (sale.customerId <= 0) {
@@ -78,6 +79,7 @@ class SalesApiService(private val httpClient: HttpClient) {
 
             val response = httpClient.post(url) {
                 contentType(ContentType.Application.Json)
+                couponCode?.let { parameter("couponCode", it) }
                 setBody(sale)
             }
 
@@ -117,6 +119,44 @@ class SalesApiService(private val httpClient: HttpClient) {
         return safeApiCall {
             val response = httpClient.post("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.cancelSale(id)}")
             response.body<SaleDTO>()
+        }
+    }
+
+    // Promotion-related endpoints
+    suspend fun applyPromotionToSale(saleId: Long, couponCode: String): NetworkResult<SaleDTO> {
+        return safeApiCall {
+            val url = "${ApiConfig.BASE_URL}${ApiConfig.Endpoints.SALES}/$saleId/apply-promotion"
+            println("🔍 Applying promotion to sale at URL: $url")
+            println("🔍 Sale ID: $saleId, Coupon Code: $couponCode")
+
+            val response = httpClient.post(url) {
+                parameter("couponCode", couponCode)
+            }
+            response.body<SaleDTO>()
+        }
+    }
+
+    suspend fun removePromotionFromSale(saleId: Long, promotionId: Long): NetworkResult<SaleDTO> {
+        return safeApiCall {
+            val url = "${ApiConfig.BASE_URL}${ApiConfig.Endpoints.SALES}/$saleId/remove-promotion"
+            println("🔍 Removing promotion from sale at URL: $url")
+            println("🔍 Sale ID: $saleId, Promotion ID: $promotionId")
+
+            val response = httpClient.delete(url) {
+                parameter("promotionId", promotionId)
+            }
+            response.body<SaleDTO>()
+        }
+    }
+
+    suspend fun getEligiblePromotionsForSale(saleId: Long): NetworkResult<List<PromotionDTO>> {
+        return safeApiCall {
+            val url = "${ApiConfig.BASE_URL}${ApiConfig.Endpoints.SALES}/$saleId/eligible-promotions"
+            println("🔍 Getting eligible promotions for sale at URL: $url")
+            println("🔍 Sale ID: $saleId")
+
+            val response = httpClient.get(url)
+            response.body<List<PromotionDTO>>()
         }
     }
 }

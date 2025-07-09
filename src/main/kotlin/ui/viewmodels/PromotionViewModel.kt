@@ -4,6 +4,8 @@ import data.api.*
 import data.repository.PromotionRepository
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import java.time.LocalDateTime
+import java.time.temporal.ChronoUnit
 
 /**
  * ViewModel for promotion management with comprehensive backend integration
@@ -46,17 +48,15 @@ class PromotionViewModel(
     private val _lastOperationResult = MutableStateFlow<NetworkResult<PromotionDTO>?>(null)
     val lastOperationResult: StateFlow<NetworkResult<PromotionDTO>?> = _lastOperationResult.asStateFlow()
     
-    // Filtered promotions based on search and filters
-    val filteredPromotions: StateFlow<List<PromotionDTO>> = combine(
+    // Base filtered promotions (search, status, type)
+    private val baseFilteredPromotions: StateFlow<List<PromotionDTO>> = combine(
         promotions,
         searchQuery,
         selectedStatus,
-        selectedType,
-        showActiveOnly,
-        showExpiringOnly
-    ) { promotionsList, query, status, type, activeOnly, expiringOnly ->
+        selectedType
+    ) { promotionsList, query, status, type ->
         var filtered = promotionsList
-        
+
         // Search filter
         if (query.isNotBlank()) {
             filtered = filtered.filter { promotion ->
@@ -65,18 +65,18 @@ class PromotionViewModel(
                 promotion.couponCode?.contains(query, ignoreCase = true) == true
             }
         }
-        
+
         // Status filter
         if (status != "الكل") {
             filtered = when (status) {
                 "نشط" -> filtered.filter { it.isActive }
                 "غير نشط" -> filtered.filter { !it.isActive }
-                "منتهي الصلاحية" -> filtered.filter { it.isExpired == true }
-                "مجدول" -> filtered.filter { it.isNotYetStarted == true }
+                "منتهي الصلاحية" -> filtered.filter { isPromotionExpired(it) }
+                "مجدول" -> filtered.filter { isPromotionNotYetStarted(it) }
                 else -> filtered
             }
         }
-        
+
         // Type filter
         if (type != "الكل") {
             filtered = when (type) {
@@ -87,20 +87,31 @@ class PromotionViewModel(
                 else -> filtered
             }
         }
-        
+
+        filtered
+    }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    // Final filtered promotions with additional filters
+    val filteredPromotions: StateFlow<List<PromotionDTO>> = combine(
+        baseFilteredPromotions,
+        showActiveOnly,
+        showExpiringOnly
+    ) { baseFiltered, activeOnly, expiringOnly ->
+        var filtered = baseFiltered
+
         // Active only filter
         if (activeOnly) {
-            filtered = filtered.filter { it.isCurrentlyActive == true }
+            filtered = filtered.filter { isPromotionCurrentlyActive(it) }
         }
-        
+
         // Expiring only filter
         if (expiringOnly) {
-            filtered = filtered.filter { 
-                val daysUntilExpiry = it.daysUntilExpiry ?: Long.MAX_VALUE
+            filtered = filtered.filter {
+                val daysUntilExpiry = calculateDaysUntilExpiry(it)
                 daysUntilExpiry in 1..7 // Expiring within 7 days
             }
         }
-        
+
         filtered
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     
@@ -281,14 +292,39 @@ class PromotionViewModel(
      */
     suspend fun createPromotion(promotion: PromotionDTO): NetworkResult<PromotionDTO> {
         _isProcessing.value = true
-        
+
+        // First check if coupon code is unique
+        val uniquenessCheck = promotionRepository.checkCouponCodeUniqueness(promotion.couponCode)
+
+        when (uniquenessCheck) {
+            is NetworkResult.Success -> {
+                if (!uniquenessCheck.data) {
+                    // Coupon code already exists
+                    val error = ApiException.ValidationError(
+                        mapOf("couponCode" to listOf("كود الكوبون موجود بالفعل"))
+                    )
+                    val result = NetworkResult.Error(error)
+                    _lastOperationResult.value = result
+                    _isProcessing.value = false
+                    return result
+                }
+            }
+            is NetworkResult.Error -> {
+                // If uniqueness check fails, proceed anyway (backend will handle it)
+                println("⚠️ Could not check coupon code uniqueness: ${uniquenessCheck.exception.message}")
+            }
+            else -> {
+                // Loading state - should not happen in this context
+            }
+        }
+
         val result = promotionRepository.createPromotion(promotion).first()
-        
+
         result.onSuccess {
             // Refresh data after successful creation
             refreshData()
         }
-        
+
         _lastOperationResult.value = result
         _isProcessing.value = false
         return result
@@ -373,9 +409,74 @@ class PromotionViewModel(
     }
     
     /**
+     * Validate coupon code uniqueness
+     */
+    suspend fun validateCouponCodeUniqueness(couponCode: String): Boolean {
+        if (couponCode.isBlank()) return false
+
+        return try {
+            val result = promotionRepository.checkCouponCodeUniqueness(couponCode)
+            when (result) {
+                is NetworkResult.Success -> result.data
+                else -> true // If check fails, assume it's unique (backend will validate)
+            }
+        } catch (e: Exception) {
+            true // If check fails, assume it's unique
+        }
+    }
+
+    /**
      * Clean up resources
      */
     fun cleanup() {
         viewModelScope.cancel()
+    }
+
+    // Helper functions for promotion status calculations
+    private fun isPromotionExpired(promotion: PromotionDTO): Boolean {
+        return try {
+            val endDate = LocalDateTime.parse(promotion.endDate.replace("Z", ""))
+            endDate.isBefore(LocalDateTime.now())
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun isPromotionNotYetStarted(promotion: PromotionDTO): Boolean {
+        return try {
+            val startDate = LocalDateTime.parse(promotion.startDate.replace("Z", ""))
+            startDate.isAfter(LocalDateTime.now())
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun isPromotionCurrentlyActive(promotion: PromotionDTO): Boolean {
+        if (!promotion.isActive) return false
+
+        return try {
+            val now = LocalDateTime.now()
+            val startDate = LocalDateTime.parse(promotion.startDate.replace("Z", ""))
+            val endDate = LocalDateTime.parse(promotion.endDate.replace("Z", ""))
+
+            now.isAfter(startDate) && now.isBefore(endDate)
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun calculateDaysUntilExpiry(promotion: PromotionDTO): Long {
+        return try {
+            val endDate = LocalDateTime.parse(promotion.endDate.replace("Z", ""))
+            val now = LocalDateTime.now()
+
+            if (endDate.isBefore(now)) {
+                0L // Already expired
+            } else {
+                ChronoUnit.DAYS.between(now, endDate)
+            }
+        } catch (e: Exception) {
+            Long.MAX_VALUE
+        }
     }
 }

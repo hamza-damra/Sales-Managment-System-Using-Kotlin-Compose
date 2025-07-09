@@ -27,7 +27,7 @@ object ViewModelFactory {
     }
 
     fun createSalesViewModel(): SalesViewModel {
-        return SalesViewModel(container.salesRepository, container.customerRepository, container.productRepository)
+        return SalesViewModel(container.salesRepository, container.customerRepository, container.productRepository, container.promotionRepository)
     }
 
     fun createCustomerViewModel(): CustomerViewModel {
@@ -36,5 +36,9 @@ object ViewModelFactory {
 
     fun createReturnsViewModel(): ReturnsViewModel {
         return ReturnsViewModel(container.returnRepository, container.customerRepository, container.productRepository)
+    }
+
+    fun createPromotionViewModel(): PromotionViewModel {
+        return PromotionViewModel(container.promotionRepository)
     }
 }

@@ -51,18 +51,18 @@ class StockMovementApiService(private val httpClient: HttpClient) {
                 sale.items.forEach { item ->
                     movements.add(
                         StockMovementDTO(
-                            id = (index * 1000 + item.id).toLong(),
+                            id = (index * 1000 + (item.id ?: 0L)).toLong(),
                             productId = item.productId,
-                            productName = item.productName,
+                            productName = item.productName ?: "منتج غير محدد",
                             warehouseId = 1L, // Default warehouse for now
                             warehouseName = "المستودع الرئيسي",
                             movementType = MovementType.SALE,
                             quantity = -item.quantity, // Negative for sales
-                            date = sale.saleDate,
-                            reference = sale.saleNumber ?: "SALE-${sale.id}",
-                            notes = "بيع للعميل ${sale.customerName}",
+                            date = sale.saleDate ?: "",
+                            reference = sale.saleNumber ?: "SALE-${sale.id ?: 0L}",
+                            notes = "بيع للعميل ${sale.customerName ?: "عميل غير محدد"}",
                             unitPrice = item.unitPrice,
-                            totalValue = item.totalPrice
+                            totalValue = item.totalPrice ?: 0.0
                         )
                     )
                 }
@@ -73,16 +73,16 @@ class StockMovementApiService(private val httpClient: HttpClient) {
             movements.addAll(samplePurchases)
             
             // Apply filters
-            var filteredMovements = movements
-            
+            var filteredMovements: List<StockMovementDTO> = movements
+
             warehouseId?.let { id ->
                 filteredMovements = filteredMovements.filter { it.warehouseId == id }
             }
-            
+
             productId?.let { id ->
                 filteredMovements = filteredMovements.filter { it.productId == id }
             }
-            
+
             movementType?.let { type ->
                 filteredMovements = filteredMovements.filter { it.movementType == type }
             }
@@ -110,9 +110,9 @@ class StockMovementApiService(private val httpClient: HttpClient) {
                 pageable = PageableInfo(
                     pageNumber = page,
                     pageSize = size,
-                    sort = SortInfo(sorted = true, ascending = sortDir == "asc")
+                    sort = SortInfo(sorted = true, unsorted = false)
                 ),
-                totalElements = totalElements,
+                totalElements = totalElements.toLong(),
                 totalPages = (totalElements + size - 1) / size,
                 first = page == 0,
                 last = page >= (totalElements + size - 1) / size - 1,

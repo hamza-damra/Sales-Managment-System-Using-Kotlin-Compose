@@ -1,45 +1,75 @@
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
+
 package ui.screens
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.animation.*
+import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
 import ui.components.*
 import ui.theme.AppTheme
 import ui.theme.CardStyles
-import ui.utils.ResponsiveUtils
+import ui.viewmodels.ReportsViewModel
+import ui.viewmodels.DateRange
+import data.api.*
+import kotlinx.coroutines.launch
+import kotlinx.datetime.*
+import java.text.NumberFormat
+import java.util.*
 
+/**
+ * Comprehensive Reports Screen with enterprise-level analytics
+ * Follows existing UI/UX patterns and integrates with backend reporting APIs
+ */
 @Composable
-fun ReportsScreen() {
-    val responsive = ResponsiveUtils.getResponsiveSpacing()
-    val responsivePadding = ResponsiveUtils.getResponsivePadding()
-    var selectedReportType by remember { mutableStateOf("sales") }
+fun ReportsScreen(
+    reportsViewModel: ReportsViewModel
+) {
+    // Collect state from ViewModel
+    val selectedReportType by reportsViewModel.selectedReportType.collectAsState()
+    val selectedDateRange by reportsViewModel.selectedDateRange.collectAsState()
+    val isLoading by reportsViewModel.isLoading.collectAsState()
+    val error by reportsViewModel.error.collectAsState()
+    val isRefreshing by reportsViewModel.isRefreshing.collectAsState()
+    
+    // Report data
+    val comprehensiveSalesReport by reportsViewModel.comprehensiveSalesReport.collectAsState()
+    val customerReport by reportsViewModel.customerReport.collectAsState()
+    val productReport by reportsViewModel.productReport.collectAsState()
+    val inventoryReport by reportsViewModel.inventoryReport.collectAsState()
+    val financialReport by reportsViewModel.financialReport.collectAsState()
+    val promotionReport by reportsViewModel.promotionReport.collectAsState()
+    val realTimeKPIs by reportsViewModel.realTimeKPIs.collectAsState()
+    
+    // UI state
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showExportDialog by remember { mutableStateOf(false) }
+    var showFiltersDialog by remember { mutableStateOf(false) }
+    var selectedCustomStartDate by remember { mutableStateOf<LocalDate?>(null) }
+    var selectedCustomEndDate by remember { mutableStateOf<LocalDate?>(null) }
+    
+    val coroutineScope = rememberCoroutineScope()
+    val currencyFormatter = remember { 
+        NumberFormat.getCurrencyInstance(Locale("ar", "SA")).apply {
+            currency = Currency.getInstance("SAR")
+        }
+    }
 
     RTLProvider {
         Box(
@@ -49,248 +79,363 @@ fun ReportsScreen() {
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(responsivePadding.screen),
-                verticalArrangement = Arrangement.spacedBy(responsive.large)
+                contentPadding = PaddingValues(28.dp),
+                verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
                 // Enhanced Header Section
                 item {
-                    EnhancedReportsHeader()
-                }
-
-                // Report Type Selector with improved design
-                item {
-                    EnhancedReportTypeSelector(
-                        selectedType = selectedReportType,
-                        onTypeSelected = { selectedReportType = it }
+                    EnhancedReportsHeader(
+                        selectedDateRange = selectedDateRange,
+                        onDateRangeSelected = { range ->
+                            reportsViewModel.selectDateRange(range)
+                        },
+                        onCustomDateRangeClick = { showDatePicker = true },
+                        onRefresh = { reportsViewModel.refreshAllReports() },
+                        onExport = { showExportDialog = true },
+                        onFilters = { showFiltersDialog = true },
+                        isLoading = isLoading,
+                        isRefreshing = isRefreshing
                     )
                 }
 
-                // Main Analytics Dashboard
+                // Report Type Selector
                 item {
-                    EnhancedAnalyticsDashboard()
+                    EnhancedReportTypeSelector(
+                        selectedType = selectedReportType,
+                        onTypeSelected = { reportsViewModel.selectReportType(it) }
+                    )
                 }
 
-                // Detailed Reports Section
+                // Real-time KPIs Dashboard
                 item {
-                    EnhancedDetailedReports(selectedReportType)
+                    RealTimeKPIsDashboard(
+                        kpis = realTimeKPIs,
+                        currencyFormatter = currencyFormatter,
+                        isLoading = isLoading
+                    )
+                }
+
+                // Main Report Content
+                item {
+                    ReportContentSection(
+                        reportType = selectedReportType,
+                        salesReport = comprehensiveSalesReport,
+                        customerReport = customerReport,
+                        productReport = productReport,
+                        inventoryReport = inventoryReport,
+                        financialReport = financialReport,
+                        promotionReport = promotionReport,
+                        currencyFormatter = currencyFormatter,
+                        isLoading = isLoading,
+                        error = error,
+                        onRetry = { reportsViewModel.refreshCurrentReport() }
+                    )
                 }
             }
+            
+            // Error handling
+            error?.let { errorMessage ->
+                LaunchedEffect(errorMessage) {
+                    // Show error notification
+                    // You can integrate with your notification service here
+                }
+            }
+        }
+        
+        // Date Picker Dialog
+        if (showDatePicker) {
+            CustomDateRangeDialog(
+                startDate = selectedCustomStartDate,
+                endDate = selectedCustomEndDate,
+                onStartDateSelected = { selectedCustomStartDate = it },
+                onEndDateSelected = { selectedCustomEndDate = it },
+                onConfirm = { start, end ->
+                    reportsViewModel.setCustomDateRange(start, end)
+                    showDatePicker = false
+                },
+                onDismiss = { showDatePicker = false }
+            )
+        }
+        
+        // Export Dialog
+        if (showExportDialog) {
+            ExportReportDialog(
+                onExport = { format ->
+                    coroutineScope.launch {
+                        val result = reportsViewModel.exportReport(format)
+                        // Handle export result
+                        showExportDialog = false
+                    }
+                },
+                onDismiss = { showExportDialog = false }
+            )
+        }
+        
+        // Filters Dialog
+        if (showFiltersDialog) {
+            ReportFiltersDialog(
+                currentFilters = reportsViewModel.selectedFilters.collectAsState().value,
+                onFiltersApplied = { filters ->
+                    reportsViewModel.updateFilters(filters)
+                    showFiltersDialog = false
+                },
+                onDismiss = { showFiltersDialog = false }
+            )
         }
     }
 }
 
 // Enhanced Header Component
 @Composable
-private fun EnhancedReportsHeader() {
-    val responsive = ResponsiveUtils.getResponsiveSpacing()
-
-    RTLRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+private fun EnhancedReportsHeader(
+    selectedDateRange: DateRange,
+    onDateRangeSelected: (DateRange) -> Unit,
+    onCustomDateRangeClick: () -> Unit,
+    onRefresh: () -> Unit,
+    onExport: () -> Unit,
+    onFilters: () -> Unit,
+    isLoading: Boolean,
+    isRefreshing: Boolean
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Column {
-            Text(
-                text = "التقارير والإحصائيات",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Text(
-                text = "تحليل شامل وتفصيلي لأداء المبيعات والمخزون",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
-            )
-        }
-
-        // Action buttons
-        RTLRow(
-            horizontalArrangement = Arrangement.spacedBy(responsive.small)
+        // Title and actions
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(
-                onClick = { /* Export functionality */ },
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = AppTheme.colors.success.copy(alpha = 0.1f)
+            Column {
+                Text(
+                    text = "التقارير والإحصائيات",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
                 )
-            ) {
-                Icon(
-                    Icons.Default.FileDownload,
-                    contentDescription = "تصدير",
-                    tint = AppTheme.colors.success
+                Text(
+                    text = "تحليل شامل وتفصيلي لأداء الأعمال",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-
-            IconButton(
-                onClick = { /* Refresh functionality */ },
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                )
+            
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(
-                    Icons.Default.Refresh,
-                    contentDescription = "تحديث",
-                    tint = MaterialTheme.colorScheme.primary
-                )
+                // Refresh button
+                IconButton(
+                    onClick = onRefresh,
+                    enabled = !isLoading
+                ) {
+                    if (isRefreshing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "تحديث",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                
+                // Export button
+                IconButton(onClick = onExport) {
+                    Icon(
+                        Icons.Default.FileDownload,
+                        contentDescription = "تصدير",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                
+                // Filters button
+                IconButton(onClick = onFilters) {
+                    Icon(
+                        Icons.Default.FilterList,
+                        contentDescription = "فلاتر",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+        
+        // Date range selector
+        DateRangeSelector(
+            selectedRange = selectedDateRange,
+            onRangeSelected = onDateRangeSelected,
+            onCustomRangeClick = onCustomDateRangeClick
+        )
+    }
+}
+
+// Date Range Selector Component
+@Composable
+private fun DateRangeSelector(
+    selectedRange: DateRange,
+    onRangeSelected: (DateRange) -> Unit,
+    onCustomRangeClick: () -> Unit
+) {
+    Card(
+        colors = CardStyles.defaultCardColors(),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardStyles.defaultCardElevation()
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "فترة التقرير",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(DateRange.values()) { range ->
+                    DateRangeChip(
+                        range = range,
+                        isSelected = selectedRange == range,
+                        onClick = {
+                            if (range == DateRange.CUSTOM) {
+                                onCustomRangeClick()
+                            } else {
+                                onRangeSelected(range)
+                            }
+                        }
+                    )
+                }
             }
         }
     }
 }
 
-// Enhanced Report Type Selector (Simplified version without experimental APIs)
+@Composable
+private fun DateRangeChip(
+    range: DateRange,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val text = when (range) {
+        DateRange.TODAY -> "اليوم"
+        DateRange.YESTERDAY -> "أمس"
+        DateRange.LAST_7_DAYS -> "آخر 7 أيام"
+        DateRange.LAST_30_DAYS -> "آخر 30 يوم"
+        DateRange.LAST_90_DAYS -> "آخر 90 يوم"
+        DateRange.THIS_MONTH -> "هذا الشهر"
+        DateRange.LAST_MONTH -> "الشهر الماضي"
+        DateRange.THIS_YEAR -> "هذا العام"
+        DateRange.CUSTOM -> "فترة مخصصة"
+    }
+
+    FilterChip(
+        onClick = onClick,
+        label = { Text(text) },
+        selected = isSelected,
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.primary,
+            selectedLabelColor = Color.White
+        )
+    )
+}
+
+// Report Type Selector Component
 @Composable
 private fun EnhancedReportTypeSelector(
     selectedType: String,
     onTypeSelected: (String) -> Unit
 ) {
-    val responsive = ResponsiveUtils.getResponsiveSpacing()
-    val responsivePadding = ResponsiveUtils.getResponsivePadding()
-    val listState = rememberLazyListState()
-    val coroutineScope = rememberCoroutineScope()
-
-    Column(
-        verticalArrangement = Arrangement.spacedBy(responsive.small)
+    Card(
+        colors = CardStyles.defaultCardColors(),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardStyles.defaultCardElevation()
     ) {
-        // Section title with navigation controls
-        RTLRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "أنواع التقارير",
+                text = "نوع التقرير",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onBackground
+                color = MaterialTheme.colorScheme.onSurface
             )
 
-            // Navigation controls
-            RTLRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Right arrow (positioned on the left, scrolls LEFT through report types)
-                EnhancedNavigationButton(
-                    icon = Icons.Default.ChevronRight,
-                    contentDescription = "السابق",
-                    onClick = {
-                        coroutineScope.launch {
-                            val currentIndex = maxOf(0, listState.firstVisibleItemIndex - 1)
-                            listState.animateScrollToItem(currentIndex)
-                        }
-                    }
-                )
-
-                // Left arrow (positioned on the right, scrolls RIGHT through report types)
-                EnhancedNavigationButton(
-                    icon = Icons.Default.ChevronLeft,
-                    contentDescription = "التالي",
-                    onClick = {
-                        coroutineScope.launch {
-                            val nextIndex = minOf(7, listState.firstVisibleItemIndex + 1) // 8 total items (0-7)
-                            listState.animateScrollToItem(nextIndex)
-                        }
-                    }
-                )
-            }
-        }
-
-        // Scrollable cards row
-        LazyRow(
-            state = listState,
-            horizontalArrangement = Arrangement.spacedBy(responsive.medium),
-            contentPadding = PaddingValues(
-                horizontal = responsivePadding.item,
-                vertical = 4.dp
-            ),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            item {
-                EnhancedReportCard(
-                    title = "تقرير المبيعات",
-                    description = "تحليل المبيعات اليومية والشهرية",
-                    icon = Icons.Default.TrendingUp,
-                    color = MaterialTheme.colorScheme.primary,
-                    isSelected = selectedType == "sales",
-                    onClick = { onTypeSelected("sales") }
-                )
-            }
-            item {
-                EnhancedReportCard(
-                    title = "تقرير المخزون",
-                    description = "حالة المخزون والمنتجات",
-                    icon = Icons.Default.Inventory,
-                    color = AppTheme.colors.success,
-                    isSelected = selectedType == "inventory",
-                    onClick = { onTypeSelected("inventory") }
-                )
-            }
-            item {
-                EnhancedReportCard(
-                    title = "تقرير العملاء",
-                    description = "إحصائيات وتحليل العملاء",
-                    icon = Icons.Default.People,
-                    color = AppTheme.colors.info,
-                    isSelected = selectedType == "customers",
-                    onClick = { onTypeSelected("customers") }
-                )
-            }
-            item {
-                EnhancedReportCard(
-                    title = "التقرير المالي",
-                    description = "الأرباح والخسائر والتدفق النقدي",
-                    icon = Icons.Default.AccountBalance,
-                    color = AppTheme.colors.warning,
-                    isSelected = selectedType == "financial",
-                    onClick = { onTypeSelected("financial") }
-                )
-            }
-            item {
-                EnhancedReportCard(
-                    title = "تقرير الموردين",
-                    description = "إحصائيات الموردين والمشتريات",
-                    icon = Icons.Default.Business,
-                    color = AppTheme.colors.purple,
-                    isSelected = selectedType == "suppliers",
-                    onClick = { onTypeSelected("suppliers") }
-                )
-            }
-            item {
-                EnhancedReportCard(
-                    title = "تقرير المرتجعات",
-                    description = "تحليل المرتجعات والإلغاءات",
-                    icon = Icons.Default.AssignmentReturn,
-                    color = AppTheme.colors.error,
-                    isSelected = selectedType == "returns",
-                    onClick = { onTypeSelected("returns") }
-                )
-            }
-            item {
-                EnhancedReportCard(
-                    title = "تقرير العروض",
-                    description = "فعالية العروض والخصومات",
-                    icon = Icons.Default.LocalOffer,
-                    color = AppTheme.colors.pink,
-                    isSelected = selectedType == "promotions",
-                    onClick = { onTypeSelected("promotions") }
-                )
-            }
-            item {
-                EnhancedReportCard(
-                    title = "التقرير الضريبي",
-                    description = "الضرائب والرسوم المحصلة",
-                    icon = Icons.Default.Receipt,
-                    color = AppTheme.colors.indigo,
-                    isSelected = selectedType == "tax",
-                    onClick = { onTypeSelected("tax") }
-                )
+                item {
+                    ReportTypeCard(
+                        title = "تقرير المبيعات",
+                        description = "تحليل شامل للمبيعات والإيرادات",
+                        icon = Icons.Default.TrendingUp,
+                        color = MaterialTheme.colorScheme.primary,
+                        isSelected = selectedType == "sales",
+                        onClick = { onTypeSelected("sales") }
+                    )
+                }
+                item {
+                    ReportTypeCard(
+                        title = "تقرير العملاء",
+                        description = "تحليل سلوك العملاء والقيمة الدائمة",
+                        icon = Icons.Default.People,
+                        color = AppTheme.colors.info,
+                        isSelected = selectedType == "customers",
+                        onClick = { onTypeSelected("customers") }
+                    )
+                }
+                item {
+                    ReportTypeCard(
+                        title = "تقرير المنتجات",
+                        description = "أداء المنتجات والربحية",
+                        icon = Icons.Default.Inventory,
+                        color = AppTheme.colors.success,
+                        isSelected = selectedType == "products",
+                        onClick = { onTypeSelected("products") }
+                    )
+                }
+                item {
+                    ReportTypeCard(
+                        title = "تقرير المخزون",
+                        description = "حالة المخزون والتقييم",
+                        icon = Icons.Default.Warehouse,
+                        color = AppTheme.colors.warning,
+                        isSelected = selectedType == "inventory",
+                        onClick = { onTypeSelected("inventory") }
+                    )
+                }
+                item {
+                    ReportTypeCard(
+                        title = "التقرير المالي",
+                        description = "التحليل المالي والربحية",
+                        icon = Icons.Default.AccountBalance,
+                        color = AppTheme.colors.purple,
+                        isSelected = selectedType == "financial",
+                        onClick = { onTypeSelected("financial") }
+                    )
+                }
+                item {
+                    ReportTypeCard(
+                        title = "تقرير العروض",
+                        description = "فعالية العروض والخصومات",
+                        icon = Icons.Default.LocalOffer,
+                        color = AppTheme.colors.pink,
+                        isSelected = selectedType == "promotions",
+                        onClick = { onTypeSelected("promotions") }
+                    )
+                }
             }
         }
     }
 }
 
-// Enhanced Report Card Component with Box-based hover effects
 @Composable
-private fun EnhancedReportCard(
+private fun ReportTypeCard(
     title: String,
     description: String,
     icon: ImageVector,
@@ -298,683 +443,1097 @@ private fun EnhancedReportCard(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    val responsivePadding = ResponsiveUtils.getResponsivePadding()
-
-    // Enhanced hover effect with complete coverage
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
 
-    Box(
+    Card(
         modifier = Modifier
-            .width(300.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(
-                color = when {
-                    isSelected -> color.copy(alpha = 0.1f)
-                    isHovered -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
-                    else -> MaterialTheme.colorScheme.surface
-                },
-                shape = RoundedCornerShape(12.dp)
-            )
-            .border(
-                width = when {
-                    isSelected -> 2.dp
-                    isHovered -> 1.5.dp
-                    else -> 1.dp
-                },
-                color = when {
-                    isSelected -> color.copy(alpha = 0.5f)
-                    isHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                    else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
-                },
-                shape = RoundedCornerShape(12.dp)
-            )
+            .width(280.dp)
+            .height(120.dp)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null
-            ) { onClick() }
-    ) {
-        // Subtle gradient background
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            color.copy(alpha = if (isSelected) 0.05f else 0.02f),
-                            color.copy(alpha = if (isSelected) 0.1f else 0.05f)
-                        )
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                )
-        )
-
-        Column(
-            modifier = Modifier
-                .padding(responsivePadding.card)
-                .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Icon with enhanced styling
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .background(
-                        color.copy(alpha = 0.15f),
-                        RoundedCornerShape(16.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = color,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
-
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = if (isSelected) color else MaterialTheme.colorScheme.onSurface
-            )
-
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                lineHeight = MaterialTheme.typography.bodyMedium.lineHeight
-            )
-
-            // Selection indicator
-            if (isSelected) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(3.dp)
-                        .background(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(
-                                    color.copy(alpha = 0.3f),
-                                    color,
-                                    color.copy(alpha = 0.3f)
-                                )
-                            ),
-                            shape = RoundedCornerShape(2.dp)
-                        )
-                )
-            }
-        }
-    }
-}
-
-// Enhanced Analytics Dashboard
-@Composable
-private fun EnhancedAnalyticsDashboard() {
-    val responsive = ResponsiveUtils.getResponsiveSpacing()
-    val responsivePadding = ResponsiveUtils.getResponsivePadding()
-
-    RTLRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(responsive.large)
-    ) {
-        // Main Chart Section
-        Card(
-            modifier = Modifier.weight(2f),
-            colors = CardStyles.elevatedCardColors(),
-            shape = RoundedCornerShape(24.dp),
-            elevation = CardStyles.elevatedCardElevation(),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-        ) {
-            Box(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                // Subtle gradient background
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.02f),
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)
-                                )
-                            )
-                        )
-                )
-
-                Column(
-                    modifier = Modifier.padding(responsivePadding.card),
-                    verticalArrangement = Arrangement.spacedBy(responsive.medium)
-                ) {
-                    RTLRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "مخطط المبيعات الشهرية",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-
-                        // Chart type selector
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            ChartTypeButton("خطي", Icons.Default.ShowChart, true) { }
-                            ChartTypeButton("أعمدة", Icons.Default.BarChart, false) { }
-                        }
-                    }
-
-                    // Enhanced Chart Placeholder
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(350.dp)
-                            .background(
-                                brush = Brush.verticalGradient(
-                                    colors = listOf(
-                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f)
-                                    )
-                                ),
-                                shape = RoundedCornerShape(16.dp)
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Analytics,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-                            )
-                            Text(
-                                text = "مخطط المبيعات التفاعلي",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = "سيتم عرض البيانات الفعلية هنا",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Quick Stats Section
-        Card(
-            modifier = Modifier.weight(1f),
-            colors = CardStyles.elevatedCardColors(),
-            shape = RoundedCornerShape(24.dp),
-            elevation = CardStyles.elevatedCardElevation(),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-        ) {
-            Box(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                // Subtle gradient background
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    AppTheme.colors.success.copy(alpha = 0.02f),
-                                    AppTheme.colors.success.copy(alpha = 0.05f)
-                                )
-                            )
-                        )
-                )
-
-                Column(
-                    modifier = Modifier.padding(responsivePadding.card),
-                    verticalArrangement = Arrangement.spacedBy(responsive.medium)
-                ) {
-                    Text(
-                        text = "الإحصائيات السريعة",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    EnhancedQuickStatsItem(
-                        label = "إجمالي المبيعات اليوم",
-                        value = "1,250 ر.س",
-                        color = AppTheme.colors.success,
-                        icon = Icons.Default.AttachMoney,
-                        trend = "+12.5%"
-                    )
-
-                    EnhancedQuickStatsItem(
-                        label = "عدد الفواتير",
-                        value = "45",
-                        color = MaterialTheme.colorScheme.primary,
-                        icon = Icons.Default.Receipt,
-                        trend = "+8.2%"
-                    )
-
-                    EnhancedQuickStatsItem(
-                        label = "متوسط قيمة الفاتورة",
-                        value = "278 ر.س",
-                        color = AppTheme.colors.info,
-                        icon = Icons.Default.Analytics,
-                        trend = "+5.1%"
-                    )
-
-                    EnhancedQuickStatsItem(
-                        label = "أفضل منتج",
-                        value = "هاتف ذكي",
-                        color = AppTheme.colors.warning,
-                        icon = Icons.Default.Star,
-                        trend = "15 مبيعة"
-                    )
-                }
-            }
-        }
-    }
-}
-
-// Chart Type Button Component
-@Composable
-private fun ChartTypeButton(
-    text: String,
-    icon: ImageVector,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Button(
-        onClick = onClick,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (isSelected) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            },
-            contentColor = if (isSelected) {
-                MaterialTheme.colorScheme.onPrimary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            }
-        ),
-        shape = RoundedCornerShape(12.dp),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-        modifier = Modifier.height(36.dp)
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            modifier = Modifier.size(16.dp)
-        )
-        Spacer(modifier = Modifier.width(4.dp))
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Medium
-        )
-    }
-}
-
-// Enhanced Quick Stats Item
-@Composable
-private fun EnhancedQuickStatsItem(
-    label: String,
-    value: String,
-    color: Color,
-    icon: ImageVector,
-    trend: String
-) {
-    val responsive = ResponsiveUtils.getResponsiveSpacing()
-
-    Card(
+            ) { onClick() },
         colors = CardDefaults.cardColors(
-            containerColor = color.copy(alpha = 0.08f)
+            containerColor = if (isSelected) color.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surface
         ),
+        border = if (isSelected) BorderStroke(2.dp, color) else null,
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, color.copy(alpha = 0.2f))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(responsive.small)
-        ) {
-            RTLRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(
-                            color.copy(alpha = 0.15f),
-                            RoundedCornerShape(12.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        icon,
-                        contentDescription = null,
-                        tint = color,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                Text(
-                    text = trend,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = AppTheme.colors.success
-                )
-            }
-
-            Text(
-                text = value,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = color
-            )
-
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2
-            )
-        }
-    }
-}
-
-// Enhanced Detailed Reports Section
-@Composable
-private fun EnhancedDetailedReports(selectedType: String) {
-    val responsive = ResponsiveUtils.getResponsiveSpacing()
-    val responsivePadding = ResponsiveUtils.getResponsivePadding()
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardStyles.elevatedCardColors(),
-        shape = RoundedCornerShape(24.dp),
-        elevation = CardStyles.elevatedCardElevation(),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isHovered) 8.dp else 4.dp
+        )
     ) {
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Subtle gradient background
+            // Background gradient
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         brush = Brush.verticalGradient(
                             colors = listOf(
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.02f),
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.05f)
+                                color.copy(alpha = 0.02f),
+                                color.copy(alpha = 0.08f)
                             )
                         )
                     )
             )
 
             Column(
-                modifier = Modifier.padding(responsivePadding.card),
-                verticalArrangement = Arrangement.spacedBy(responsive.large)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                RTLRow(
+                Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Text(
-                        text = getReportTitle(selectedType),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    // Enhanced export buttons
-                    RTLRow(
-                        horizontalArrangement = Arrangement.spacedBy(responsive.small)
+                    Column(
+                        modifier = Modifier.weight(1f)
                     ) {
-                        EnhancedExportButton(
-                            text = "Excel",
-                            icon = Icons.Default.TableChart,
-                            color = AppTheme.colors.success,
-                            onClick = { /* Export to Excel */ }
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isSelected) color else MaterialTheme.colorScheme.onSurface
                         )
-
-                        EnhancedExportButton(
-                            text = "PDF",
-                            icon = Icons.Default.PictureAsPdf,
-                            color = AppTheme.colors.error,
-                            onClick = { /* Export to PDF */ }
+                        Text(
+                            text = description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp)
                         )
                     }
-                }
 
-                // Report content based on selected type
-                when (selectedType) {
-                    "sales" -> ReportsSalesContent()
-                    "inventory" -> ReportsInventoryContent()
-                    "customers" -> ReportsCustomersContent()
-                    "financial" -> ReportsFinancialContent()
-                    "suppliers" -> ReportsSuppliersContent()
-                    "returns" -> ReportsReturnsContent()
-                    "promotions" -> ReportsPromotionsContent()
-                    "tax" -> ReportsTaxContent()
-                    else -> ReportsSalesContent()
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(color.copy(alpha = 0.1f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            icon,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = color
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-// Helper function to get report title
-private fun getReportTitle(type: String): String {
-    return when (type) {
-        "sales" -> "تقرير المبيعات التفصيلي"
-        "inventory" -> "تقرير المخزون التفصيلي"
-        "customers" -> "تقرير العملاء التفصيلي"
-        "financial" -> "التقرير المالي التفصيلي"
-        "suppliers" -> "تقرير الموردين التفصيلي"
-        "returns" -> "تقرير المرتجعات التفصيلي"
-        "promotions" -> "تقرير العروض التفصيلي"
-        "tax" -> "التقرير الضريبي التفصيلي"
-        else -> "التقرير التفصيلي"
+// Real-time KPIs Dashboard
+@Composable
+private fun RealTimeKPIsDashboard(
+    kpis: Map<String, Any>?,
+    currencyFormatter: NumberFormat,
+    isLoading: Boolean
+) {
+    Card(
+        colors = CardStyles.elevatedCardColors(),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardStyles.elevatedCardElevation()
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "المؤشرات الرئيسية",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp
+                    )
+                }
+            }
+
+            if (kpis != null) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    item {
+                        KPICard(
+                            title = "مبيعات اليوم",
+                            value = currencyFormatter.format(kpis["todaysRevenue"] as? Double ?: 0.0),
+                            subtitle = "${kpis["todaysSales"] as? Int ?: 0} عملية بيع",
+                            icon = Icons.Default.TrendingUp,
+                            color = AppTheme.colors.success
+                        )
+                    }
+                    item {
+                        KPICard(
+                            title = "العملاء النشطون",
+                            value = "${kpis["activeCustomers"] as? Int ?: 0}",
+                            subtitle = "عميل نشط",
+                            icon = Icons.Default.People,
+                            color = AppTheme.colors.info
+                        )
+                    }
+                    item {
+                        KPICard(
+                            title = "قيمة المخزون",
+                            value = currencyFormatter.format(kpis["inventoryValue"] as? Double ?: 0.0),
+                            subtitle = "${kpis["lowStockItems"] as? Int ?: 0} منتج ناقص",
+                            icon = Icons.Default.Inventory,
+                            color = AppTheme.colors.warning
+                        )
+                    }
+                    item {
+                        KPICard(
+                            title = "المرتجعات المعلقة",
+                            value = "${kpis["pendingReturns"] as? Int ?: 0}",
+                            subtitle = "مرتجع معلق",
+                            icon = Icons.Default.AssignmentReturn,
+                            color = AppTheme.colors.error
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    repeat(4) {
+                        KPICardSkeleton(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
     }
 }
 
-// Report Content Components
 @Composable
-private fun ReportsSalesContent() {
-    EnhancedEmptyState(
-        icon = Icons.Default.TrendingUp,
-        title = "تقرير المبيعات",
-        description = "سيتم عرض تحليل مفصل للمبيعات اليومية والشهرية والسنوية هنا"
-    )
-}
-
-@Composable
-private fun ReportsInventoryContent() {
-    EnhancedEmptyState(
-        icon = Icons.Default.Inventory,
-        title = "تقرير المخزون",
-        description = "سيتم عرض حالة المخزون والمنتجات والتنبيهات هنا"
-    )
-}
-
-@Composable
-private fun ReportsCustomersContent() {
-    EnhancedEmptyState(
-        icon = Icons.Default.People,
-        title = "تقرير العملاء",
-        description = "سيتم عرض إحصائيات وتحليل العملاء والمبيعات لكل عميل هنا"
-    )
-}
-
-@Composable
-private fun ReportsFinancialContent() {
-    EnhancedEmptyState(
-        icon = Icons.Default.AccountBalance,
-        title = "التقرير المالي",
-        description = "سيتم عرض الأرباح والخسائر والتدفق النقدي هنا"
-    )
-}
-
-@Composable
-private fun ReportsSuppliersContent() {
-    EnhancedEmptyState(
-        icon = Icons.Default.Business,
-        title = "تقرير الموردين",
-        description = "سيتم عرض إحصائيات الموردين والمشتريات والأداء هنا"
-    )
-}
-
-@Composable
-private fun ReportsReturnsContent() {
-    EnhancedEmptyState(
-        icon = Icons.Default.AssignmentReturn,
-        title = "تقرير المرتجعات",
-        description = "سيتم عرض تحليل المرتجعات والإلغاءات والأسباب هنا"
-    )
-}
-
-@Composable
-private fun ReportsPromotionsContent() {
-    EnhancedEmptyState(
-        icon = Icons.Default.LocalOffer,
-        title = "تقرير العروض",
-        description = "سيتم عرض فعالية العروض والخصومات والنتائج هنا"
-    )
-}
-
-@Composable
-private fun ReportsTaxContent() {
-    EnhancedEmptyState(
-        icon = Icons.Default.Receipt,
-        title = "التقرير الضريبي",
-        description = "سيتم عرض الضرائب والرسوم المحصلة والتفاصيل الضريبية هنا"
-    )
-}
-
-// Enhanced Navigation Button Component with complete hover coverage
-@Composable
-private fun EnhancedNavigationButton(
+private fun KPICard(
+    title: String,
+    value: String,
+    subtitle: String,
     icon: ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit
+    color: Color
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isHovered by interactionSource.collectIsHoveredAsState()
-
-    Box(
+    Card(
         modifier = Modifier
-            .size(36.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(
-                color = when {
-                    isHovered -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-                    else -> MaterialTheme.colorScheme.surface
-                },
-                shape = RoundedCornerShape(12.dp)
-            )
-            .border(
-                width = if (isHovered) 1.5.dp else 1.dp,
-                color = when {
-                    isHovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
-                    else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                },
-                shape = RoundedCornerShape(12.dp)
-            )
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            ),
-        contentAlignment = Alignment.Center
+            .width(200.dp)
+            .height(120.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Icon(
-            icon,
-            contentDescription = contentDescription,
-            modifier = Modifier.size(18.dp),
-            tint = when {
-                isHovered -> MaterialTheme.colorScheme.primary
-                else -> MaterialTheme.colorScheme.onSurfaceVariant
+        Box(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // Background gradient
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                color.copy(alpha = 0.02f),
+                                color.copy(alpha = 0.08f)
+                            )
+                        )
+                    )
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = value,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = color
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(color.copy(alpha = 0.1f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            icon,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = color
+                        )
+                    }
+                }
+
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun KPICardSkeleton(
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.height(120.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Box(
+                        modifier = Modifier
+                            .width(80.dp)
+                            .height(16.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .width(60.dp)
+                            .height(20.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .width(100.dp)
+                    .height(14.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+            )
+        }
+    }
+}
+
+// Report Content Section
+@Composable
+private fun ReportContentSection(
+    reportType: String,
+    salesReport: ComprehensiveSalesReportDTO?,
+    customerReport: CustomerReportDTO?,
+    productReport: ProductReportDTO?,
+    inventoryReport: EnhancedInventoryReportDTO?,
+    financialReport: FinancialReportDTO?,
+    promotionReport: PromotionReportDTO?,
+    currencyFormatter: NumberFormat,
+    isLoading: Boolean,
+    error: String?,
+    onRetry: () -> Unit
+) {
+    Card(
+        colors = CardStyles.defaultCardColors(),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardStyles.defaultCardElevation()
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            Text(
+                text = getReportTitle(reportType),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            when {
+                isLoading -> {
+                    ReportLoadingSkeleton()
+                }
+                error != null -> {
+                    ReportErrorState(
+                        error = error,
+                        onRetry = onRetry
+                    )
+                }
+                else -> {
+                    when (reportType) {
+                        "sales" -> SalesReportContent(salesReport, currencyFormatter)
+                        "customers" -> CustomerReportContent(customerReport, currencyFormatter)
+                        "products" -> ProductReportContent(productReport, currencyFormatter)
+                        "inventory" -> InventoryReportContent(inventoryReport, currencyFormatter)
+                        "financial" -> FinancialReportContent(financialReport, currencyFormatter)
+                        "promotions" -> PromotionReportContent(promotionReport, currencyFormatter)
+                        else -> EmptyReportState()
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun getReportTitle(reportType: String): String {
+    return when (reportType) {
+        "sales" -> "تقرير المبيعات الشامل"
+        "customers" -> "تقرير تحليل العملاء"
+        "products" -> "تقرير أداء المنتجات"
+        "inventory" -> "تقرير حالة المخزون"
+        "financial" -> "التقرير المالي"
+        "promotions" -> "تقرير فعالية العروض"
+        else -> "التقرير"
+    }
+}
+
+@Composable
+private fun ReportLoadingSkeleton() {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Summary cards skeleton
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            items(3) {
+                Card(
+                    modifier = Modifier
+                        .width(200.dp)
+                        .height(100.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.7f)
+                                .height(16.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.5f)
+                                .height(20.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                        )
+                    }
+                }
+            }
+        }
+
+        // Chart skeleton
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(300.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
         )
     }
 }
 
-// Enhanced Export Button Component with complete hover coverage
 @Composable
-private fun EnhancedExportButton(
-    text: String,
-    icon: ImageVector,
-    color: Color,
-    onClick: () -> Unit
+private fun ReportErrorState(
+    error: String,
+    onRetry: () -> Unit
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isHovered by interactionSource.collectIsHoveredAsState()
-
-    Box(
-        modifier = Modifier
-            .height(56.dp) // Match dropdown height for consistency
-            .clip(RoundedCornerShape(12.dp))
-            .background(
-                color = when {
-                    isHovered -> color.copy(alpha = 0.1f)
-                    else -> MaterialTheme.colorScheme.surface
-                },
-                shape = RoundedCornerShape(12.dp)
-            )
-            .border(
-                width = if (isHovered) 1.5.dp else 1.dp,
-                color = when {
-                    isHovered -> color.copy(alpha = 0.6f)
-                    else -> color.copy(alpha = 0.3f)
-                },
-                shape = RoundedCornerShape(12.dp)
-            )
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            ),
-        contentAlignment = Alignment.Center
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 16.dp)
+        Icon(
+            Icons.Default.Error,
+            contentDescription = null,
+            modifier = Modifier.size(48.dp),
+            tint = AppTheme.colors.error
+        )
+
+        Text(
+            text = "حدث خطأ في تحميل التقرير",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center
+        )
+
+        Text(
+            text = error,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+
+        Button(
+            onClick = onRetry,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary
+            )
         ) {
             Icon(
-                icon,
+                Icons.Default.Refresh,
                 contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = when {
-                    isHovered -> color
-                    else -> color.copy(alpha = 0.8f)
-                }
+                modifier = Modifier.size(18.dp)
             )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("إعادة المحاولة")
+        }
+    }
+}
+
+@Composable
+private fun EmptyReportState() {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Icon(
+            Icons.Default.Analytics,
+            contentDescription = null,
+            modifier = Modifier.size(48.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Text(
+            text = "لا توجد بيانات للعرض",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+
+        Text(
+            text = "اختر فترة زمنية مختلفة أو تحقق من الفلاتر المطبقة",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+// Sales Report Content
+@Composable
+private fun SalesReportContent(
+    salesReport: ComprehensiveSalesReportDTO?,
+    currencyFormatter: NumberFormat
+) {
+    if (salesReport == null) {
+        EmptyReportState()
+        return
+    }
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        // Summary cards
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item {
+                MetricCard(
+                    title = "إجمالي المبيعات",
+                    value = "${salesReport.summary.totalSales}",
+                    change = salesReport.summary.salesGrowth?.let { "+${String.format("%.1f", it)}%" } ?: "N/A",
+                    isPositiveChange = salesReport.summary.salesGrowth?.let { it >= 0 } ?: true,
+                    icon = Icons.Default.ShoppingCart
+                )
+            }
+            item {
+                MetricCard(
+                    title = "إجمالي الإيرادات",
+                    value = currencyFormatter.format(salesReport.summary.totalRevenue),
+                    change = salesReport.summary.revenueGrowth?.let { "+${String.format("%.1f", it)}%" } ?: "N/A",
+                    isPositiveChange = salesReport.summary.revenueGrowth?.let { it >= 0 } ?: true,
+                    icon = Icons.Default.TrendingUp
+                )
+            }
+            item {
+                MetricCard(
+                    title = "متوسط قيمة الطلب",
+                    value = currencyFormatter.format(salesReport.summary.averageOrderValue),
+                    change = null,
+                    icon = Icons.Default.Receipt
+                )
+            }
+            item {
+                MetricCard(
+                    title = "العملاء الفريدون",
+                    value = "${salesReport.summary.uniqueCustomers ?: "N/A"}",
+                    change = null,
+                    icon = Icons.Default.People
+                )
+            }
+        }
+
+        // Top customers and products
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Top customers
+            Card(
+                modifier = Modifier.weight(1f),
+                colors = CardStyles.defaultCardColors()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "أفضل العملاء",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    salesReport.topCustomers.take(5).forEach { customer ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = customer.customerName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "${customer.totalOrders} طلب",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Text(
+                                text = currencyFormatter.format(customer.totalSpent),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = AppTheme.colors.success
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Top products
+            Card(
+                modifier = Modifier.weight(1f),
+                colors = CardStyles.defaultCardColors()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "أفضل المنتجات",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    salesReport.topProducts.take(5).forEach { product ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = product.productName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "${product.quantitySold} قطعة",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Text(
+                                text = currencyFormatter.format(product.revenue),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = AppTheme.colors.success
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Customer Report Content
+@Composable
+private fun CustomerReportContent(
+    customerReport: CustomerReportDTO?,
+    currencyFormatter: NumberFormat
+) {
+    if (customerReport == null) {
+        EmptyReportState()
+        return
+    }
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        // Customer summary
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item {
+                MetricCard(
+                    title = "إجمالي العملاء",
+                    value = "${customerReport.summary.totalCustomers}",
+                    icon = Icons.Default.People
+                )
+            }
+            item {
+                MetricCard(
+                    title = "العملاء النشطون",
+                    value = "${customerReport.summary.activeCustomers}",
+                    icon = Icons.Default.PersonAdd
+                )
+            }
+            item {
+                MetricCard(
+                    title = "متوسط قيمة العميل",
+                    value = currencyFormatter.format(customerReport.summary.averageCustomerValue),
+                    icon = Icons.Default.AttachMoney
+                )
+            }
+            item {
+                MetricCard(
+                    title = "معدل الاحتفاظ",
+                    value = "${String.format("%.1f", customerReport.summary.customerRetentionRate)}%",
+                    icon = Icons.Default.TrendingUp
+                )
+            }
+        }
+
+        // Customer segments
+        Card(
+            colors = CardStyles.defaultCardColors()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "شرائح العملاء",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                customerReport.segments.forEach { segment ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = segment.segmentName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "${segment.customerCount} عميل (${String.format("%.1f", segment.percentage)}%)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text(
+                            text = currencyFormatter.format(segment.totalRevenue),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = AppTheme.colors.success
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Placeholder implementations for other report types
+@Composable
+private fun ProductReportContent(
+    productReport: ProductReportDTO?,
+    currencyFormatter: NumberFormat
+) {
+    if (productReport == null) {
+        EmptyReportState()
+        return
+    }
+
+    Text(
+        text = "تقرير المنتجات قيد التطوير",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
+@Composable
+private fun InventoryReportContent(
+    inventoryReport: EnhancedInventoryReportDTO?,
+    currencyFormatter: NumberFormat
+) {
+    if (inventoryReport == null) {
+        EmptyReportState()
+        return
+    }
+
+    Text(
+        text = "تقرير المخزون قيد التطوير",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
+@Composable
+private fun FinancialReportContent(
+    financialReport: FinancialReportDTO?,
+    currencyFormatter: NumberFormat
+) {
+    if (financialReport == null) {
+        EmptyReportState()
+        return
+    }
+
+    Text(
+        text = "التقرير المالي قيد التطوير",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
+@Composable
+private fun PromotionReportContent(
+    promotionReport: PromotionReportDTO?,
+    currencyFormatter: NumberFormat
+) {
+    if (promotionReport == null) {
+        EmptyReportState()
+        return
+    }
+
+    Text(
+        text = "تقرير العروض قيد التطوير",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
+// Dialog Components
+@Composable
+private fun CustomDateRangeDialog(
+    startDate: LocalDate?,
+    endDate: LocalDate?,
+    onStartDateSelected: (LocalDate) -> Unit,
+    onEndDateSelected: (LocalDate) -> Unit,
+    onConfirm: (LocalDate, LocalDate) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
             Text(
-                text = text,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Medium,
-                color = when {
-                    isHovered -> color
-                    else -> color.copy(alpha = 0.8f)
-                }
+                text = "اختيار فترة مخصصة",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
             )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "اختر تاريخ البداية والنهاية للتقرير",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Date selection UI would go here
+                // For now, showing placeholder
+                Text(
+                    text = "منتقي التاريخ قيد التطوير",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val start = startDate ?: Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date.minus(30, DateTimeUnit.DAY)
+                    val end = endDate ?: Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+                    onConfirm(start, end)
+                }
+            ) {
+                Text("تأكيد")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("إلغاء")
+            }
+        }
+    )
+}
+
+@Composable
+private fun ExportReportDialog(
+    onExport: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "تصدير التقرير",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "اختر تنسيق التصدير:",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                val exportFormats = listOf(
+                    "PDF" to Icons.Default.PictureAsPdf,
+                    "Excel" to Icons.Default.TableChart,
+                    "CSV" to Icons.Default.Description
+                )
+
+                exportFormats.forEach { (format, icon) ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onExport(format) },
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                icon,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = format,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("إلغاء")
+            }
+        }
+    )
+}
+
+@Composable
+private fun ReportFiltersDialog(
+    currentFilters: ui.viewmodels.ReportFilters,
+    onFiltersApplied: (ui.viewmodels.ReportFilters) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var filters by remember { mutableStateOf(currentFilters) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "فلاتر التقرير",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "تخصيص فلاتر التقرير:",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                // Include inactive items toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "تضمين العناصر غير النشطة",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Switch(
+                        checked = filters.includeInactive,
+                        onCheckedChange = { filters = filters.copy(includeInactive = it) }
+                    )
+                }
+
+                // Placeholder for other filter options
+                Text(
+                    text = "فلاتر إضافية قيد التطوير",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onFiltersApplied(filters) }
+            ) {
+                Text("تطبيق")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("إلغاء")
+            }
+        }
+    )
+}
+
+// Metric Card Component
+@Composable
+private fun MetricCard(
+    title: String,
+    value: String,
+    change: String? = null,
+    isPositiveChange: Boolean = true,
+    icon: ImageVector
+) {
+    Card(
+        modifier = Modifier
+            .width(200.dp)
+            .height(100.dp),
+        colors = CardStyles.defaultCardColors(),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardStyles.defaultCardElevation()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = value,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            change?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isPositiveChange) AppTheme.colors.success else AppTheme.colors.error,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
     }
 }

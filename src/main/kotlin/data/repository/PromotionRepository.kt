@@ -50,16 +50,20 @@ class PromotionRepository(
 
         val result = promotionApiService.getAllPromotions(page, size, sortBy, sortDir, isActive)
 
-        result.onSuccess { pageResponse ->
-            if (page == 0) {
-                _promotions.value = pageResponse.content
-            } else {
-                _promotions.value = _promotions.value + pageResponse.content
+        when (result) {
+            is NetworkResult.Success -> {
+                if (page == 0) {
+                    _promotions.value = result.data.content
+                } else {
+                    _promotions.value = _promotions.value + result.data.content
+                }
             }
-        }
-
-        result.onError { exception ->
-            _error.value = exception.message
+            is NetworkResult.Error -> {
+                _error.value = result.exception.message
+            }
+            is NetworkResult.Loading -> {
+                // Handle loading state if needed
+            }
         }
 
         _isLoading.value = false
@@ -130,12 +134,16 @@ class PromotionRepository(
 
         val result = promotionApiService.getActivePromotions()
 
-        result.onSuccess { promotions ->
-            _activePromotions.value = promotions
-        }
-
-        result.onError { exception ->
-            _error.value = exception.message
+        when (result) {
+            is NetworkResult.Success -> {
+                _activePromotions.value = result.data
+            }
+            is NetworkResult.Error -> {
+                _error.value = result.exception.message
+            }
+            is NetworkResult.Loading -> {
+                // Handle loading state if needed
+            }
         }
 
         _isLoading.value = false
@@ -259,6 +267,85 @@ class PromotionRepository(
     }
 
     /**
+     * Validate coupon code and return promotion details
+     */
+    suspend fun validateCouponCode(couponCode: String): NetworkResult<PromotionDTO> {
+        _isLoading.value = true
+        _error.value = null
+
+        val result = promotionApiService.validateCouponCode(couponCode)
+
+        result.onError { exception ->
+            _error.value = exception.message
+        }
+
+        _isLoading.value = false
+        return result
+    }
+
+    /**
+     * Check if promotion is currently valid for use
+     */
+    fun isPromotionValid(promotion: PromotionDTO, orderAmount: Double, customerId: Long? = null): Boolean {
+        // Check if promotion is active
+        if (!promotion.isActive) return false
+
+        // Check date range
+        val now = System.currentTimeMillis()
+        try {
+            val startDate = java.time.Instant.parse(promotion.startDate).toEpochMilli()
+            val endDate = java.time.Instant.parse(promotion.endDate).toEpochMilli()
+            if (now < startDate || now > endDate) return false
+        } catch (e: Exception) {
+            return false
+        }
+
+        // Check minimum order amount
+        promotion.minimumOrderAmount?.let { minAmount ->
+            if (orderAmount < minAmount) return false
+        }
+
+        // Check usage limit
+        promotion.usageLimit?.let { limit ->
+            val currentUsage = promotion.usageCount ?: 0
+            if (currentUsage >= limit) return false
+        }
+
+        // TODO: Add customer eligibility check when customer service is available
+        // For now, assume all customers are eligible
+
+        return true
+    }
+
+    /**
+     * Calculate discount amount for a promotion
+     */
+    fun calculateDiscount(promotion: PromotionDTO, orderAmount: Double): Double {
+        if (!isPromotionValid(promotion, orderAmount)) return 0.0
+
+        val discount = when (promotion.type) {
+            "PERCENTAGE" -> {
+                val percentageDiscount = orderAmount * (promotion.discountValue / 100.0)
+                // Apply maximum discount limit if specified
+                promotion.maximumDiscountAmount?.let { maxDiscount ->
+                    minOf(percentageDiscount, maxDiscount)
+                } ?: percentageDiscount
+            }
+            "FIXED_AMOUNT" -> {
+                // Don't exceed the order amount
+                minOf(promotion.discountValue, orderAmount)
+            }
+            "FREE_SHIPPING" -> {
+                // For free shipping, return a fixed amount (could be configurable)
+                10.0 // Assuming $10 shipping cost
+            }
+            else -> 0.0
+        }
+
+        return maxOf(0.0, discount)
+    }
+
+    /**
      * Refresh all promotion data
      */
     suspend fun refreshAllData() {
@@ -281,31 +368,28 @@ class PromotionRepository(
             // Get all promotions and filter for expired ones
             val allPromotionsResult = promotionApiService.getAllPromotions(page = 0, size = 1000)
 
-            when (allPromotionsResult) {
-                is NetworkResult.Success -> {
-                    val currentTime = System.currentTimeMillis()
-                    val expiredPromotions = allPromotionsResult.data.content.filter { promotion ->
-                        try {
-                            // Parse end date and check if it's in the past
-                            val endDate = java.time.Instant.parse(promotion.endDate)
-                            endDate.toEpochMilli() < currentTime
-                        } catch (e: Exception) {
-                            println("⚠️ Error parsing date for promotion ${promotion.id}: ${e.message}")
-                            false
-                        }
+            if (allPromotionsResult is NetworkResult.Success) {
+                val currentTime = System.currentTimeMillis()
+                val expiredPromotions = allPromotionsResult.data.content.filter { promotion ->
+                    try {
+                        // Parse end date and check if it's in the past
+                        val endDate = java.time.Instant.parse(promotion.endDate)
+                        endDate.toEpochMilli() < currentTime
+                    } catch (e: Exception) {
+                        println("⚠️ Error parsing date for promotion ${promotion.id}: ${e.message}")
+                        false
                     }
+                }
 
-                    _expiredPromotions.value = expiredPromotions
-                    println("✅ PromotionRepository - Fallback loaded ${expiredPromotions.size} expired promotions")
-                    NetworkResult.Success(expiredPromotions)
-                }
-                is NetworkResult.Error -> {
-                    println("❌ PromotionRepository - Fallback also failed: ${allPromotionsResult.exception.message}")
-                    NetworkResult.Error(allPromotionsResult.exception)
-                }
-                is NetworkResult.Loading -> {
-                    NetworkResult.Loading
-                }
+                _expiredPromotions.value = expiredPromotions
+                println("✅ PromotionRepository - Fallback loaded ${expiredPromotions.size} expired promotions")
+                NetworkResult.Success(expiredPromotions)
+            } else if (allPromotionsResult is NetworkResult.Error) {
+                println("❌ PromotionRepository - Fallback also failed: ${allPromotionsResult.exception.message}")
+                allPromotionsResult
+            } else {
+                // Loading state - return empty list as fallback
+                NetworkResult.Success(emptyList())
             }
         } catch (e: Exception) {
             println("❌ PromotionRepository - Exception in fallback: ${e.message}")
@@ -324,35 +408,39 @@ class PromotionRepository(
             // Get all promotions and filter for scheduled ones
             val allPromotionsResult = promotionApiService.getAllPromotions(page = 0, size = 1000)
 
-            when (allPromotionsResult) {
-                is NetworkResult.Success -> {
-                    val currentTime = System.currentTimeMillis()
-                    val scheduledPromotions = allPromotionsResult.data.content.filter { promotion ->
-                        try {
-                            // Parse start date and check if it's in the future
-                            val startDate = java.time.Instant.parse(promotion.startDate)
-                            startDate.toEpochMilli() > currentTime
-                        } catch (e: Exception) {
-                            println("⚠️ Error parsing date for promotion ${promotion.id}: ${e.message}")
-                            false
-                        }
+            if (allPromotionsResult is NetworkResult.Success) {
+                val currentTime = System.currentTimeMillis()
+                val scheduledPromotions = allPromotionsResult.data.content.filter { promotion ->
+                    try {
+                        // Parse start date and check if it's in the future
+                        val startDate = java.time.Instant.parse(promotion.startDate)
+                        startDate.toEpochMilli() > currentTime
+                    } catch (e: Exception) {
+                        println("⚠️ Error parsing date for promotion ${promotion.id}: ${e.message}")
+                        false
                     }
+                }
 
-                    _scheduledPromotions.value = scheduledPromotions
-                    println("✅ PromotionRepository - Fallback loaded ${scheduledPromotions.size} scheduled promotions")
-                    NetworkResult.Success(scheduledPromotions)
-                }
-                is NetworkResult.Error -> {
-                    println("❌ PromotionRepository - Fallback also failed: ${allPromotionsResult.exception.message}")
-                    NetworkResult.Error(allPromotionsResult.exception)
-                }
-                is NetworkResult.Loading -> {
-                    NetworkResult.Loading
-                }
+                _scheduledPromotions.value = scheduledPromotions
+                println("✅ PromotionRepository - Fallback loaded ${scheduledPromotions.size} scheduled promotions")
+                NetworkResult.Success(scheduledPromotions)
+            } else if (allPromotionsResult is NetworkResult.Error) {
+                println("❌ PromotionRepository - Fallback also failed: ${allPromotionsResult.exception.message}")
+                allPromotionsResult
+            } else {
+                // Loading state - return empty list as fallback
+                NetworkResult.Success(emptyList())
             }
         } catch (e: Exception) {
             println("❌ PromotionRepository - Exception in fallback: ${e.message}")
             NetworkResult.Error(e.toApiException())
         }
+    }
+
+    /**
+     * Check if coupon code is unique
+     */
+    suspend fun checkCouponCodeUniqueness(couponCode: String): NetworkResult<Boolean> {
+        return promotionApiService.checkCouponCodeUniqueness(couponCode)
     }
 }

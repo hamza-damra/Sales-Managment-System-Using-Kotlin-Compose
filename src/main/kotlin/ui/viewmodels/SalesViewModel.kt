@@ -4,6 +4,7 @@ import data.api.*
 import data.repository.SalesRepository
 import data.repository.CustomerRepository
 import data.repository.ProductRepository
+import data.repository.PromotionRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.*
@@ -20,7 +21,8 @@ import kotlinx.datetime.toLocalDateTime
 class SalesViewModel(
     private val salesRepository: SalesRepository,
     private val customerRepository: CustomerRepository,
-    private val productRepository: ProductRepository
+    private val productRepository: ProductRepository,
+    private val promotionRepository: PromotionRepository
 ) {
     private val viewModelScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     
@@ -54,18 +56,39 @@ class SalesViewModel(
     
     private val _statusFilter = MutableStateFlow<String?>(null)
     val statusFilter: StateFlow<String?> = _statusFilter.asStateFlow()
-    
+
+    // Promotion-related state
+    private val _appliedPromotion = MutableStateFlow<PromotionDTO?>(null)
+    val appliedPromotion: StateFlow<PromotionDTO?> = _appliedPromotion.asStateFlow()
+
+    private val _promotionCode = MutableStateFlow("")
+    val promotionCode: StateFlow<String> = _promotionCode.asStateFlow()
+
+    private val _promotionDiscount = MutableStateFlow(0.0)
+    val promotionDiscount: StateFlow<Double> = _promotionDiscount.asStateFlow()
+
+    private val _isValidatingPromotion = MutableStateFlow(false)
+    val isValidatingPromotion: StateFlow<Boolean> = _isValidatingPromotion.asStateFlow()
+
+    private val _promotionError = MutableStateFlow<String?>(null)
+    val promotionError: StateFlow<String?> = _promotionError.asStateFlow()
+
     // Computed properties
-    val cartTotal: StateFlow<Double> = _selectedProducts.map { items ->
-        items.sumOf { it.totalPrice ?: (it.unitPrice * it.quantity) }
-    }.stateIn(viewModelScope, SharingStarted.Lazily, 0.0)
-    
     val cartSubtotal: StateFlow<Double> = _selectedProducts.map { items ->
         items.sumOf { it.subtotal ?: (it.unitPrice * it.quantity) }
     }.stateIn(viewModelScope, SharingStarted.Lazily, 0.0)
-    
+
     val cartTax: StateFlow<Double> = cartSubtotal.map { subtotal ->
         subtotal * 0.15 // 15% tax rate
+    }.stateIn(viewModelScope, SharingStarted.Lazily, 0.0)
+
+    val cartTotal: StateFlow<Double> = combine(
+        _selectedProducts,
+        _promotionDiscount,
+        cartTax
+    ) { items, discount, tax ->
+        val subtotal = items.sumOf { it.totalPrice ?: (it.unitPrice * it.quantity) }
+        maxOf(0.0, subtotal - discount + tax)
     }.stateIn(viewModelScope, SharingStarted.Lazily, 0.0)
     
     // Filtered sales based on search and status
@@ -180,6 +203,7 @@ class SalesViewModel(
         _selectedProducts.value = emptyList()
         _selectedCustomer.value = null
         _selectedPaymentMethod.value = "CASH"
+        clearPromotion()
         // Don't clear lastCompletedSale here - it's needed for the success dialog
     }
 
@@ -207,7 +231,7 @@ class SalesViewModel(
     }
     
     // Sale operations
-    suspend fun createSale(): NetworkResult<SaleDTO> {
+    suspend fun createSale(couponCode: String? = null): NetworkResult<SaleDTO> {
         _isProcessingSale.value = true
 
         // Validation before creating sale
@@ -231,8 +255,12 @@ class SalesViewModel(
             status = "PENDING",
             items = _selectedProducts.value,
             subtotal = cartSubtotal.value,
-            discountAmount = 0.0,
+            discountAmount = _promotionDiscount.value,
             discountPercentage = 0.0,
+            appliedPromotionId = _appliedPromotion.value?.id,
+            appliedPromotionCode = _appliedPromotion.value?.couponCode,
+            appliedPromotionName = _appliedPromotion.value?.name,
+            promotionDiscountAmount = _promotionDiscount.value,
             taxAmount = cartTax.value,
             taxPercentage = 15.0,
             shippingCost = 0.0,
@@ -262,16 +290,18 @@ class SalesViewModel(
             println("🔍 Item $index: Product ID=${item.productId}, Quantity=${item.quantity}, Unit Price=${item.unitPrice}")
         }
         
-        val result = salesRepository.createSale(saleDTO)
-        
+        val result = salesRepository.createSale(saleDTO, couponCode)
+
         result.onSuccess { createdSale ->
             println("🔍 SalesViewModel - Sale created successfully:")
             println("🔍 Created Sale ID: ${createdSale.id}")
             println("🔍 Created Sale Total: ${createdSale.totalAmount}")
+            println("🔍 Applied Promotions: ${createdSale.appliedPromotions?.size ?: 0}")
+            println("🔍 Total Savings: ${createdSale.totalSavings ?: 0.0}")
             _lastCompletedSale.value = createdSale
             // Don't clear cart immediately - let the success dialog handle it
         }
-        
+
         _isProcessingSale.value = false
         return result
     }
@@ -286,6 +316,93 @@ class SalesViewModel(
     
     suspend fun refreshSales() {
         salesRepository.loadSales()
+    }
+
+    // Enhanced promotion methods
+    suspend fun applyPromotionToSale(saleId: Long, couponCode: String): NetworkResult<SaleDTO> {
+        _isValidatingPromotion.value = true
+        _promotionError.value = null
+
+        val result = salesRepository.applyPromotionToSale(saleId, couponCode)
+
+        result.onSuccess { updatedSale ->
+            println("🔍 SalesViewModel - Promotion applied successfully:")
+            println("🔍 Sale ID: ${updatedSale.id}")
+            println("🔍 Applied Promotions: ${updatedSale.appliedPromotions?.size ?: 0}")
+            println("🔍 Total Savings: ${updatedSale.totalSavings ?: 0.0}")
+        }.onError { exception ->
+            _promotionError.value = exception.message
+        }
+
+        _isValidatingPromotion.value = false
+        return result
+    }
+
+    suspend fun removePromotionFromSale(saleId: Long, promotionId: Long): NetworkResult<SaleDTO> {
+        val result = salesRepository.removePromotionFromSale(saleId, promotionId)
+
+        result.onSuccess { updatedSale ->
+            println("🔍 SalesViewModel - Promotion removed successfully:")
+            println("🔍 Sale ID: ${updatedSale.id}")
+            println("🔍 Remaining Promotions: ${updatedSale.appliedPromotions?.size ?: 0}")
+        }
+
+        return result
+    }
+
+    suspend fun getEligiblePromotionsForSale(saleId: Long): NetworkResult<List<PromotionDTO>> {
+        return salesRepository.getEligiblePromotionsForSale(saleId)
+    }
+
+    // Enhanced promotion validation
+    suspend fun validateAndApplyPromotion(code: String) {
+        if (code.isBlank()) {
+            _promotionError.value = "يرجى إدخال رمز الكوبون"
+            return
+        }
+
+        _isValidatingPromotion.value = true
+        _promotionError.value = null
+
+        try {
+            // For now, we'll validate by trying to find the promotion
+            // In a real implementation, you might want a separate validation endpoint
+            val promotions = promotionRepository.promotions.value
+            val promotion = promotions.find { it.couponCode == code && it.isActive }
+
+            if (promotion != null) {
+                // Calculate discount based on promotion type
+                val currentTotal = cartSubtotal.value
+                val discount = when (promotion.type) {
+                    "PERCENTAGE" -> {
+                        val discountAmount = currentTotal * (promotion.discountValue / 100)
+                        promotion.maximumDiscountAmount?.let { maxDiscount ->
+                            minOf(discountAmount, maxDiscount)
+                        } ?: discountAmount
+                    }
+                    "FIXED_AMOUNT" -> promotion.discountValue
+                    else -> 0.0
+                }
+
+                // Check minimum order amount
+                if (promotion.minimumOrderAmount != null && currentTotal < promotion.minimumOrderAmount) {
+                    _promotionError.value = "الحد الأدنى للطلب هو ${promotion.minimumOrderAmount}"
+                    _isValidatingPromotion.value = false
+                    return
+                }
+
+                _appliedPromotion.value = promotion
+                _promotionDiscount.value = discount
+                _promotionCode.value = code
+                println("🔍 SalesViewModel - Promotion applied: ${promotion.name}, Discount: $discount")
+            } else {
+                _promotionError.value = "رمز الكوبون غير صحيح أو منتهي الصلاحية"
+            }
+        } catch (e: Exception) {
+            _promotionError.value = "خطأ في التحقق من الكوبون: ${e.message}"
+        }
+
+        _isValidatingPromotion.value = false
     }
     
     suspend fun loadMoreSales() {
@@ -309,5 +426,22 @@ class SalesViewModel(
     
     fun getTotalRevenue(): Double {
         return salesRepository.getTotalRevenue()
+    }
+
+    // Promotion-related methods
+    fun updatePromotionCode(code: String) {
+        _promotionCode.value = code.uppercase()
+        _promotionError.value = null
+    }
+
+    fun clearPromotion() {
+        _appliedPromotion.value = null
+        _promotionCode.value = ""
+        _promotionDiscount.value = 0.0
+        _promotionError.value = null
+    }
+
+    fun clearPromotionError() {
+        _promotionError.value = null
     }
 }

@@ -13,6 +13,7 @@ data class Category(
     val imageUrl: String? = null,
     val icon: String? = null,
     val colorCode: String? = null,
+    val inventoryId: Long? = null, // Associated inventory/warehouse ID
     val createdAt: LocalDateTime? = null,
     val updatedAt: LocalDateTime? = null,
     val productCount: Int = 0

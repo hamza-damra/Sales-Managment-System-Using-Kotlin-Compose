@@ -48,7 +48,6 @@ import ui.utils.ResponsiveUtils.getResponsivePadding
 import ui.utils.ResponsiveUtils.getScreenInfo
 import ui.viewmodels.ReturnsViewModel
 import androidx.compose.runtime.collectAsState
-import services.ReturnReceiptService
 import utils.FileDialogUtils
 import java.io.File
 
@@ -572,11 +571,11 @@ fun ReturnsScreen() {
                                     coroutineScope.launch {
                                         isGeneratingPdf = true
                                         try {
-                                            val receiptsDir = services.ReturnReceiptService.getReceiptsDirectory()
-                                            val fileName = services.ReturnReceiptService.generateReturnReceiptFilename(returnItem.id?.toInt() ?: 0)
+                                            val receiptsDir = services.CanvasReturnReceiptService.getReceiptsDirectory()
+                                            val fileName = services.CanvasReturnReceiptService.generateReturnReceiptFilename(returnItem.id?.toInt() ?: 0)
                                             val pdfFile = File(receiptsDir, fileName)
 
-                                            val success = services.ReturnReceiptService.generateReturnReceipt(
+                                            val success = services.CanvasReturnReceiptService.generateReturnReceipt(
                                                 returnItem = returnItem,
                                                 outputFile = pdfFile
                                             )
@@ -584,7 +583,7 @@ fun ReturnsScreen() {
                                             if (success) {
                                                 generatedPdfFile = pdfFile
                                                 showPdfViewer = true
-                                                exportMessage = "تم إنشاء إيصال الإرجاع بنجاح"
+                                                exportMessage = "تم إنشاء إيصال الإرجاع بنجاح باستخدام Canvas"
                                             } else {
                                                 exportMessage = "خطأ في إنشاء إيصال الإرجاع"
                                             }

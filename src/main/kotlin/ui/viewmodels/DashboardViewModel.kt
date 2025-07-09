@@ -48,18 +48,66 @@ class DashboardViewModel(
                     when (result) {
                         is NetworkResult.Success -> {
                             println("✅ DashboardViewModel - Dashboard data loaded successfully")
+
+                            // Log the received data for debugging
+                            val data = result.data
+                            println("📊 Received data - Period: ${data?.period}")
+                            println("📊 Received data - Sales: ${data?.sales?.totalSales}")
+                            println("📊 Received data - Revenue: ${data?.sales?.totalRevenue}")
+                            println("📊 Received data - Customers: ${data?.customers?.totalCustomers}")
+
+                            // Improved mock data detection
+                            val isUsingMockData = data?.period?.contains("بيانات تجريبية") == true ||
+                                                 (data?.period?.contains("آخر 30 يوم") == true &&
+                                                  data.sales?.totalSales == 156) // Mock data indicator
+
+                            // Additional validation - check if we have real data
+                            val hasRealData = data?.sales?.totalRevenue != null &&
+                                            data.sales.totalRevenue > 0 &&
+                                            data.customers?.totalCustomers != null &&
+                                            data.customers.totalCustomers > 0
+
                             _uiState.value = _uiState.value.copy(
                                 isLoading = false,
-                                dashboardSummary = result.data,
+                                dashboardSummary = data,
                                 error = null,
-                                lastUpdated = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+                                lastUpdated = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()),
+                                isUsingMockData = isUsingMockData
                             )
+
+                            if (isUsingMockData) {
+                                println("ℹ️ DashboardViewModel - Using mock data (API unavailable)")
+                            } else if (hasRealData) {
+                                println("✅ DashboardViewModel - Using real data from API")
+                                println("📊 Real data values - Revenue: ${data.sales?.totalRevenue}, Sales: ${data.sales?.totalSales}, Customers: ${data.customers?.totalCustomers}")
+                            } else {
+                                println("⚠️ DashboardViewModel - Data received but appears to be empty/null")
+                                println("📊 Data check - Revenue: ${data?.sales?.totalRevenue}, Sales: ${data?.sales?.totalSales}, Customers: ${data?.customers?.totalCustomers}")
+                            }
+
+                            // Log final UI state
+                            println("📊 Final UI State - hasData: ${_uiState.value.hasData}")
+                            println("📊 Final UI State - isLoading: ${_uiState.value.isLoading}")
+                            println("📊 Final UI State - error: ${_uiState.value.error}")
                         }
                         is NetworkResult.Error -> {
                             println("❌ DashboardViewModel - Error loading dashboard: ${result.exception.message}")
+
+                            // Check if it's an authentication error
+                            val isAuthError = result.exception.message?.contains("Authentication", ignoreCase = true) == true ||
+                                             result.exception.message?.contains("401", ignoreCase = true) == true ||
+                                             result.exception.message?.contains("Unauthorized", ignoreCase = true) == true ||
+                                             result.exception is data.api.ApiException.AuthenticationError
+
+                            val errorMessage = if (isAuthError) {
+                                "يرجى تسجيل الدخول لعرض بيانات لوحة التحكم"
+                            } else {
+                                result.exception.message ?: "فشل في تحميل بيانات لوحة التحكم"
+                            }
+
                             _uiState.value = _uiState.value.copy(
                                 isLoading = false,
-                                error = result.exception.message ?: "Failed to load dashboard data"
+                                error = errorMessage
                             )
                         }
                         is NetworkResult.Loading -> {
@@ -101,7 +149,8 @@ data class DashboardUiState(
     val isLoading: Boolean = false,
     val dashboardSummary: DashboardSummaryDTO? = null,
     val error: String? = null,
-    val lastUpdated: kotlinx.datetime.LocalDateTime? = null
+    val lastUpdated: kotlinx.datetime.LocalDateTime? = null,
+    val isUsingMockData: Boolean = false
 ) {
     val hasData: Boolean get() = dashboardSummary != null
     val hasError: Boolean get() = error != null

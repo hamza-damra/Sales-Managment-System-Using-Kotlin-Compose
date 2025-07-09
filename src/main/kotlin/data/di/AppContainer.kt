@@ -73,6 +73,14 @@ class AppContainer {
         CategoryApiService(httpClient)
     }
 
+    val inventoryApiService: InventoryApiService by lazy {
+        InventoryApiService(httpClient)
+    }
+
+    val stockMovementApiService: StockMovementApiService by lazy {
+        StockMovementApiService(httpClient)
+    }
+
     // Repositories
     val customerRepository: CustomerRepository by lazy { 
         CustomerRepository(customerApiService) 
@@ -110,13 +118,21 @@ class AppContainer {
         CategoryRepository(categoryApiService)
     }
 
+    val inventoryRepository: InventoryRepository by lazy {
+        InventoryRepository(inventoryApiService)
+    }
+
+    val stockMovementRepository: StockMovementRepository by lazy {
+        StockMovementRepository(stockMovementApiService)
+    }
+
     // ViewModels
     val dashboardViewModel: DashboardViewModel by lazy {
         DashboardViewModel(dashboardRepository)
     }
 
     val salesViewModel: SalesViewModel by lazy {
-        SalesViewModel(salesRepository, customerRepository, productRepository)
+        SalesViewModel(salesRepository, customerRepository, productRepository, promotionRepository)
     }
 
     val productViewModel: ProductViewModel by lazy {
@@ -133,6 +149,18 @@ class AppContainer {
 
     val returnsViewModel: ReturnsViewModel by lazy {
         ReturnsViewModel(returnRepository, customerRepository, productRepository)
+    }
+
+    val inventoryViewModel: InventoryViewModel by lazy {
+        InventoryViewModel(inventoryRepository, stockMovementRepository, productRepository, categoryRepository)
+    }
+
+    val promotionViewModel: ui.viewmodels.PromotionViewModel by lazy {
+        ui.viewmodels.PromotionViewModel(promotionRepository)
+    }
+
+    val reportsViewModel: ui.viewmodels.ReportsViewModel by lazy {
+        ui.viewmodels.ReportsViewModel(reportsRepository)
     }
 
     /**

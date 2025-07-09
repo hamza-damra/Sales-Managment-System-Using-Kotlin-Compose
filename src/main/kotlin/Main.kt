@@ -163,22 +163,28 @@ fun MainAppContent(appContainer: AppContainer) {
                         salesRepository = appContainer.salesRepository,
                         customerRepository = appContainer.customerRepository,
                         productRepository = appContainer.productRepository,
+                        promotionRepository = appContainer.promotionRepository,
                         notificationService = appContainer.notificationService
                     )
                     Screen.PRODUCTS -> ProductsScreen(
                         productViewModel = appContainer.productViewModel
                     )
                     Screen.CATEGORIES -> CategoriesScreen(
-                        categoryViewModel = appContainer.categoryViewModel
+                        categoryViewModel = appContainer.categoryViewModel,
+                        inventoryViewModel = appContainer.inventoryViewModel
                     )
                     Screen.CUSTOMERS -> CustomersScreen()
-                    Screen.INVENTORY -> InventoryScreen(SalesDataManager()) // TODO: Replace with ViewModel
+                    Screen.INVENTORY -> InventoryScreen(
+                        inventoryViewModel = appContainer.inventoryViewModel
+                    )
                     Screen.SUPPLIERS -> SuppliersScreen(
                         supplierViewModel = appContainer.supplierViewModel
                     )
                     Screen.RETURNS -> ReturnsScreen() // TODO: Replace with ViewModel
-                    Screen.PROMOTIONS -> PromotionsScreen() // TODO: Replace with ViewModel
-                    Screen.REPORTS -> ReportsScreen() // TODO: Replace with ViewModel
+                    Screen.PROMOTIONS -> PromotionsScreen(promotionViewModel = appContainer.promotionViewModel)
+                    Screen.REPORTS -> ReportsScreen(
+                        reportsViewModel = appContainer.reportsViewModel
+                    )
                     Screen.SETTINGS -> SettingsScreen() // TODO: Replace with ViewModel
                 }
             }

@@ -26,6 +26,47 @@ object HttpClientProvider {
         }
         return _client!!
     }
+
+    /**
+     * Create a simple HTTP client without authentication for testing
+     */
+    fun create(): HttpClient {
+        return HttpClient(CIO) {
+            // JSON Configuration
+            install(ContentNegotiation) {
+                json(Json {
+                    ignoreUnknownKeys = true
+                    isLenient = true
+                    encodeDefaults = true
+                    prettyPrint = true
+                    coerceInputValues = true
+                })
+            }
+
+            // Logging
+            install(Logging) {
+                logger = Logger.DEFAULT
+                level = LogLevel.ALL
+                filter { request ->
+                    request.url.host.contains("localhost")
+                }
+            }
+
+            // Timeout Configuration
+            install(HttpTimeout) {
+                requestTimeoutMillis = ApiConfig.Http.REQUEST_TIMEOUT
+                connectTimeoutMillis = ApiConfig.Http.CONNECT_TIMEOUT
+                socketTimeoutMillis = ApiConfig.Http.SOCKET_TIMEOUT
+            }
+
+            // Default Headers and Base URL
+            defaultRequest {
+                url(ApiConfig.BASE_URL)
+                header(HttpHeaders.ContentType, ApiConfig.Http.CONTENT_TYPE)
+                header(HttpHeaders.Accept, ApiConfig.Http.ACCEPT)
+            }
+        }
+    }
     
     private fun createHttpClient(tokenManager: TokenManager): HttpClient {
         return HttpClient(CIO) {
@@ -126,8 +167,9 @@ object HttpClientProvider {
                 }
             }
             
-            // Default Headers
+            // Default Headers and Base URL
             defaultRequest {
+                url(ApiConfig.BASE_URL)
                 header(HttpHeaders.ContentType, ApiConfig.Http.CONTENT_TYPE)
                 header(HttpHeaders.Accept, ApiConfig.Http.ACCEPT)
             }
