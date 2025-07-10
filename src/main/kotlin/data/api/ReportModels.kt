@@ -2,6 +2,9 @@ package data.api
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.doubleOrNull
 
 // Note: DashboardSummaryDTO is now defined in ApiModels.kt
 
@@ -16,6 +19,13 @@ data class StandardReportResponse<T>(
     val errorDetails: String? = null
 )
 
+/**
+ * Metadata for report responses containing execution details and applied filters.
+ *
+ * Note: appliedFilters and pagination are JsonElement to handle dynamic structures
+ * from the backend (objects, arrays, or primitives). Use extension functions
+ * like getFilterBoolean(), getFilterString(), etc. for safe access.
+ */
 @Serializable
 data class ReportMetadata(
     val reportType: String,
@@ -23,8 +33,8 @@ data class ReportMetadata(
     val generatedAt: String,
     val generatedBy: String? = null,
     val period: ReportPeriodDTO? = null,
-    val appliedFilters: String? = null,
-    val pagination: String? = null,
+    val appliedFilters: JsonElement? = null, // Can be object, array, or primitive
+    val pagination: JsonElement? = null,     // Can be object, array, or primitive
     val totalRecords: Long? = null,
     val executionTimeMs: Long? = null,
     val version: String? = null,
@@ -183,9 +193,232 @@ data class SalesReportSummaryDTO(
     val averageOrderValue: Double
 )
 
-// Customer Reports
+// Customer Reports - Updated to match new comprehensive backend response structure
 @Serializable
 data class CustomerReportDTO(
+    val customerSegmentation: CustomerSegmentationData? = null,
+    val acquisitionMetrics: CustomerAcquisitionData? = null,
+    val lifetimeValueAnalysis: CustomerLifetimeValueData? = null,
+    val churnAnalysis: CustomerChurnData? = null,
+    val behaviorAnalysis: CustomerBehaviorData? = null
+)
+
+// Customer Segmentation Data - matches API response structure
+@Serializable
+data class CustomerSegmentationData(
+    val segments: CustomerSegments? = null,
+    val totalCustomers: Long? = null,
+    val customerDetails: CustomerSegmentDetails? = null,
+    val summary: CustomerSegmentSummary? = null,
+    val thresholds: CustomerSegmentThresholds? = null
+)
+
+@Serializable
+data class CustomerSegments(
+    val lowValue: CustomerSegmentInfo? = null,
+    val mediumValue: CustomerSegmentInfo? = null,
+    val highValue: CustomerSegmentInfo? = null,
+    val newCustomers: CustomerSegmentInfo? = null,
+    val atRiskCustomers: CustomerSegmentInfo? = null
+)
+
+@Serializable
+data class CustomerSegmentInfo(
+    val count: Long? = null,
+    val totalRevenue: Double? = null,
+    val percentage: Double? = null,
+    val avgOrderValue: Double? = null
+)
+
+@Serializable
+data class CustomerSegmentDetails(
+    val lowValue: List<CustomerDetail>? = null,
+    val mediumValue: List<CustomerDetail>? = null,
+    val highValue: List<CustomerDetail>? = null,
+    val newCustomers: List<CustomerDetail>? = null,
+    val atRiskCustomers: List<CustomerDetail>? = null
+)
+
+@Serializable
+data class CustomerDetail(
+    val customerId: Long? = null,
+    val customerName: String? = null,
+    val email: String? = null,
+    val totalSpent: Double? = null,
+    val totalOrders: Long? = null,
+    val avgOrderValue: Double? = null,
+    val firstPurchase: String? = null,
+    val lastPurchase: String? = null
+)
+
+@Serializable
+data class CustomerSegmentSummary(
+    val totalRevenue: Double? = null,
+    val avgCustomerValue: Double? = null
+)
+
+@Serializable
+data class CustomerSegmentThresholds(
+    val mediumValue: Double? = null,
+    val highValue: Double? = null
+)
+
+// Customer Acquisition Data - matches API response structure
+@Serializable
+data class CustomerAcquisitionData(
+    val channels: CustomerAcquisitionChannels? = null,
+    val acquisitionTrends: CustomerAcquisitionTrends? = null,
+    val metrics: CustomerAcquisitionMetricsData? = null,
+    val recommendations: List<String>? = null
+)
+
+@Serializable
+data class CustomerAcquisitionChannels(
+    val topChannel: String? = null,
+    val acquisitionChannels: Map<String, Long>? = null
+)
+
+@Serializable
+data class CustomerAcquisitionTrends(
+    val monthlyAcquisition: Map<String, Long>? = null,
+    val growthRate: Double? = null,
+    val totalNewCustomers: Long? = null
+)
+
+@Serializable
+data class CustomerAcquisitionMetricsData(
+    val customersWithPurchases: Long? = null,
+    val avgDaysToFirstPurchase: Double? = null,
+    val estimatedAcquisitionCost: Double? = null,
+    val conversionRate: Double? = null
+)
+
+// Customer Lifetime Value Data - matches API response structure
+@Serializable
+data class CustomerLifetimeValueData(
+    val topCustomers: List<CustomerLifetimeValueDetail>? = null,
+    val recommendations: List<String>? = null,
+    val metrics: CustomerLTVMetrics? = null,
+    val analysis: CustomerLTVAnalysis? = null
+)
+
+@Serializable
+data class CustomerLifetimeValueDetail(
+    val customerId: Long? = null,
+    val customerName: String? = null,
+    val email: String? = null,
+    val totalRevenue: Double? = null,
+    val totalOrders: Long? = null,
+    val avgOrderValue: Double? = null,
+    val firstPurchase: String? = null,
+    val lastPurchase: String? = null,
+    val lifespanDays: Long? = null,
+    val purchaseFrequency: Double? = null,
+    val predictedLTV: Double? = null,
+    val customerSegment: String? = null,
+    val profitMargin: Double? = null
+)
+
+@Serializable
+data class CustomerLTVMetrics(
+    val lowValueCustomers: Long? = null,
+    val mediumValueCustomers: Long? = null,
+    val highValueCustomers: Long? = null,
+    val revenueConcentration: CustomerRevenueConcentration? = null
+)
+
+@Serializable
+data class CustomerRevenueConcentration(
+    val top10Percent: Double? = null,
+    val top20Percent: Double? = null
+)
+
+@Serializable
+data class CustomerLTVAnalysis(
+    val totalCustomers: Long? = null,
+    val totalRevenue: Double? = null,
+    val avgLifetimeValue: Double? = null,
+    val avgOrderValue: Double? = null,
+    val avgPurchaseFrequency: Double? = null,
+    val ltvDistribution: Map<String, Long>? = null
+)
+
+// Customer Churn Analysis Data - matches API response structure
+@Serializable
+data class CustomerChurnData(
+    val churnMetrics: CustomerChurnMetrics? = null,
+    val churnedCustomers: List<CustomerDetail>? = null,
+    val riskAnalysis: CustomerRiskAnalysis? = null,
+    val recommendations: List<String>? = null
+)
+
+@Serializable
+data class CustomerChurnMetrics(
+    val churnRate: Double? = null,
+    val totalCustomers: Long? = null,
+    val churnedCustomers: Long? = null,
+    val revenueAtRisk: Double? = null,
+    val avgDaysSinceLastPurchase: Double? = null
+)
+
+@Serializable
+data class CustomerRiskAnalysis(
+    val riskDistribution: Map<String, Long>? = null,
+    val retentionOpportunity: Double? = null,
+    val highRiskCustomers: List<CustomerDetail>? = null
+)
+
+// Customer Behavior Analysis Data - matches API response structure
+@Serializable
+data class CustomerBehaviorData(
+    val seasonality: CustomerSeasonality? = null,
+    val preferences: CustomerPreferences? = null,
+    val purchasePatterns: CustomerPurchasePatterns? = null,
+    val customerJourney: CustomerJourney? = null,
+    val summary: CustomerBehaviorSummary? = null
+)
+
+@Serializable
+data class CustomerSeasonality(
+    val monthlyTrends: Map<String, Long>? = null,
+    val dayOfWeekTrends: Map<String, Long>? = null,
+    val hourlyTrends: Map<String, Long>? = null,
+    val peakSalesDay: String? = null,
+    val peakSalesHour: String? = null
+)
+
+@Serializable
+data class CustomerPreferences(
+    val paymentMethodPreferences: Map<String, Long>? = null,
+    val saleTypePreferences: Map<String, Long>? = null,
+    val avgDiscountUsage: Double? = null
+)
+
+@Serializable
+data class CustomerPurchasePatterns(
+    val orderValueDistribution: Map<String, Long>? = null,
+    val frequencyDistribution: Map<String, Long>? = null,
+    val repeatCustomerRate: Double? = null,
+    val avgDaysBetweenPurchases: Double? = null
+)
+
+@Serializable
+data class CustomerJourney(
+    val lifecycleStages: Map<String, Long>? = null,
+    val avgCustomerAge: Double? = null,
+    val customerRetentionInsights: List<String>? = null
+)
+
+@Serializable
+data class CustomerBehaviorSummary(
+    val analysisDate: String? = null,
+    val totalCustomers: Long? = null,
+    val totalSales: Long? = null
+)
+
+// Legacy Customer Report DTO for backward compatibility
+@Serializable
+data class LegacyCustomerReportDTO(
     val summary: CustomerSummary,
     val segments: List<CustomerSegment>,
     val topCustomers: List<CustomerLifetimeValue>,
@@ -193,6 +426,167 @@ data class CustomerReportDTO(
     val acquisition: CustomerAcquisitionMetrics,
     val behaviorInsights: List<CustomerBehaviorInsight>
 )
+
+// Helper functions for backward compatibility (internal use only)
+private fun CustomerReportDTO.getAcquisitionMetrics(): CustomerAcquisitionMetrics? {
+    val data = acquisitionMetrics ?: return null
+    return CustomerAcquisitionMetrics(
+        newCustomersThisMonth = data.acquisitionTrends?.totalNewCustomers ?: 0L,
+        acquisitionCost = data.metrics?.estimatedAcquisitionCost ?: 0.0,
+        acquisitionChannels = data.channels?.acquisitionChannels ?: emptyMap(),
+        conversionRate = data.metrics?.conversionRate ?: 0.0
+    )
+}
+
+private fun CustomerReportDTO.getRetentionMetrics(): CustomerRetentionMetrics? {
+    val data = churnAnalysis ?: return null
+    return CustomerRetentionMetrics(
+        retentionRate = (100.0 - (data.churnMetrics?.churnRate ?: 0.0)), // Calculate retention from churn
+        churnRate = data.churnMetrics?.churnRate ?: 0.0,
+        averageLifespan = 0.0, // Not available in new structure
+        cohortAnalysis = emptyList() // Not available in new structure
+    )
+}
+
+// Computed summary property for backward compatibility
+val CustomerReportDTO.summary: CustomerSummary
+    get() {
+        val segmentationData = customerSegmentation
+        val acquisitionData = acquisitionMetrics
+        val lifetimeData = lifetimeValueAnalysis
+        val churnData = churnAnalysis
+
+        return CustomerSummary(
+            totalCustomers = segmentationData?.totalCustomers ?: 0L,
+            activeCustomers = segmentationData?.totalCustomers ?: 0L, // Assuming all are active if not specified
+            newCustomersThisMonth = acquisitionData?.acquisitionTrends?.totalNewCustomers ?: 0L,
+            averageCustomerValue = lifetimeData?.analysis?.avgLifetimeValue ?: 0.0,
+            customerRetentionRate = (100.0 - (churnData?.churnMetrics?.churnRate ?: 0.0)),
+            churnRate = churnData?.churnMetrics?.churnRate ?: 0.0
+        )
+    }
+
+// Computed segments property for backward compatibility
+val CustomerReportDTO.segments: List<CustomerSegment>
+    get() {
+        val segments = customerSegmentation?.segments
+        return listOfNotNull(
+            segments?.newCustomers?.let {
+                CustomerSegment(
+                    segmentName = "عملاء جدد",
+                    customerCount = it.count ?: 0L,
+                    totalRevenue = it.totalRevenue ?: 0.0,
+                    percentage = it.percentage ?: 0.0,
+                    averageValue = it.avgOrderValue ?: 0.0
+                )
+            },
+            segments?.highValue?.let {
+                CustomerSegment(
+                    segmentName = "عملاء عالي القيمة",
+                    customerCount = it.count ?: 0L,
+                    totalRevenue = it.totalRevenue ?: 0.0,
+                    percentage = it.percentage ?: 0.0,
+                    averageValue = it.avgOrderValue ?: 0.0
+                )
+            },
+            segments?.mediumValue?.let {
+                CustomerSegment(
+                    segmentName = "عملاء متوسط القيمة",
+                    customerCount = it.count ?: 0L,
+                    totalRevenue = it.totalRevenue ?: 0.0,
+                    percentage = it.percentage ?: 0.0,
+                    averageValue = it.avgOrderValue ?: 0.0
+                )
+            },
+            segments?.lowValue?.let {
+                CustomerSegment(
+                    segmentName = "عملاء منخفض القيمة",
+                    customerCount = it.count ?: 0L,
+                    totalRevenue = it.totalRevenue ?: 0.0,
+                    percentage = it.percentage ?: 0.0,
+                    averageValue = it.avgOrderValue ?: 0.0
+                )
+            }
+        )
+    }
+
+// Computed topCustomers property for backward compatibility
+val CustomerReportDTO.topCustomers: List<CustomerLifetimeValue>
+    get() = lifetimeValueAnalysis?.topCustomers?.map { customer ->
+        CustomerLifetimeValue(
+            customerId = customer.customerId ?: 0L,
+            customerName = customer.customerName ?: "",
+            email = customer.email,
+            totalValue = customer.totalRevenue ?: 0.0,
+            averageOrderValue = customer.avgOrderValue ?: 0.0,
+            orderFrequency = customer.purchaseFrequency ?: 0.0,
+            lastOrderDate = customer.lastPurchase,
+            predictedValue = customer.predictedLTV ?: 0.0,
+            segment = customer.customerSegment ?: ""
+        )
+    } ?: emptyList()
+
+// Computed retention property for backward compatibility
+val CustomerReportDTO.retention: CustomerRetentionMetrics
+    get() = getRetentionMetrics() ?: CustomerRetentionMetrics(
+        retentionRate = 0.0,
+        churnRate = 0.0,
+        averageLifespan = 0.0,
+        cohortAnalysis = emptyList()
+    )
+
+// Computed acquisition property for backward compatibility
+val CustomerReportDTO.acquisition: CustomerAcquisitionMetrics
+    get() = getAcquisitionMetrics() ?: CustomerAcquisitionMetrics(
+        newCustomersThisMonth = 0L,
+        acquisitionCost = 0.0,
+        acquisitionChannels = emptyMap(),
+        conversionRate = 0.0
+    )
+
+// Computed behaviorInsights property for backward compatibility
+val CustomerReportDTO.behaviorInsights: List<CustomerBehaviorInsight>
+    get() {
+        val insights = mutableListOf<CustomerBehaviorInsight>()
+
+        // Generate insights from behavior analysis data
+        behaviorAnalysis?.let { behavior ->
+            behavior.seasonality?.peakSalesDay?.let { peakDay ->
+                insights.add(
+                    CustomerBehaviorInsight(
+                        insight = "أفضل يوم للمبيعات هو $peakDay",
+                        category = "Seasonality",
+                        impact = "High",
+                        recommendation = "ركز الحملات التسويقية في يوم $peakDay"
+                    )
+                )
+            }
+
+            behavior.purchasePatterns?.repeatCustomerRate?.let { rate ->
+                if (rate > 50.0) {
+                    insights.add(
+                        CustomerBehaviorInsight(
+                            insight = "معدل العملاء المتكررين مرتفع (${String.format("%.1f", rate)}%)",
+                            category = "Retention",
+                            impact = "High",
+                            recommendation = "استمر في برامج الولاء الحالية"
+                        )
+                    )
+                } else {
+                    insights.add(
+                        CustomerBehaviorInsight(
+                            insight = "معدل العملاء المتكررين منخفض (${String.format("%.1f", rate)}%)",
+                            category = "Retention",
+                            impact = "Medium",
+                            recommendation = "طور برامج ولاء جديدة لزيادة الاحتفاظ بالعملاء"
+                        )
+                    )
+                }
+            }
+        }
+
+        return insights
+    }
 
 @Serializable
 data class CustomerSummary(
@@ -257,19 +651,297 @@ data class CohortData(
     val retentionRates: Map<String, Double>
 )
 
-// Product Reports
+// Product Reports - Updated to match comprehensive backend response structure
 @Serializable
 data class ProductReportDTO(
-    val summary: ProductSummary? = null,
-    val productRankings: JsonElement? = null,
-    val crossSellAnalysis: JsonElement? = null,
-    val profitabilityAnalysis: JsonElement? = null,
-    val productTrends: JsonElement? = null,
-    val categoryPerformance: JsonElement? = null,
+    val productRankings: ProductRankingsData? = null,
+    val crossSellAnalysis: CrossSellAnalysisData? = null,
+    val profitabilityAnalysis: ProfitabilityAnalysisData? = null,
+    val productTrends: ProductTrendsData? = null,
+    val categoryPerformance: CategoryPerformanceData? = null,
+    val reportSummary: ProductReportSummary? = null,
+    val dataValidation: ProductDataValidation? = null,
+    val metadata: ProductReportMetadata? = null,
     // Legacy fields for backward compatibility
+    val summary: ProductSummary? = null,
     val topProducts: List<ProductPerformance>? = null,
     val categoryAnalysis: List<CategoryAnalysis>? = null,
     val turnoverAnalysis: List<ProductTurnover>? = null
+)
+
+// New comprehensive data models for product performance API
+@Serializable
+data class ProductReportSummary(
+    val insights: List<String>? = null,
+    val salesMetrics: ProductSalesMetrics? = null,
+    val reportPeriod: ProductReportPeriod? = null,
+    val financialMetrics: ProductFinancialMetrics? = null,
+    val productCounts: ProductCounts? = null
+)
+
+@Serializable
+data class ProductSalesMetrics(
+    val totalSales: Long? = null,
+    val totalRevenue: Double? = null,
+    val totalQuantitySold: Long? = null,
+    val avgOrderValue: Double? = null,
+    val uniqueCustomers: Long? = null
+)
+
+@Serializable
+data class ProductReportPeriod(
+    val startDate: String? = null,
+    val endDate: String? = null,
+    val daysIncluded: Int? = null,
+    val description: String? = null
+)
+
+@Serializable
+data class ProductFinancialMetrics(
+    val totalProfit: Double? = null,
+    val avgProfitMargin: Double? = null,
+    val totalCost: Double? = null,
+    val roi: Double? = null
+)
+
+@Serializable
+data class ProductCounts(
+    val totalProducts: Long? = null,
+    val activeProducts: Long? = null,
+    val categoriesIncluded: Long? = null,
+    val productsWithSales: Long? = null
+)
+
+@Serializable
+data class ProductDataValidation(
+    val validationCounts: ProductValidationCounts? = null,
+    val productCoverage: ProductCoverage? = null,
+    val dataQualityScore: Double? = null,
+    val warnings: List<String>? = null,
+    val errors: List<String>? = null
+)
+
+@Serializable
+data class ProductValidationCounts(
+    val totalRecords: Long? = null,
+    val validRecords: Long? = null,
+    val invalidRecords: Long? = null,
+    val duplicateRecords: Long? = null
+)
+
+@Serializable
+data class ProductCoverage(
+    val productsWithData: Long? = null,
+    val productsWithoutData: Long? = null,
+    val coveragePercentage: Double? = null
+)
+
+@Serializable
+data class ProductReportMetadata(
+    val reportId: String? = null,
+    val generatedAt: String? = null,
+    val generatedBy: String? = null,
+    val reportVersion: String? = null,
+    val executionTimeMs: Long? = null,
+    val dataSourceVersion: String? = null,
+    val cacheStatus: String? = null
+)
+
+// Product Rankings Data - matches API response structure
+@Serializable
+data class ProductRankingsData(
+    val allProductMetrics: List<ProductAllMetricsItem>? = null, // API returns array, not object
+    val topProductsByQuantity: List<ProductRankingItem>? = null,
+    val topProductsByRevenue: List<ProductRankingItem>? = null,
+    val topProductsByMargin: List<ProductRankingItem>? = null,
+    val topProductsByProfit: List<ProductRankingItem>? = null,
+    val summary: ProductRankingSummary? = null,
+    val recommendations: List<String>? = null
+)
+
+@Serializable
+data class ProductAllMetrics(
+    val totalProducts: Long? = null,
+    val totalRevenue: Double? = null,
+    val totalQuantitySold: Long? = null,
+    val totalProfit: Double? = null,
+    val avgProfitMargin: Double? = null
+)
+
+// New data class to match the actual API response structure for allProductMetrics array items
+@Serializable
+data class ProductAllMetricsItem(
+    val totalQuantitySold: Long? = null,
+    val salesCount: Long? = null,
+    val productId: Long? = null,
+    val totalProfit: Double? = null,
+    val stockTurnover: Double? = null,
+    val productName: String? = null,
+    val avgUnitPrice: Double? = null,
+    val profitMargin: Double? = null,
+    val currentStock: Long? = null,
+    val revenuePercentage: Double? = null,
+    val totalRevenue: Double? = null,
+    val sku: String? = null,
+    val category: String? = null,
+    val brand: String? = null,
+    val totalCost: Double? = null
+)
+
+// Extension to make ProductAllMetrics compatible with ProductRankingSummary interface
+val ProductAllMetrics.asRankingSummary: ProductRankingSummary
+    get() = ProductRankingSummary(
+        totalProducts = this.totalProducts,
+        totalRevenue = this.totalRevenue,
+        totalQuantitySold = this.totalQuantitySold,
+        avgProfitMargin = this.avgProfitMargin,
+        totalProfit = this.totalProfit,
+        avgUnitPrice = null // Not available in ProductAllMetrics
+    )
+
+// Extension to convert List<ProductAllMetricsItem> to ProductRankingSummary for backward compatibility
+val List<ProductAllMetricsItem>.asRankingSummary: ProductRankingSummary
+    get() {
+        val totalRevenue = this.sumOf { it.totalRevenue ?: 0.0 }
+        val totalQuantity = this.sumOf { it.totalQuantitySold ?: 0L }
+        val totalProfit = this.sumOf { it.totalProfit ?: 0.0 }
+        val avgProfitMargin = if (this.isNotEmpty()) {
+            this.mapNotNull { it.profitMargin }.average()
+        } else 0.0
+        val avgUnitPrice = if (this.isNotEmpty()) {
+            this.mapNotNull { it.avgUnitPrice }.average()
+        } else 0.0
+
+        return ProductRankingSummary(
+            totalProducts = this.size.toLong(),
+            totalRevenue = totalRevenue,
+            totalQuantitySold = totalQuantity,
+            avgProfitMargin = avgProfitMargin,
+            totalProfit = totalProfit,
+            avgUnitPrice = avgUnitPrice
+        )
+    }
+
+@Serializable
+data class ProductRankingSummary(
+    val totalProducts: Long? = null,
+    val totalRevenue: Double? = null,
+    val totalQuantitySold: Long? = null,
+    val avgProfitMargin: Double? = null,
+    val totalProfit: Double? = null,
+    val avgUnitPrice: Double? = null
+)
+
+@Serializable
+data class ProductRankingItem(
+    val productId: Long? = null,
+    val productName: String? = null,
+    val category: String? = null,
+    val quantitySold: Long? = null,
+    val revenue: Double? = null,
+    val profit: Double? = null,
+    val profitMargin: Double? = null,
+    val unitPrice: Double? = null,
+    val rank: Int? = null
+)
+
+// Cross-Sell Analysis Data - matches API response structure
+@Serializable
+data class CrossSellAnalysisData(
+    val basketAnalysis: BasketAnalysisData? = null,
+    val productPairs: List<ProductPair>? = null,
+    val crossSellOpportunities: List<CrossSellOpportunity>? = null,
+    val productAssociations: List<ProductAssociation>? = null,
+    val recommendations: List<String>? = null
+)
+
+@Serializable
+data class ProductPair(
+    val productA: String? = null,
+    val productB: String? = null,
+    val frequency: Long? = null,
+    val confidence: Double? = null,
+    val lift: Double? = null,
+    val support: Double? = null
+)
+
+@Serializable
+data class CrossSellOpportunity(
+    val primaryProduct: String? = null,
+    val suggestedProducts: List<String>? = null,
+    val confidence: Double? = null,
+    val potentialRevenue: Double? = null
+)
+
+@Serializable
+data class BasketAnalysisData(
+    val avgBasketSize: Double? = null,
+    val avgBasketValue: Double? = null,
+    val mostCommonCombinations: List<ProductCombination>? = null
+)
+
+@Serializable
+data class ProductCombination(
+    val products: List<String>? = null,
+    val frequency: Long? = null,
+    val totalValue: Double? = null
+)
+
+@Serializable
+data class ProductAssociation(
+    val productA: String? = null,
+    val productB: String? = null,
+    val support: Double? = null,
+    val confidence: Double? = null,
+    val lift: Double? = null
+)
+
+// Profitability Analysis Data - matches API response structure
+@Serializable
+data class ProfitabilityAnalysisData(
+    val mostProfitableProducts: List<ProductRankingItem>? = null,
+    val profitabilityMetrics: ProfitabilityMetrics? = null,
+    val categoryProfitability: Map<String, CategoryProfitability>? = null,
+    val costAnalysis: CostAnalysisData? = null,
+    val leastProfitableProducts: List<ProductRankingItem>? = null,
+    val profitMarginDistribution: Map<String, Long>? = null,
+    val recommendations: List<String>? = null
+)
+
+@Serializable
+data class ProfitabilityMetrics(
+    val totalProfit: Double? = null,
+    val avgProfitMargin: Double? = null,
+    val profitGrowth: Double? = null,
+    val marginTrend: String? = null
+)
+
+@Serializable
+data class ProfitMarginsData(
+    val avgProfitMargin: Double? = null,
+    val marginDistribution: Map<String, Long>? = null,
+    val topProfitableProducts: List<ProductRankingItem>? = null,
+    val lowMarginProducts: List<ProductRankingItem>? = null
+)
+
+@Serializable
+data class CostAnalysisData(
+    val totalCosts: Double? = null,
+    val avgCostPerUnit: Double? = null,
+    val costBreakdown: Map<String, Double>? = null
+)
+
+@Serializable
+data class CategoryProfitability(
+    val categoryName: String? = null,
+    val revenue: Double? = null,
+    val totalRevenue: Double? = null,
+    val cost: Double? = null,
+    val profit: Double? = null,
+    val totalProfit: Double? = null,
+    val profitMargin: Double? = null,
+    val itemCount: Long? = null,
+    val productCount: Long? = null
 )
 
 @Serializable
@@ -279,6 +951,191 @@ data class ProductSummary(
     val totalRevenue: Double,
     val averagePrice: Double,
     val topCategory: String
+)
+
+// Computed summary property for backward compatibility
+val ProductReportDTO.computedSummary: ProductSummary
+    get() {
+        val rankings = productRankings
+        val categoryPerf = categoryPerformance
+
+        return summary ?: ProductSummary(
+            totalProducts = rankings?.summary?.totalProducts ?: 0L,
+            activeProducts = rankings?.summary?.totalProducts ?: 0L, // Assuming all are active
+            totalRevenue = rankings?.summary?.totalRevenue ?: 0.0,
+            averagePrice = 0.0, // Not available in new structure
+            topCategory = categoryPerf?.categoryMetricsData?.topPerformingCategory ?: ""
+        )
+    }
+
+// Computed topProducts property for backward compatibility
+val ProductReportDTO.computedTopProducts: List<ProductPerformance>
+    get() = topProducts ?: productRankings?.topProductsByRevenue?.map { item ->
+        ProductPerformance(
+            productId = item.productId ?: 0L,
+            productName = item.productName ?: "",
+            category = item.category,
+            quantitySold = item.quantitySold ?: 0L,
+            revenue = item.revenue ?: 0.0,
+            profitMargin = item.profitMargin ?: 0.0,
+            growthRate = 0.0, // Not available in new structure
+            ranking = item.rank ?: 0
+        )
+    } ?: emptyList()
+
+// Computed categoryProfitabilityList property for backward compatibility
+val ProfitabilityAnalysisData.categoryProfitabilityList: List<CategoryProfitability>
+    get() = categoryProfitability?.map { (categoryName, profitData) ->
+        profitData.copy(categoryName = categoryName)
+    } ?: emptyList()
+
+// Product Trends Data - matches API response structure
+@Serializable
+data class ProductTrendsData(
+    val trendSummary: ProductTrendSummary? = null,
+    val trendingProducts: List<TrendingProduct>? = null,
+    val weeklyTrends: Map<String, WeeklyTrend>? = null,
+    val dailyTrends: Map<String, DailyTrend>? = null,
+    val seasonalPatterns: Map<String, Double>? = null,
+    val recommendations: List<String>? = null
+)
+
+@Serializable
+data class ProductTrendSummary(
+    val totalTrendingProducts: Long? = null,
+    val avgGrowthRate: Double? = null,
+    val topTrendDirection: String? = null,
+    val periodComparison: String? = null
+)
+
+@Serializable
+data class DailyTrend(
+    val date: String? = null,
+    val totalQuantity: Long? = null,
+    val totalSales: Long? = null,
+    val totalRevenue: Double? = null,
+    val salesCount: Long? = null,
+    val uniqueProducts: Long? = null,
+    val topProduct: String? = null
+)
+
+@Serializable
+data class WeeklyTrend(
+    val week: String? = null,
+    val totalQuantity: Long? = null,
+    val totalSales: Long? = null,
+    val totalRevenue: Double? = null,
+    val salesCount: Long? = null,
+    val uniqueProducts: Long? = null,
+    val growthRate: Double? = null
+)
+
+@Serializable
+data class TrendingProduct(
+    val productName: String? = null,
+    val category: String? = null,
+    val growthRate: Double? = null,
+    val currentSales: Long? = null,
+    val previousSales: Long? = null,
+    val trendDirection: String? = null
+)
+
+// Computed trends list properties for backward compatibility
+val ProductTrendsData.dailyTrendsList: List<DailyTrend>
+    get() = dailyTrends?.map { (date, trendData) ->
+        trendData.copy(date = date)
+    } ?: emptyList()
+
+val ProductTrendsData.weeklyTrendsList: List<WeeklyTrend>
+    get() = weeklyTrends?.map { (week, trendData) ->
+        trendData.copy(week = week)
+    } ?: emptyList()
+
+// Computed category performance properties for backward compatibility
+val CategoryPerformanceData.categoryMetricsData: CategoryMetricsData?
+    get() = categoryComparison?.let { comparison ->
+        CategoryMetricsData(
+            totalCategories = comparison.totalCategories,
+            avgRevenuePerCategory = comparison.avgRevenuePerCategory,
+            topPerformingCategory = categoryMetrics?.maxByOrNull { it.totalRevenue ?: 0.0 }?.categoryName,
+            fastestGrowingCategory = null // Not available in new structure
+        )
+    }
+
+val CategoryPerformanceData.categoryComparisonList: List<CategoryComparison>
+    get() = categoryMetrics?.map { metric ->
+        CategoryComparison(
+            categoryName = metric.categoryName,
+            totalRevenue = metric.totalRevenue,
+            totalQuantity = metric.totalQuantitySold,
+            avgPrice = metric.avgUnitPrice,
+            profitMargin = metric.profitMargin,
+            marketShare = metric.revenuePercentage
+        )
+    } ?: emptyList()
+
+// Category Performance Data - matches API response structure
+@Serializable
+data class CategoryPerformanceData(
+    val categoryComparison: CategoryComparisonSummary? = null,
+    val categoryMetrics: List<CategoryMetric>? = null,
+    val topCategoriesByRevenue: List<CategoryMetric>? = null,
+    val topCategoriesByQuantity: List<CategoryMetric>? = null,
+    val topCategoriesByProfitMargin: List<CategoryMetric>? = null,
+    val topCategories: List<TopCategory>? = null,
+    val recommendations: List<String>? = null
+)
+
+@Serializable
+data class CategoryComparisonSummary(
+    val totalCategories: Long? = null,
+    val totalRevenue: Double? = null,
+    val avgRevenuePerCategory: Double? = null,
+    val totalQuantitySold: Long? = null
+)
+
+@Serializable
+data class CategoryMetric(
+    val categoryId: Long? = null,
+    val categoryName: String? = null,
+    val totalRevenue: Double? = null,
+    val totalQuantitySold: Long? = null,
+    val salesCount: Long? = null,
+    val totalProfit: Double? = null,
+    val uniqueProducts: Long? = null,
+    val quantityPercentage: Double? = null,
+    val avgUnitPrice: Double? = null,
+    val profitMargin: Double? = null,
+    val revenuePercentage: Double? = null,
+    val avgOrderValue: Double? = null,
+    val uniqueCustomers: Long? = null
+)
+
+@Serializable
+data class CategoryComparison(
+    val categoryName: String? = null,
+    val totalRevenue: Double? = null,
+    val totalQuantity: Long? = null,
+    val avgPrice: Double? = null,
+    val profitMargin: Double? = null,
+    val marketShare: Double? = null
+)
+
+@Serializable
+data class CategoryMetricsData(
+    val totalCategories: Long? = null,
+    val avgRevenuePerCategory: Double? = null,
+    val topPerformingCategory: String? = null,
+    val fastestGrowingCategory: String? = null
+)
+
+@Serializable
+data class TopCategory(
+    val categoryName: String? = null,
+    val rank: Int? = null,
+    val revenue: Double? = null,
+    val growth: Double? = null,
+    val productCount: Long? = null
 )
 
 @Serializable
@@ -378,15 +1235,20 @@ data class TopCustomerDTO(
     val lastOrderDate: String?
 )
 
-// Enhanced Inventory Report
+// Enhanced Inventory Report - Updated to match backend response structure
 @Serializable
 data class EnhancedInventoryReportDTO(
-    val summary: InventorySummary,
-    val stockAlerts: List<StockAlert>,
-    val turnoverAnalysis: List<ProductTurnover>,
-    val valuation: InventoryValuation,
-    val categoryBreakdown: List<CategoryInventoryAnalysis>,
-    val warehouseDistribution: List<WarehouseAnalysis>
+    val stockLevels: JsonElement? = null,
+    val lowStockAlerts: JsonElement? = null,
+    val outOfStockItems: List<JsonElement>? = null,
+    val inventoryValuation: JsonElement? = null,
+    val warehouseDistribution: JsonElement? = null,
+    // Legacy fields for backward compatibility
+    val summary: InventorySummary? = null,
+    val stockAlerts: List<StockAlert>? = null,
+    val turnoverAnalysis: List<ProductTurnover>? = null,
+    val valuation: InventoryValuation? = null,
+    val categoryBreakdown: List<CategoryInventoryAnalysis>? = null
 )
 
 @Serializable
@@ -609,4 +1471,104 @@ data class SlowMovingProductDTO(
     val category: String?
 )
 
+// Extension functions for ReportMetadata to safely access filter data
+fun ReportMetadata.getFilterBoolean(key: String): Boolean? {
+    return try {
+        appliedFilters?.jsonObject?.get(key)?.jsonPrimitive?.content?.toBoolean()
+    } catch (e: Exception) {
+        null
+    }
+}
 
+fun ReportMetadata.getFilterInt(key: String): Int? {
+    return try {
+        appliedFilters?.jsonObject?.get(key)?.jsonPrimitive?.content?.toInt()
+    } catch (e: Exception) {
+        null
+    }
+}
+
+fun ReportMetadata.getFilterString(key: String): String? {
+    return try {
+        appliedFilters?.jsonObject?.get(key)?.jsonPrimitive?.content
+    } catch (e: Exception) {
+        null
+    }
+}
+
+fun ReportMetadata.getFilterLong(key: String): Long? {
+    return try {
+        appliedFilters?.jsonObject?.get(key)?.jsonPrimitive?.content?.toLong()
+    } catch (e: Exception) {
+        null
+    }
+}
+
+// Helper to get all filter keys for debugging
+fun ReportMetadata.getFilterKeys(): Set<String> {
+    return try {
+        appliedFilters?.jsonObject?.keys ?: emptySet()
+    } catch (e: Exception) {
+        emptySet()
+    }
+}
+
+// Helper to get pagination information
+fun ReportMetadata.getPaginationInt(key: String): Int? {
+    return try {
+        pagination?.jsonObject?.get(key)?.jsonPrimitive?.content?.toInt()
+    } catch (e: Exception) {
+        null
+    }
+}
+
+// Extension functions for EnhancedInventoryReportDTO backward compatibility
+val EnhancedInventoryReportDTO.computedSummary: InventorySummary
+    get() = summary ?: InventorySummary(
+        totalProducts = 0L,
+        totalInventoryValue = 0.0,
+        lowStockItems = 0L,
+        outOfStockItems = 0L,
+        overStockItems = 0L,
+        averageTurnoverRate = 0.0
+    )
+
+val EnhancedInventoryReportDTO.computedStockAlerts: List<StockAlert>
+    get() = stockAlerts ?: emptyList()
+
+val EnhancedInventoryReportDTO.computedTurnoverAnalysis: List<ProductTurnover>
+    get() = turnoverAnalysis ?: emptyList()
+
+val EnhancedInventoryReportDTO.computedValuation: InventoryValuation?
+    get() = valuation
+
+val EnhancedInventoryReportDTO.computedCategoryBreakdown: List<CategoryInventoryAnalysis>
+    get() = categoryBreakdown ?: emptyList()
+
+val EnhancedInventoryReportDTO.computedWarehouseAnalysis: List<WarehouseAnalysis>
+    get() = emptyList() // Return empty list since backend returns object instead of array
+
+// Helper functions to extract data from JsonElement fields
+fun EnhancedInventoryReportDTO.getStockLevelDouble(key: String): Double? {
+    return try {
+        stockLevels?.jsonObject?.get(key)?.jsonPrimitive?.doubleOrNull
+    } catch (e: Exception) {
+        null
+    }
+}
+
+fun EnhancedInventoryReportDTO.getLowStockAlertInt(key: String): Int? {
+    return try {
+        lowStockAlerts?.jsonObject?.get(key)?.jsonPrimitive?.content?.toInt()
+    } catch (e: Exception) {
+        null
+    }
+}
+
+fun EnhancedInventoryReportDTO.getInventoryValuationDouble(key: String): Double? {
+    return try {
+        inventoryValuation?.jsonObject?.get(key)?.jsonPrimitive?.doubleOrNull
+    } catch (e: Exception) {
+        null
+    }
+}

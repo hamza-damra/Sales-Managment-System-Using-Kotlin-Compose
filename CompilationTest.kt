@@ -1,70 +1,120 @@
-/**
- * Simple compilation test to verify that the NetworkResult and PromotionRepository fixes work correctly
- */
-
-import data.api.NetworkResult
-import data.api.PromotionDTO
-
-fun testNetworkResultCompilation() {
-    // Test NetworkResult creation
-    val successResult: NetworkResult<String> = NetworkResult.Success("Test data")
-    val errorResult: NetworkResult<String> = NetworkResult.Error(
-        data.api.ApiException.NetworkError("Test error")
-    )
-    val loadingResult: NetworkResult<String> = NetworkResult.Loading
-    
-    // Test when expressions (should compile without issues)
-    when (successResult) {
-        is NetworkResult.Success -> {
-            println("Success: ${successResult.data}")
-        }
-        is NetworkResult.Error -> {
-            println("Error: ${successResult.exception.message}")
-        }
-        is NetworkResult.Loading -> {
-            println("Loading...")
-        }
-    }
-    
-    // Test inline functions (should compile without issues)
-    successResult.onSuccess { data ->
-        println("Inline success: $data")
-    }.onError { exception ->
-        println("Inline error: ${exception.message}")
-    }.onLoading {
-        println("Inline loading")
-    }
-    
-    println("✅ NetworkResult compilation test passed")
-}
-
-fun testPromotionRepositoryTypes() {
-    // Test that PromotionDTO can be used in NetworkResult
-    val promotionList: List<PromotionDTO> = emptyList()
-    val promotionResult: NetworkResult<List<PromotionDTO>> = NetworkResult.Success(promotionList)
-    
-    when (promotionResult) {
-        is NetworkResult.Success -> {
-            println("Promotions loaded: ${promotionResult.data.size}")
-        }
-        is NetworkResult.Error -> {
-            println("Error loading promotions: ${promotionResult.exception.message}")
-        }
-        is NetworkResult.Loading -> {
-            println("Loading promotions...")
-        }
-    }
-    
-    println("✅ PromotionRepository types test passed")
-}
+import kotlinx.serialization.json.Json
+import data.api.*
 
 fun main() {
+    println("🧪 Testing Compilation and Extension Properties...")
+    
+    val json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+    }
+
+    val testJson = """
+    {
+        "success": true,
+        "message": "Test",
+        "data": {
+            "customerSegmentation": {
+                "segments": [
+                    {
+                        "segmentName": "Premium",
+                        "customerCount": 150,
+                        "averageValue": 2500.0,
+                        "totalRevenue": 375000.0,
+                        "percentage": 15.0
+                    }
+                ],
+                "totalCustomers": 1000
+            },
+            "acquisitionMetrics": {
+                "newCustomersThisMonth": 45,
+                "acquisitionCost": 125.50,
+                "acquisitionChannels": {
+                    "Online": 30,
+                    "Referral": 15
+                },
+                "conversionRate": 12.5
+            },
+            "lifetimeValueAnalysis": {
+                "topCustomers": [
+                    {
+                        "customerId": 1,
+                        "customerName": "أحمد محمد",
+                        "email": "ahmed@example.com",
+                        "totalValue": 15000.0,
+                        "averageOrderValue": 500.0,
+                        "orderFrequency": 2.5,
+                        "lastOrderDate": "2024-01-15",
+                        "predictedValue": 18000.0,
+                        "segment": "Premium"
+                    }
+                ],
+                "averageLifetimeValue": 2500.0
+            },
+            "churnAnalysis": {
+                "churnRate": 5.2,
+                "retentionRate": 94.8,
+                "cohortAnalysis": [
+                    {
+                        "cohortMonth": "2024-01",
+                        "customersCount": 100,
+                        "retentionRates": {
+                            "Month1": 95.0
+                        }
+                    }
+                ]
+            },
+            "behaviorAnalysis": {
+                "behaviorInsights": [
+                    {
+                        "insight": "Test insight",
+                        "category": "Test Category",
+                        "impact": "High",
+                        "recommendation": "Test recommendation"
+                    }
+                ]
+            }
+        }
+    }
+    """.trimIndent()
+
     try {
-        testNetworkResultCompilation()
-        testPromotionRepositoryTypes()
-        println("🎉 All compilation tests passed successfully!")
+        println("📝 Parsing JSON...")
+        val response = json.decodeFromString<StandardReportResponse<CustomerReportDTO>>(testJson)
+        
+        println("✅ JSON parsing successful!")
+        
+        val customerReport = response.data
+        
+        // Test all extension properties (these should compile without conflicts)
+        println("🔍 Testing Extension Properties:")
+        println("   - summary.totalCustomers: ${customerReport.summary.totalCustomers}")
+        println("   - segments.size: ${customerReport.segments.size}")
+        println("   - topCustomers.size: ${customerReport.topCustomers.size}")
+        println("   - retention.retentionRate: ${customerReport.retention.retentionRate}")
+        println("   - acquisition.newCustomersThisMonth: ${customerReport.acquisition.newCustomersThisMonth}")
+        println("   - behaviorInsights.size: ${customerReport.behaviorInsights.size}")
+        
+        // Test accessing data like the UI would
+        println("\n📊 UI-style Access Test:")
+        println("   Total Customers: ${customerReport.summary.totalCustomers}")
+        println("   Active Customers: ${customerReport.summary.activeCustomers}")
+        println("   Retention Rate: ${customerReport.summary.customerRetentionRate}%")
+        
+        if (customerReport.segments.isNotEmpty()) {
+            val segment = customerReport.segments[0]
+            println("   First Segment: ${segment.segmentName} (${segment.customerCount} customers)")
+        }
+        
+        if (customerReport.topCustomers.isNotEmpty()) {
+            val topCustomer = customerReport.topCustomers[0]
+            println("   Top Customer: ${topCustomer.customerName} ($${topCustomer.totalValue})")
+        }
+        
+        println("\n🎉 All compilation and extension property tests passed!")
+        
     } catch (e: Exception) {
-        println("❌ Compilation test failed: ${e.message}")
+        println("❌ Error: ${e.message}")
         e.printStackTrace()
     }
 }

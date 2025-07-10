@@ -5,6 +5,7 @@ import data.api.services.ReportsApiService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.json.JsonElement
 
 /**
  * Enhanced repository for comprehensive enterprise reporting
@@ -37,8 +38,8 @@ class ReportsRepository(private val reportsApiService: ReportsApiService) {
     private val _promotionReport = MutableStateFlow<PromotionReportDTO?>(null)
     val promotionReport: StateFlow<PromotionReportDTO?> = _promotionReport.asStateFlow()
 
-    private val _realTimeKPIs = MutableStateFlow<Map<String, Any>?>(null)
-    val realTimeKPIs: StateFlow<Map<String, Any>?> = _realTimeKPIs.asStateFlow()
+    private val _realTimeKPIs = MutableStateFlow<JsonElement?>(null)
+    val realTimeKPIs: StateFlow<JsonElement?> = _realTimeKPIs.asStateFlow()
 
     // Legacy state
     private val _dashboardSummary = MutableStateFlow<DashboardSummaryDTO?>(null)
@@ -417,7 +418,7 @@ class ReportsRepository(private val reportsApiService: ReportsApiService) {
     }
 
     // Dashboard & KPI Reports
-    suspend fun getExecutiveDashboard(days: Int = 30): NetworkResult<Map<String, Any>> {
+    suspend fun getExecutiveDashboard(days: Int = 30): NetworkResult<JsonElement> {
         _isLoading.value = true
         _error.value = null
 
@@ -442,7 +443,7 @@ class ReportsRepository(private val reportsApiService: ReportsApiService) {
         }
     }
 
-    suspend fun getOperationalDashboard(): NetworkResult<Map<String, Any>> {
+    suspend fun getOperationalDashboard(): NetworkResult<JsonElement> {
         _isLoading.value = true
         _error.value = null
 
@@ -467,7 +468,7 @@ class ReportsRepository(private val reportsApiService: ReportsApiService) {
         }
     }
 
-    suspend fun loadRealTimeKPIs(): NetworkResult<Map<String, Any>> {
+    suspend fun loadRealTimeKPIs(): NetworkResult<JsonElement> {
         _isLoading.value = true
         _error.value = null
 

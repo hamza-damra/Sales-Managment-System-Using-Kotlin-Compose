@@ -5,6 +5,7 @@ import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.http.*
+import kotlinx.serialization.json.JsonElement
 
 /**
  * Enhanced API service for comprehensive enterprise reporting
@@ -109,6 +110,11 @@ class ReportsApiService(private val httpClient: HttpClient) {
             val response = httpClient.get(ApiConfig.Endpoints.REPORTS_PRODUCTS_PERFORMANCE) {
                 parameter("startDate", request.startDate)
                 parameter("endDate", request.endDate)
+                parameter("page", request.page)
+                parameter("size", request.size)
+                parameter("sortBy", request.sortBy)
+                parameter("sortDirection", request.sortDirection)
+                parameter("useCache", request.useCache)
                 request.categoryIds?.let { parameter("categoryIds", it.joinToString(",")) }
                 request.productIds?.let { parameter("productIds", it.joinToString(",")) }
             }
@@ -200,26 +206,26 @@ class ReportsApiService(private val httpClient: HttpClient) {
     // Dashboard & KPI Reports
     suspend fun getExecutiveDashboard(
         days: Int = 30
-    ): NetworkResult<StandardReportResponse<Map<String, Any>>> {
+    ): NetworkResult<StandardReportResponse<JsonElement>> {
         return safeApiCall {
             val response = httpClient.get(ApiConfig.Endpoints.REPORTS_DASHBOARD_EXECUTIVE) {
                 parameter("days", days)
             }
-            response.body<StandardReportResponse<Map<String, Any>>>()
+            response.body<StandardReportResponse<JsonElement>>()
         }
     }
 
-    suspend fun getOperationalDashboard(): NetworkResult<StandardReportResponse<Map<String, Any>>> {
+    suspend fun getOperationalDashboard(): NetworkResult<StandardReportResponse<JsonElement>> {
         return safeApiCall {
             val response = httpClient.get(ApiConfig.Endpoints.REPORTS_DASHBOARD_OPERATIONAL)
-            response.body<StandardReportResponse<Map<String, Any>>>()
+            response.body<StandardReportResponse<JsonElement>>()
         }
     }
 
-    suspend fun getRealTimeKPIs(): NetworkResult<StandardReportResponse<Map<String, Any>>> {
+    suspend fun getRealTimeKPIs(): NetworkResult<StandardReportResponse<JsonElement>> {
         return safeApiCall {
             val response = httpClient.get(ApiConfig.Endpoints.REPORTS_KPI_REAL_TIME)
-            response.body<StandardReportResponse<Map<String, Any>>>()
+            response.body<StandardReportResponse<JsonElement>>()
         }
     }
 
