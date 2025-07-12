@@ -169,6 +169,62 @@ class SupplierRepository(
     }
 
     /**
+     * Get supplier with purchase orders
+     */
+    fun getSupplierWithOrders(id: Long): Flow<NetworkResult<SupplierDTO>> = flow {
+        emit(supplierApiService.getSupplierWithOrders(id))
+    }
+
+    /**
+     * Get top rated suppliers
+     */
+    suspend fun getTopRatedSuppliers(minRating: Double = 4.0): NetworkResult<List<SupplierDTO>> {
+        return supplierApiService.getTopRatedSuppliers(minRating)
+    }
+
+    /**
+     * Get high value suppliers
+     */
+    suspend fun getHighValueSuppliers(minAmount: Double = 10000.0): NetworkResult<List<SupplierDTO>> {
+        return supplierApiService.getHighValueSuppliers(minAmount)
+    }
+
+    /**
+     * Update supplier rating
+     */
+    suspend fun updateSupplierRating(id: Long, rating: Double): NetworkResult<SupplierDTO> {
+        _isLoading.value = true
+        _error.value = null
+
+        val result = supplierApiService.updateSupplierRating(id, rating)
+
+        result.onSuccess { updatedSupplier ->
+            _suppliers.value = _suppliers.value.map {
+                if (it.id == id) updatedSupplier else it
+            }
+        }.onError { exception ->
+            _error.value = exception.message
+        }
+
+        _isLoading.value = false
+        return result
+    }
+
+    /**
+     * Get supplier analytics overview
+     */
+    suspend fun getSupplierAnalytics(): NetworkResult<SupplierAnalyticsOverviewDTO> {
+        return supplierApiService.getSupplierAnalytics()
+    }
+
+    /**
+     * Get individual supplier analytics
+     */
+    suspend fun getSupplierAnalyticsById(id: Long): NetworkResult<SupplierAnalyticsDTO> {
+        return supplierApiService.getSupplierAnalyticsById(id)
+    }
+
+    /**
      * Refresh suppliers data
      */
     suspend fun refreshSuppliers() {

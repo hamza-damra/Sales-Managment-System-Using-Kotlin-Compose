@@ -41,4 +41,8 @@ object ViewModelFactory {
     fun createPromotionViewModel(): PromotionViewModel {
         return PromotionViewModel(container.promotionRepository)
     }
+
+    fun createPurchaseOrderViewModel(): PurchaseOrderViewModel {
+        return PurchaseOrderViewModel(container.purchaseOrderRepository, container.supplierRepository)
+    }
 }

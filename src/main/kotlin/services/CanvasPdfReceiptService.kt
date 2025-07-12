@@ -10,6 +10,10 @@ import com.itextpdf.kernel.geom.PageSize
 import data.Sale
 import data.Customer
 import data.SaleItem
+import data.preferences.TaxSettings
+import data.preferences.TaxPreferencesManager
+import utils.CurrencyUtils
+import data.preferences.CurrencyPreferencesManager
 import java.io.File
 import java.io.FileOutputStream
 import java.text.NumberFormat
@@ -31,12 +35,10 @@ import java.io.ByteArrayOutputStream
  * Uses Graphics2D canvas approach for proper Arabic text shaping and RTL support
  */
 object CanvasPdfReceiptService {
-    
-    private val arabicLocale = Locale("ar", "SA")
-    private val currencyFormatter = NumberFormat.getCurrencyInstance(arabicLocale).apply {
-        currency = Currency.getInstance("SAR")
-    }
-    private val arabicDateFormatter = SimpleDateFormat("dd/MM/yyyy HH:mm", arabicLocale)
+
+    private val currencyFormatter = CurrencyUtils.getCurrencyFormatter()
+    private val arabicDateFormatter = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("ar"))
+    private val taxPreferencesManager = TaxPreferencesManager()
     
     // Canvas dimensions
     private const val PAGE_WIDTH = 595f  // A4 width in points
@@ -358,10 +360,14 @@ object CanvasPdfReceiptService {
         drawArabicText(g2d, currencyFormatter.format(sale.subtotal), PAGE_WIDTH - 200f, y, valueFont)
         y += 25f
 
-        // Tax
-        drawArabicText(g2d, "الضريبة (15%):", PAGE_WIDTH - MARGIN, y, labelFont)
-        drawArabicText(g2d, currencyFormatter.format(sale.tax), PAGE_WIDTH - 200f, y, valueFont)
-        y += 25f
+        // Tax (show only if enabled in settings)
+        val taxSettings = taxPreferencesManager.loadTaxSettings()
+        if (taxSettings.showTaxOnReceipts) {
+            val taxPercentage = String.format("%.1f", taxSettings.taxRate * 100)
+            drawArabicText(g2d, "الضريبة ($taxPercentage%):", PAGE_WIDTH - MARGIN, y, labelFont)
+            drawArabicText(g2d, currencyFormatter.format(sale.tax), PAGE_WIDTH - 200f, y, valueFont)
+            y += 25f
+        }
 
         // Line above total
         g2d.color = Color.BLACK

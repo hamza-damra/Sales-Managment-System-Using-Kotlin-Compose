@@ -24,7 +24,7 @@ object SupplierMapper {
             rating = this.rating ?: 0.0
         )
     }
-    
+
     /**
      * Convert Supplier (UI model) to SupplierDTO
      */
@@ -32,10 +32,10 @@ object SupplierMapper {
         return SupplierDTO(
             id = this.id.toLong(),
             name = this.name,
-            contactPerson = this.contactPerson,
-            phone = this.phone,
-            email = this.email,
-            address = this.address,
+            contactPerson = this.contactPerson.ifBlank { null },
+            phone = this.phone.ifBlank { null },
+            email = this.email.ifBlank { null },
+            address = this.address.ifBlank { null },
             paymentTerms = this.paymentTerms,
             deliveryTerms = this.deliveryTerms,
             rating = this.rating
@@ -228,22 +228,35 @@ object SupplierMapper {
      * Create sample supplier for testing
      */
     fun createSampleSupplier(index: Int): SupplierDTO {
+        val cities = listOf("الرياض", "جدة", "الدمام", "مكة", "المدينة المنورة")
+        val companies = listOf("شركة التقنية المتقدمة", "مؤسسة الإلكترونيات", "شركة المواد الصناعية", "مجموعة التجارة", "شركة الخدمات")
+        val contacts = listOf("أحمد محمد", "فاطمة علي", "محمد عبدالله", "نورا سعد", "خالد أحمد")
+
         return SupplierDTO(
             id = index.toLong(),
-            name = "شركة المورد $index",
-            contactPerson = "أحمد محمد",
-            phone = "+966-50-123-45${index + 10}",
-            email = "supplier$index@company.com",
-            address = "الرياض، المملكة العربية السعودية",
-            city = "الرياض",
+            name = "${companies[index % companies.size]} $index",
+            contactPerson = contacts[index % contacts.size],
+            phone = "+966-50-123-45${String.format("%02d", index + 10)}",
+            email = "supplier$index@${companies[index % companies.size].replace(" ", "").lowercase()}.com",
+            address = "شارع الملك فهد، حي النخيل، مبنى رقم ${100 + index}",
+            city = cities[index % cities.size],
             country = "المملكة العربية السعودية",
-            paymentTerms = "NET_30",
-            deliveryTerms = "FOB_DESTINATION",
-            rating = 4.0 + (index % 5) * 0.2,
-            status = if (index % 3 == 0) "SUSPENDED" else "ACTIVE",
+            taxNumber = "TAX${String.format("%09d", 100000000 + index)}",
+            paymentTerms = listOf("NET_30", "NET_15", "NET_7", "COD")[index % 4],
+            deliveryTerms = listOf("FOB_DESTINATION", "FOB_ORIGIN", "CIF", "EXW")[index % 4],
+            rating = 3.0 + (index % 6) * 0.3, // Rating between 3.0 and 4.5
+            status = when (index % 4) {
+                0 -> "ACTIVE"
+                1 -> "ACTIVE"
+                2 -> "INACTIVE"
+                else -> "SUSPENDED"
+            },
             totalOrders = 5 + index * 2,
             totalAmount = (10000 + index * 5000).toDouble(),
-            notes = "مورد موثوق ومتميز"
+            lastOrderDate = "2024-01-${String.format("%02d", (index % 28) + 1)}T10:30:00",
+            notes = "مورد ${if (index % 2 == 0) "موثوق ومتميز" else "جديد وواعد"}",
+            createdAt = "2024-01-01T10:00:00",
+            updatedAt = "2024-01-${String.format("%02d", (index % 28) + 1)}T15:30:00"
         )
     }
 }

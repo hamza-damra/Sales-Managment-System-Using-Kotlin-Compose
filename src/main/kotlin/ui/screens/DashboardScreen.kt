@@ -53,6 +53,8 @@ import java.text.NumberFormat
 import java.util.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import utils.CurrencyUtils
+import data.preferences.CurrencyPreferencesManager
 
 @Composable
 fun DashboardScreen(
@@ -66,11 +68,9 @@ fun DashboardScreen(
     val uiState by dashboardViewModel.uiState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
-    // Currency formatter for Arabic locale
+    // Currency formatter using configurable currency system
     val currencyFormatter = remember {
-        NumberFormat.getCurrencyInstance(Locale("ar", "SA")).apply {
-            currency = Currency.getInstance("SAR")
-        }
+        CurrencyUtils.getCurrencyFormatter()
     }
 
     // Load data when screen is first displayed
@@ -351,7 +351,7 @@ private fun DashboardContent(
 
                         ModernStatCard(
                             title = "إجمالي المبيعات",
-                            value = if (totalRevenue > 0) currencyFormatter.format(totalRevenue) else "0 ر.س",
+                            value = if (totalRevenue > 0) currencyFormatter.format(totalRevenue) else "0 ${CurrencyUtils.getCurrencySymbol()}",
                             subtitle = "$totalSales معاملة",
                             icon = Icons.Default.AttachMoney,
                             iconColor = AppTheme.colors.success,
@@ -364,7 +364,7 @@ private fun DashboardContent(
 
                         ModernStatCard(
                             title = "متوسط قيمة الطلب",
-                            value = if (averageOrderValue > 0) currencyFormatter.format(averageOrderValue) else "0 ر.س",
+                            value = if (averageOrderValue > 0) currencyFormatter.format(averageOrderValue) else "0 ${CurrencyUtils.getCurrencySymbol()}",
                             subtitle = "لكل معاملة",
                             icon = Icons.AutoMirrored.Filled.TrendingUp,
                             iconColor = AppTheme.colors.info,
@@ -438,7 +438,7 @@ private fun DashboardContent(
                             val displayValue = if (monthlyRevenueValue > 0) {
                                 currencyFormatter.format(monthlyRevenueValue)
                             } else {
-                                "0 ر.س"
+                                "0 ${CurrencyUtils.getCurrencySymbol()}"
                             }
 
                             Text(

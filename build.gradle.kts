@@ -60,6 +60,9 @@ dependencies {
     implementation("org.slf4j:slf4j-simple:2.0.9")
     implementation("org.apache.logging.log4j:log4j-core:2.21.1")
 
+    // Color Picker - Skydoves Compose Color Picker for Kotlin Multiplatform
+    implementation("com.github.skydoves:colorpicker-compose:1.1.2")
+
     // Test dependencies
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.1")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
@@ -77,8 +80,56 @@ compose.desktop {
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "DesktopApp"
+            packageName = "SalesManagementSystem"
             packageVersion = "1.0.0"
+            description = "Professional Sales Management System"
+            copyright = "© 2024 Hamza Damra. All rights reserved."
+            vendor = "Hamza Damra"
+            licenseFile.set(project.file("installer/LICENSE.txt"))
+
+            // Application metadata
+            modules("java.base", "java.desktop", "java.logging", "java.naming", "java.security.jgss", "java.sql")
+
+            // Windows MSI specific configuration
+            windows {
+                iconFile.set(project.file("installer/icons/app-icon.ico"))
+                menuGroup = "Sales Management System"
+                // Upgrade UUID for proper MSI upgrade handling
+                upgradeUuid = "B8C9D0E1-F2A3-4B5C-6D7E-8F9A0B1C2D3E"
+
+                // MSI installer properties
+                msiPackageVersion = packageVersion
+                dirChooser = true
+                perUserInstall = false
+                shortcut = true
+            }
+
+            // macOS DMG configuration
+            macOS {
+                iconFile.set(project.file("installer/icons/app-icon.icns"))
+                bundleID = "com.hamzadamra.salesmanagement"
+                appCategory = "public.app-category.business"
+                entitlementsFile.set(project.file("installer/macOS/entitlements.plist"))
+                runtimeEntitlementsFile.set(project.file("installer/macOS/runtime-entitlements.plist"))
+            }
+
+            // Linux DEB configuration
+            linux {
+                iconFile.set(project.file("installer/icons/app-icon.png"))
+                packageName = "sales-management-system"
+                debMaintainer = "hamza.damra@example.com"
+                menuGroup = "Office"
+                appRelease = "1"
+                appCategory = "Office"
+                shortcut = true
+            }
+
+            // Include additional resources
+            includeAllModules = true
+        }
+
+        buildTypes.release.proguard {
+            configurationFiles.from("installer/proguard-rules.pro")
         }
     }
 }

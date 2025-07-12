@@ -179,6 +179,7 @@ fun LoginScreen(
                                         )
                                     },
                                     modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
                                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                                     keyboardActions = KeyboardActions(
                                         onNext = { focusManager.moveFocus(FocusDirection.Down) }
@@ -207,6 +208,7 @@ fun LoginScreen(
                                         )
                                     },
                                     modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
                                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                                     keyboardActions = KeyboardActions(
                                         onNext = { focusManager.moveFocus(FocusDirection.Down) }
@@ -235,6 +237,7 @@ fun LoginScreen(
                                         )
                                     },
                                     modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
                                     keyboardOptions = KeyboardOptions(
                                         keyboardType = KeyboardType.Email,
                                         imeAction = ImeAction.Next
@@ -269,6 +272,7 @@ fun LoginScreen(
                                 )
                             },
                             modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                             keyboardActions = KeyboardActions(
                                 onNext = { focusManager.moveFocus(FocusDirection.Down) }
@@ -308,6 +312,7 @@ fun LoginScreen(
                             },
                             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                             modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
                             keyboardOptions = KeyboardOptions(
                                 keyboardType = KeyboardType.Password,
                                 imeAction = ImeAction.Done

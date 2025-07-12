@@ -32,11 +32,18 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import data.Category
 import data.CategoryStatus
 import data.api.CategoryDTO
 import data.api.InventoryDTO
+import ui.components.ColorPickerField
 import ui.components.RTLProvider
 import ui.components.RTLRow
 import ui.theme.AppTheme
@@ -949,6 +956,16 @@ fun CategoryDialog(
     var selectedInventoryId by remember { mutableStateOf(category?.inventoryId) }
     var showInventoryDropdown by remember { mutableStateOf(false) }
 
+    // Focus manager for keyboard navigation
+    val focusManager = LocalFocusManager.current
+
+    // Focus requesters for explicit focus management
+    val descriptionFocusRequester = remember { FocusRequester() }
+    val displayOrderFocusRequester = remember { FocusRequester() }
+    val colorCodeFocusRequester = remember { FocusRequester() }
+    val iconFocusRequester = remember { FocusRequester() }
+    val imageUrlFocusRequester = remember { FocusRequester() }
+
     // Collect inventory data
     val inventoryUiState by inventoryViewModel.uiState.collectAsState()
     val inventories = inventoryUiState.inventories
@@ -962,7 +979,7 @@ fun CategoryDialog(
     val title = if (isEditing) "تعديل الفئة" else "إضافة فئة جديدة"
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         title = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -1033,7 +1050,12 @@ fun CategoryDialog(
                                 )
                             },
                             modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
                             isError = name.isBlank(),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(
+                                onNext = { descriptionFocusRequester.requestFocus() }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -1054,9 +1076,15 @@ fun CategoryDialog(
                             value = description,
                             onValueChange = { description = it },
                             label = { Text("الوصف") },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(descriptionFocusRequester),
                             minLines = 3,
                             maxLines = 5,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(
+                                onNext = { displayOrderFocusRequester.requestFocus() }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -1170,8 +1198,17 @@ fun CategoryDialog(
                             value = displayOrder,
                             onValueChange = { displayOrder = it },
                             label = { Text("ترتيب العرض") },
-                            modifier = Modifier.fillMaxWidth(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(displayOrderFocusRequester),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Number,
+                                imeAction = ImeAction.Next
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onNext = { colorCodeFocusRequester.requestFocus() }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -1200,46 +1237,37 @@ fun CategoryDialog(
                             color = MaterialTheme.colorScheme.primary
                         )
 
-                        // Color Code Field
-                        Row(
+                        // Color Picker Field
+                        ColorPickerField(
+                            value = colorCode,
+                            onValueChange = { newColor ->
+                                colorCode = ColorUtils.normalizeHexColor(newColor)
+                            },
+                            label = "لون الفئة",
                             modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            OutlinedTextField(
-                                value = colorCode,
-                                onValueChange = { colorCode = it },
-                                label = { Text("رمز اللون") },
-                                modifier = Modifier.weight(1f),
-                                placeholder = { Text("#007bff") },
-                                shape = RoundedCornerShape(12.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                                )
+                            isError = !ColorUtils.isValidHexColor(colorCode) && colorCode.isNotBlank(),
+                            errorMessage = ColorUtils.getColorValidationError(colorCode),
+                            focusRequester = colorCodeFocusRequester,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(
+                                onNext = { iconFocusRequester.requestFocus() }
                             )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(
-                                        ColorUtils.parseHexColor(colorCode) ?: MaterialTheme.colorScheme.primary
-                                    )
-                                    .border(
-                                        1.dp,
-                                        MaterialTheme.colorScheme.outline,
-                                        RoundedCornerShape(8.dp)
-                                    )
-                            )
-                        }
+                        )
 
                         // Icon Field
                         OutlinedTextField(
                             value = icon,
                             onValueChange = { icon = it },
                             label = { Text("الأيقونة") },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(iconFocusRequester),
+                            singleLine = true,
                             placeholder = { Text("category-icon") },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(
+                                onNext = { imageUrlFocusRequester.requestFocus() }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -1252,8 +1280,32 @@ fun CategoryDialog(
                             value = imageUrl,
                             onValueChange = { imageUrl = it },
                             label = { Text("رابط الصورة") },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(imageUrlFocusRequester),
+                            singleLine = true,
                             placeholder = { Text("https://example.com/image.jpg") },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(
+                                onDone = {
+                                    val isColorValid = colorCode.isBlank() || ColorUtils.isValidHexColor(colorCode)
+                                    val isValid = name.isNotBlank() && selectedInventoryId != null && isColorValid
+                                    if (isValid) {
+                                        focusManager.clearFocus()
+                                        val categoryDTO = CategoryDTO(
+                                            id = category?.id,
+                                            name = name,
+                                            description = description.ifBlank { null },
+                                            displayOrder = displayOrder.toIntOrNull() ?: 0,
+                                            colorCode = colorCode.ifBlank { null },
+                                            icon = icon.ifBlank { null },
+                                            imageUrl = imageUrl.ifBlank { null },
+                                            inventoryId = selectedInventoryId
+                                        )
+                                        onSave(categoryDTO)
+                                    }
+                                }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -1314,7 +1366,8 @@ fun CategoryDialog(
                 // Save Button with Box-based hover effects
                 val saveInteractionSource = remember { MutableInteractionSource() }
                 val isSaveHovered by saveInteractionSource.collectIsHoveredAsState()
-                val isValid = name.isNotBlank() && selectedInventoryId != null
+                val isColorValid = colorCode.isBlank() || ColorUtils.isValidHexColor(colorCode)
+                val isValid = name.isNotBlank() && selectedInventoryId != null && isColorValid
 
                 Box(
                     modifier = Modifier
@@ -1382,7 +1435,13 @@ fun CategoryDetailsDialog(
     category: Category,
     onDismiss: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = {},
+        properties = DialogProperties(
+            dismissOnClickOutside = false,
+            dismissOnBackPress = true
+        )
+    ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()

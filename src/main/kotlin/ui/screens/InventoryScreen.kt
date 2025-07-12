@@ -13,8 +13,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.KeyboardType
+
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.BorderStroke
@@ -40,11 +39,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.window.Dialog
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.LaunchedEffect
 import data.*
 import data.api.*
 import data.api.services.StockMovementDTO
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
 import UiUtils
 import ui.components.*
 import ui.components.RTLProvider
@@ -701,11 +712,14 @@ fun InventoryScreen(
                             managerName = request.managerName,
                             managerPhone = request.managerPhone,
                             managerEmail = request.managerEmail,
-                            capacity = request.capacity,
+                            length = request.length,
+                            width = request.width,
+                            height = request.height,
                             currentStockCount = request.currentStockCount,
                             warehouseCode = request.warehouseCode,
                             isMainWarehouse = request.isMainWarehouse,
-                            operatingHours = request.operatingHours,
+                            startWorkTime = request.startWorkTime,
+                            endWorkTime = request.endWorkTime,
                             contactPhone = request.contactPhone,
                             contactEmail = request.contactEmail,
                             notes = request.notes
@@ -724,7 +738,7 @@ fun InventoryScreen(
 
         if (showDeleteWarehouseDialog && editingWarehouse != null) {
             AlertDialog(
-                onDismissRequest = { inventoryViewModel.closeDeleteDialog() },
+                onDismissRequest = {}, // Disabled click-outside-to-dismiss
                 title = { Text("تأكيد الحذف") },
                 text = { Text("هل أنت متأكد من حذف هذا المستودع؟ لا يمكن التراجع عن هذا الإجراء.") },
                 confirmButton = {
@@ -1975,15 +1989,27 @@ private fun EnhancedWarehouseCard(
                     )
                 }
 
-                inventory.capacity?.let { capacity ->
+                // Display dimensions if available
+                if (inventory.length != null || inventory.width != null || inventory.height != null) {
                     Column {
                         Text(
-                            text = "السعة القصوى",
+                            text = "الأبعاد (م)",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = "$capacity",
+                            text = buildString {
+                                inventory.length?.let { append("${String.format("%.1f", it)}") }
+                                if (inventory.width != null) {
+                                    if (isNotEmpty()) append(" × ")
+                                    append("${String.format("%.1f", inventory.width)}")
+                                }
+                                if (inventory.height != null) {
+                                    if (isNotEmpty()) append(" × ")
+                                    append("${String.format("%.1f", inventory.height)}")
+                                }
+                                if (isEmpty()) append("غير محدد")
+                            },
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -2312,7 +2338,7 @@ private fun InventoryItemDialog(
     var reorderPoint by remember { mutableStateOf(item?.reorderPoint?.toString() ?: "") }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         title = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -2544,6 +2570,387 @@ private fun InventoryItemDialog(
     )
 }
 
+// Time Picker Dialog Component
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TimePickerDialog(
+    selectedTime: LocalTime?,
+    onTimeSelected: (LocalTime) -> Unit,
+    onDismiss: () -> Unit,
+    title: String = "اختر الوقت"
+) {
+    var selectedHour by remember { mutableStateOf(selectedTime?.hour ?: 8) }
+    var selectedMinute by remember { mutableStateOf(selectedTime?.minute ?: 0) }
+
+    val hourListState = rememberLazyListState()
+    val minuteListState = rememberLazyListState()
+
+    // Scroll to selected values when dialog opens
+    LaunchedEffect(selectedTime) {
+        if (selectedTime != null) {
+            hourListState.scrollToItem(selectedTime.hour)
+            minuteListState.scrollToItem(selectedTime.minute)
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
+        title = {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(300.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Selected time display
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = String.format("%02d:%02d", selectedHour, selectedMinute),
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Time selectors
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Hour selector
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "الساعة",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                            )
+                        ) {
+                            LazyColumn(
+                                state = hourListState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(vertical = 8.dp)
+                            ) {
+                                items((0..23).toList()) { hour ->
+                                    val isSelected = hour == selectedHour
+
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                                            .clickable { selectedHour = hour },
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (isSelected)
+                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            else
+                                                Color.Transparent
+                                        ),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text(
+                                            text = String.format("%02d", hour),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected)
+                                                MaterialTheme.colorScheme.primary
+                                            else
+                                                MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(12.dp),
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Minute selector
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "الدقيقة",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                            )
+                        ) {
+                            LazyColumn(
+                                state = minuteListState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(vertical = 8.dp)
+                            ) {
+                                items((0..59).toList()) { minute ->
+                                    val isSelected = minute == selectedMinute
+
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                                            .clickable { selectedMinute = minute },
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (isSelected)
+                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            else
+                                                Color.Transparent
+                                        ),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text(
+                                            text = String.format("%02d", minute),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected)
+                                                MaterialTheme.colorScheme.primary
+                                            else
+                                                MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(12.dp),
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("إلغاء")
+                }
+
+                Button(
+                    onClick = {
+                        onTimeSelected(LocalTime(selectedHour, selectedMinute))
+                        onDismiss()
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Text("موافق")
+                }
+            }
+        },
+        dismissButton = null
+    )
+}
+
+// Time Picker Button Component
+@Composable
+private fun TimePickerButton(
+    selectedTime: LocalTime?,
+    onTimeSelected: (LocalTime?) -> Unit,
+    label: String,
+    placeholder: String = "اختر الوقت",
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    focusRequester: FocusRequester? = null,
+    onNext: (() -> Unit)? = null
+) {
+    var showTimePicker by remember { mutableStateOf(false) }
+
+    // Create a focusable button that can participate in keyboard navigation
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Column(modifier = modifier) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .then(
+                    if (focusRequester != null) {
+                        Modifier.focusRequester(focusRequester)
+                    } else Modifier
+                )
+                .focusable()
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    enabled = enabled
+                ) {
+                    if (enabled) {
+                        showTimePicker = true
+                    }
+                },
+            colors = CardDefaults.cardColors(
+                containerColor = if (isHovered && enabled)
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+                else
+                    MaterialTheme.colorScheme.surface
+            ),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(
+                width = if (isHovered && enabled) 1.5.dp else 1.dp,
+                color = if (isHovered && enabled)
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                else
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Schedule,
+                        contentDescription = null,
+                        tint = if (enabled)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                        modifier = Modifier.size(20.dp)
+                    )
+
+                    Text(
+                        text = selectedTime?.let {
+                            String.format("%02d:%02d", it.hour, it.minute)
+                        } ?: placeholder,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (selectedTime != null && enabled)
+                            MaterialTheme.colorScheme.onSurface
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (selectedTime != null && enabled) {
+                        IconButton(
+                            onClick = {
+                                onTimeSelected(null)
+                                onNext?.invoke()
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Clear,
+                                contentDescription = "مسح الوقت",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    Icon(
+                        Icons.Default.AccessTime,
+                        contentDescription = "اختر الوقت",
+                        tint = if (enabled)
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        else
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+    }
+
+    // Handle keyboard navigation
+    LaunchedEffect(focusRequester) {
+        focusRequester?.let { requester ->
+            // This allows the button to receive focus and handle Enter key
+            // The actual focus handling is done by the clickable modifier
+        }
+    }
+
+    // Time picker dialog
+    if (showTimePicker) {
+        TimePickerDialog(
+            selectedTime = selectedTime,
+            onTimeSelected = { time ->
+                onTimeSelected(time)
+                onNext?.invoke()
+            },
+            onDismiss = { showTimePicker = false },
+            title = label
+        )
+    }
+}
+
 // Enhanced Warehouse Dialog Component
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -2553,6 +2960,22 @@ private fun WarehouseDialog(
     onDismiss: () -> Unit,
     onSave: (InventoryCreateRequest) -> Unit
 ) {
+    // Helper function to parse time string to LocalTime
+    fun parseTimeString(timeStr: String): LocalTime? {
+        return try {
+            if (timeStr.isBlank()) return null
+            val parts = timeStr.split(":")
+            if (parts.size == 2) {
+                val hour = parts[0].toIntOrNull()
+                val minute = parts[1].toIntOrNull()
+                if (hour != null && minute != null && hour in 0..23 && minute in 0..59) {
+                    LocalTime(hour, minute)
+                } else null
+            } else null
+        } catch (e: Exception) {
+            null
+        }
+    }
     var name by remember { mutableStateOf(inventory?.name ?: "") }
     var description by remember { mutableStateOf(inventory?.description ?: "") }
     var location by remember { mutableStateOf(inventory?.location ?: "") }
@@ -2560,16 +2983,39 @@ private fun WarehouseDialog(
     var managerName by remember { mutableStateOf(inventory?.managerName ?: "") }
     var managerPhone by remember { mutableStateOf(inventory?.managerPhone ?: "") }
     var managerEmail by remember { mutableStateOf(inventory?.managerEmail ?: "") }
-    var capacity by remember { mutableStateOf(inventory?.capacity?.toString() ?: "") }
+    var length by remember { mutableStateOf(inventory?.length?.toString() ?: "") }
+    var width by remember { mutableStateOf(inventory?.width?.toString() ?: "") }
+    var height by remember { mutableStateOf(inventory?.height?.toString() ?: "") }
     var warehouseCode by remember { mutableStateOf(inventory?.warehouseCode ?: "") }
     var isMainWarehouse by remember { mutableStateOf(inventory?.isMainWarehouse ?: false) }
-    var operatingHours by remember { mutableStateOf(inventory?.operatingHours ?: "") }
+    var startWorkTime by remember { mutableStateOf(inventory?.startWorkTime) }
+    var endWorkTime by remember { mutableStateOf(inventory?.endWorkTime) }
     var contactPhone by remember { mutableStateOf(inventory?.contactPhone ?: "") }
     var contactEmail by remember { mutableStateOf(inventory?.contactEmail ?: "") }
     var notes by remember { mutableStateOf(inventory?.notes ?: "") }
 
+    // Focus manager for keyboard navigation
+    val focusManager = LocalFocusManager.current
+
+    // Focus requesters for explicit focus management
+    val locationFocusRequester = remember { FocusRequester() }
+    val descriptionFocusRequester = remember { FocusRequester() }
+    val addressFocusRequester = remember { FocusRequester() }
+    val lengthFocusRequester = remember { FocusRequester() }
+    val widthFocusRequester = remember { FocusRequester() }
+    val heightFocusRequester = remember { FocusRequester() }
+    val warehouseCodeFocusRequester = remember { FocusRequester() }
+    val managerNameFocusRequester = remember { FocusRequester() }
+    val managerPhoneFocusRequester = remember { FocusRequester() }
+    val managerEmailFocusRequester = remember { FocusRequester() }
+    val contactPhoneFocusRequester = remember { FocusRequester() }
+    val contactEmailFocusRequester = remember { FocusRequester() }
+    val startWorkTimeFocusRequester = remember { FocusRequester() }
+    val endWorkTimeFocusRequester = remember { FocusRequester() }
+    val notesFocusRequester = remember { FocusRequester() }
+
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         title = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -2640,6 +3086,11 @@ private fun WarehouseDialog(
                             },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
+                            isError = name.isBlank(),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(
+                                onNext = { locationFocusRequester.requestFocus() }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             enabled = !isLoading,
                             colors = OutlinedTextFieldDefaults.colors(
@@ -2659,8 +3110,15 @@ private fun WarehouseDialog(
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(locationFocusRequester),
                             singleLine = true,
+                            isError = location.isBlank(),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(
+                                onNext = { descriptionFocusRequester.requestFocus() }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             enabled = !isLoading,
                             colors = OutlinedTextFieldDefaults.colors(
@@ -2680,8 +3138,14 @@ private fun WarehouseDialog(
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(descriptionFocusRequester),
                             maxLines = 2,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(
+                                onNext = { addressFocusRequester.requestFocus() }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             enabled = !isLoading,
                             colors = OutlinedTextFieldDefaults.colors(
@@ -2701,8 +3165,14 @@ private fun WarehouseDialog(
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(addressFocusRequester),
                             maxLines = 2,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(
+                                onNext = { lengthFocusRequester.requestFocus() }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             enabled = !isLoading,
                             colors = OutlinedTextFieldDefaults.colors(
@@ -2713,7 +3183,7 @@ private fun WarehouseDialog(
                     }
                 }
 
-                // Capacity and Code Section
+                // Warehouse Dimensions Section
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
@@ -2726,38 +3196,117 @@ private fun WarehouseDialog(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Text(
-                            text = "معلومات السعة والكود",
+                            text = "أبعاد المستودع (بالمتر)",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
                         )
 
+                        // Dimensions Row
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             OutlinedTextField(
-                                value = capacity,
-                                onValueChange = { capacity = it },
-                                label = { Text("السعة القصوى") },
+                                value = length,
+                                onValueChange = { length = it },
+                                label = { Text("الطول") },
                                 leadingIcon = {
                                     Icon(
-                                        Icons.Default.Inventory,
+                                        Icons.Default.Straighten,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(lengthFocusRequester),
                                 singleLine = true,
                                 shape = RoundedCornerShape(12.dp),
                                 enabled = !isLoading,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Decimal,
+                                    imeAction = ImeAction.Next
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onNext = { widthFocusRequester.requestFocus() }
+                                ),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = MaterialTheme.colorScheme.primary,
                                     unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                                )
+                                ),
+                                placeholder = { Text("0.0") }
                             )
 
+                            OutlinedTextField(
+                                value = width,
+                                onValueChange = { width = it },
+                                label = { Text("العرض") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Straighten,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(widthFocusRequester),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Decimal,
+                                    imeAction = ImeAction.Next
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onNext = { heightFocusRequester.requestFocus() }
+                                ),
+                                shape = RoundedCornerShape(12.dp),
+                                enabled = !isLoading,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                                ),
+                                placeholder = { Text("0.0") }
+                            )
+
+                            OutlinedTextField(
+                                value = height,
+                                onValueChange = { height = it },
+                                label = { Text("الارتفاع") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Height,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(heightFocusRequester),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Decimal,
+                                    imeAction = ImeAction.Next
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onNext = { warehouseCodeFocusRequester.requestFocus() }
+                                ),
+                                shape = RoundedCornerShape(12.dp),
+                                enabled = !isLoading,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                                ),
+                                placeholder = { Text("0.0") }
+                            )
+                        }
+
+                        // Warehouse Code and Main Warehouse Section
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             OutlinedTextField(
                                 value = warehouseCode,
                                 onValueChange = { warehouseCode = it },
@@ -2769,8 +3318,14 @@ private fun WarehouseDialog(
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(warehouseCodeFocusRequester),
                                 singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                keyboardActions = KeyboardActions(
+                                    onNext = { managerNameFocusRequester.requestFocus() }
+                                ),
                                 shape = RoundedCornerShape(12.dp),
                                 enabled = !isLoading,
                                 colors = OutlinedTextFieldDefaults.colors(
@@ -2778,27 +3333,27 @@ private fun WarehouseDialog(
                                     unfocusedBorderColor = MaterialTheme.colorScheme.outline
                                 )
                             )
-                        }
 
-                        // Main Warehouse Checkbox
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = isMainWarehouse,
-                                onCheckedChange = { isMainWarehouse = it },
-                                enabled = !isLoading,
-                                colors = CheckboxDefaults.colors(
-                                    checkedColor = MaterialTheme.colorScheme.primary
+                            // Main Warehouse Checkbox
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = isMainWarehouse,
+                                    onCheckedChange = { isMainWarehouse = it },
+                                    enabled = !isLoading,
+                                    colors = CheckboxDefaults.colors(
+                                        checkedColor = MaterialTheme.colorScheme.primary
+                                    )
                                 )
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "مستودع رئيسي",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "مستودع رئيسي",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
                     }
                 }
@@ -2833,8 +3388,14 @@ private fun WarehouseDialog(
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(managerNameFocusRequester),
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(
+                                onNext = { managerPhoneFocusRequester.requestFocus() }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             enabled = !isLoading,
                             colors = OutlinedTextFieldDefaults.colors(
@@ -2858,11 +3419,19 @@ private fun WarehouseDialog(
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(managerPhoneFocusRequester),
                                 singleLine = true,
                                 shape = RoundedCornerShape(12.dp),
                                 enabled = !isLoading,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Phone,
+                                    imeAction = ImeAction.Next
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onNext = { managerEmailFocusRequester.requestFocus() }
+                                ),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = MaterialTheme.colorScheme.primary,
                                     unfocusedBorderColor = MaterialTheme.colorScheme.outline
@@ -2880,11 +3449,19 @@ private fun WarehouseDialog(
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(managerEmailFocusRequester),
                                 singleLine = true,
                                 shape = RoundedCornerShape(12.dp),
                                 enabled = !isLoading,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Email,
+                                    imeAction = ImeAction.Next
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onNext = { contactPhoneFocusRequester.requestFocus() }
+                                ),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = MaterialTheme.colorScheme.primary,
                                     unfocusedBorderColor = MaterialTheme.colorScheme.outline
@@ -2928,11 +3505,19 @@ private fun WarehouseDialog(
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(contactPhoneFocusRequester),
                                 singleLine = true,
                                 shape = RoundedCornerShape(12.dp),
                                 enabled = !isLoading,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Phone,
+                                    imeAction = ImeAction.Next
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onNext = { contactEmailFocusRequester.requestFocus() }
+                                ),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = MaterialTheme.colorScheme.primary,
                                     unfocusedBorderColor = MaterialTheme.colorScheme.outline
@@ -2950,11 +3535,19 @@ private fun WarehouseDialog(
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(contactEmailFocusRequester),
                                 singleLine = true,
                                 shape = RoundedCornerShape(12.dp),
                                 enabled = !isLoading,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Email,
+                                    imeAction = ImeAction.Next
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onNext = { startWorkTimeFocusRequester.requestFocus() }
+                                ),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = MaterialTheme.colorScheme.primary,
                                     unfocusedBorderColor = MaterialTheme.colorScheme.outline
@@ -2962,27 +3555,35 @@ private fun WarehouseDialog(
                             )
                         }
 
-                        OutlinedTextField(
-                            value = operatingHours,
-                            onValueChange = { operatingHours = it },
-                            label = { Text("ساعات العمل") },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Default.Schedule,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            },
+                        // Work Time Fields
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            enabled = !isLoading,
-                            placeholder = { Text("مثال: 8:00 ص - 6:00 م") },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // Start Work Time
+                            TimePickerButton(
+                                selectedTime = startWorkTime,
+                                onTimeSelected = { time -> startWorkTime = time },
+                                label = "بداية العمل",
+                                placeholder = "اختر وقت البداية",
+                                modifier = Modifier.weight(1f),
+                                enabled = !isLoading,
+                                focusRequester = startWorkTimeFocusRequester,
+                                onNext = { endWorkTimeFocusRequester.requestFocus() }
                             )
-                        )
+
+                            // End Work Time
+                            TimePickerButton(
+                                selectedTime = endWorkTime,
+                                onTimeSelected = { time -> endWorkTime = time },
+                                label = "نهاية العمل",
+                                placeholder = "اختر وقت النهاية",
+                                modifier = Modifier.weight(1f),
+                                enabled = !isLoading,
+                                focusRequester = endWorkTimeFocusRequester,
+                                onNext = { notesFocusRequester.requestFocus() }
+                            )
+                        }
                     }
                 }
 
@@ -3016,8 +3617,39 @@ private fun WarehouseDialog(
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(notesFocusRequester),
                             maxLines = 3,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(
+                                onDone = {
+                                    val isValid = name.isNotBlank() && location.isNotBlank()
+                                    if (isValid && !isLoading) {
+                                        focusManager.clearFocus()
+                                        val request = InventoryCreateRequest(
+                                            name = name.trim(),
+                                            description = description.trim().takeIf { it.isNotBlank() },
+                                            location = location.trim(),
+                                            address = address.trim().takeIf { it.isNotBlank() },
+                                            managerName = managerName.trim().takeIf { it.isNotBlank() },
+                                            managerPhone = managerPhone.trim().takeIf { it.isNotBlank() },
+                                            managerEmail = managerEmail.trim().takeIf { it.isNotBlank() },
+                                            length = length.toDoubleOrNull(),
+                                            width = width.toDoubleOrNull(),
+                                            height = height.toDoubleOrNull(),
+                                            warehouseCode = warehouseCode.trim().takeIf { it.isNotBlank() },
+                                            isMainWarehouse = isMainWarehouse,
+                                            startWorkTime = startWorkTime,
+                                            endWorkTime = endWorkTime,
+                                            contactPhone = contactPhone.trim().takeIf { it.isNotBlank() },
+                                            contactEmail = contactEmail.trim().takeIf { it.isNotBlank() },
+                                            notes = notes.trim().takeIf { it.isNotBlank() }
+                                        )
+                                        onSave(request)
+                                    }
+                                }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             enabled = !isLoading,
                             colors = OutlinedTextFieldDefaults.colors(
@@ -3121,10 +3753,13 @@ private fun WarehouseDialog(
                                     managerName = managerName.trim().takeIf { it.isNotBlank() },
                                     managerPhone = managerPhone.trim().takeIf { it.isNotBlank() },
                                     managerEmail = managerEmail.trim().takeIf { it.isNotBlank() },
-                                    capacity = capacity.toIntOrNull(),
+                                    length = length.toDoubleOrNull(),
+                                    width = width.toDoubleOrNull(),
+                                    height = height.toDoubleOrNull(),
                                     warehouseCode = warehouseCode.trim().takeIf { it.isNotBlank() },
                                     isMainWarehouse = isMainWarehouse,
-                                    operatingHours = operatingHours.trim().takeIf { it.isNotBlank() },
+                                    startWorkTime = startWorkTime,
+                                    endWorkTime = endWorkTime,
                                     contactPhone = contactPhone.trim().takeIf { it.isNotBlank() },
                                     contactEmail = contactEmail.trim().takeIf { it.isNotBlank() },
                                     notes = notes.trim().takeIf { it.isNotBlank() }

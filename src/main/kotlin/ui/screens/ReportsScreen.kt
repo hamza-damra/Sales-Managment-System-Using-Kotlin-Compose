@@ -9,6 +9,7 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Lightbulb
@@ -22,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ui.components.*
 import ui.theme.AppTheme
@@ -38,6 +40,8 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.*
 import java.text.NumberFormat
 import java.util.*
+import utils.CurrencyUtils
+import data.preferences.CurrencyPreferencesManager
 
 /**
  * Comprehensive Reports Screen with enterprise-level analytics
@@ -71,10 +75,8 @@ fun ReportsScreen(
     var selectedCustomEndDate by remember { mutableStateOf<LocalDate?>(null) }
     
     val coroutineScope = rememberCoroutineScope()
-    val currencyFormatter = remember { 
-        NumberFormat.getCurrencyInstance(Locale("ar", "SA")).apply {
-            currency = Currency.getInstance("SAR")
-        }
+    val currencyFormatter = remember {
+        CurrencyUtils.getCurrencyFormatter()
     }
 
     RTLProvider {
@@ -191,7 +193,7 @@ fun ReportsScreen(
     }
 }
 
-// Enhanced Header Component
+// Enhanced Header Component with improved design consistency
 @Composable
 private fun EnhancedReportsHeader(
     selectedDateRange: DateRange,
@@ -203,95 +205,128 @@ private fun EnhancedReportsHeader(
     isLoading: Boolean,
     isRefreshing: Boolean
 ) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+    Card(
+        colors = CardStyles.elevatedCardColors(),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardStyles.elevatedCardElevation(),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        // Title and actions
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            Column {
-                Text(
-                    text = "التقارير والإحصائيات",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Text(
-                    text = "تحليل شامل وتفصيلي لأداء الأعمال",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            
+            // Title and actions with enhanced styling
             Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Refresh button
-                IconButton(
-                    onClick = onRefresh,
-                    enabled = !isLoading
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "التقارير والإحصائيات",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "تحليل شامل وتفصيلي لأداء الأعمال",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // Enhanced action buttons with consistent styling
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (isRefreshing) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Icon(
-                            Icons.Default.Refresh,
-                            contentDescription = "تحديث",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                    // Refresh button with enhanced styling
+                    Surface(
+                        onClick = onRefresh,
+                        enabled = !isLoading,
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isRefreshing) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                               else MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            if (isRefreshing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.Refresh,
+                                    contentDescription = "تحديث",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Export button with enhanced styling
+                    Surface(
+                        onClick = onExport,
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.FileDownload,
+                                contentDescription = "تصدير",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    // Filters button with enhanced styling
+                    Surface(
+                        onClick = onFilters,
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.FilterList,
+                                contentDescription = "فلاتر",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
-                
-                // Export button
-                IconButton(onClick = onExport) {
-                    Icon(
-                        Icons.Default.FileDownload,
-                        contentDescription = "تصدير",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-                
-                // Filters button
-                IconButton(onClick = onFilters) {
-                    Icon(
-                        Icons.Default.FilterList,
-                        contentDescription = "فلاتر",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
             }
+
+            // Enhanced date range selector
+            EnhancedDateRangeSelector(
+                selectedRange = selectedDateRange,
+                onRangeSelected = onDateRangeSelected,
+                onCustomRangeClick = onCustomDateRangeClick
+            )
         }
-        
-        // Date range selector
-        DateRangeSelector(
-            selectedRange = selectedDateRange,
-            onRangeSelected = onDateRangeSelected,
-            onCustomRangeClick = onCustomDateRangeClick
-        )
     }
 }
 
-// Date Range Selector Component
+// Enhanced Date Range Selector Component with improved design
 @Composable
-private fun DateRangeSelector(
+private fun EnhancedDateRangeSelector(
     selectedRange: DateRange,
     onRangeSelected: (DateRange) -> Unit,
     onCustomRangeClick: () -> Unit
 ) {
-    Card(
-        colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardStyles.defaultCardElevation()
+    Column(
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = "فترة التقرير",
@@ -300,29 +335,59 @@ private fun DateRangeSelector(
                 color = MaterialTheme.colorScheme.onSurface
             )
 
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            // Quick date range indicator
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
             ) {
-                items(DateRange.values()) { range ->
-                    DateRangeChip(
-                        range = range,
-                        isSelected = selectedRange == range,
-                        onClick = {
-                            if (range == DateRange.CUSTOM) {
-                                onCustomRangeClick()
-                            } else {
-                                onRangeSelected(range)
-                            }
+                Text(
+                    text = getDateRangeDisplayText(selectedRange),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+        }
+
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp)
+        ) {
+            items(DateRange.values()) { range ->
+                EnhancedDateRangeChip(
+                    range = range,
+                    isSelected = selectedRange == range,
+                    onClick = {
+                        if (range == DateRange.CUSTOM) {
+                            onCustomRangeClick()
+                        } else {
+                            onRangeSelected(range)
                         }
-                    )
-                }
+                    }
+                )
             }
         }
     }
 }
 
+// Helper function for date range display
+private fun getDateRangeDisplayText(range: DateRange): String {
+    return when (range) {
+        DateRange.TODAY -> "اليوم"
+        DateRange.YESTERDAY -> "أمس"
+        DateRange.LAST_7_DAYS -> "آخر أسبوع"
+        DateRange.LAST_30_DAYS -> "آخر شهر"
+        DateRange.LAST_90_DAYS -> "آخر 3 أشهر"
+        DateRange.THIS_MONTH -> "هذا الشهر"
+        DateRange.LAST_MONTH -> "الشهر الماضي"
+        DateRange.THIS_YEAR -> "هذا العام"
+        DateRange.CUSTOM -> "فترة مخصصة"
+    }
+}
+
 @Composable
-private fun DateRangeChip(
+private fun EnhancedDateRangeChip(
     range: DateRange,
     isSelected: Boolean,
     onClick: () -> Unit
@@ -339,13 +404,33 @@ private fun DateRangeChip(
         DateRange.CUSTOM -> "فترة مخصصة"
     }
 
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
     FilterChip(
         onClick = onClick,
-        label = { Text(text) },
+        label = {
+            Text(
+                text = text,
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
+            )
+        },
         selected = isSelected,
+        interactionSource = interactionSource,
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = MaterialTheme.colorScheme.primary,
-            selectedLabelColor = Color.White
+            selectedLabelColor = Color.White,
+            containerColor = if (isHovered) MaterialTheme.colorScheme.surfaceVariant
+                           else MaterialTheme.colorScheme.surface
+        ),
+        border = if (isSelected) null else FilterChipDefaults.filterChipBorder(
+            enabled = true,
+            selected = isSelected,
+            borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+            selectedBorderColor = MaterialTheme.colorScheme.primary
+        ),
+        elevation = FilterChipDefaults.filterChipElevation(
+            elevation = if (isHovered) 4.dp else 2.dp
         )
     )
 }
@@ -534,7 +619,7 @@ private fun ReportTypeCard(
     }
 }
 
-// Real-time KPIs Dashboard
+// Enhanced Real-time KPIs Dashboard with improved design
 @Composable
 private fun RealTimeKPIsDashboard(
     kpis: JsonElement?,
@@ -544,80 +629,111 @@ private fun RealTimeKPIsDashboard(
     Card(
         colors = CardStyles.elevatedCardColors(),
         shape = RoundedCornerShape(20.dp),
-        elevation = CardStyles.elevatedCardElevation()
+        elevation = CardStyles.elevatedCardElevation(),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
+            // Enhanced header with loading state
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "المؤشرات الرئيسية",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Column {
+                    Text(
+                        text = "المؤشرات الرئيسية",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "البيانات المباشرة للأداء",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
                 if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp
-                    )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "جاري التحديث...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
                 }
             }
 
+            // Enhanced KPI cards with responsive full-width layout
             if (kpis != null) {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    item {
-                        KPICard(
-                            title = "مبيعات اليوم",
-                            value = currencyFormatter.format(getKPIDouble(kpis, "todaysRevenue")),
-                            subtitle = "${getKPILong(kpis, "todaysSales")} عملية بيع",
-                            icon = Icons.Default.TrendingUp,
-                            color = AppTheme.colors.success
-                        )
-                    }
-                    item {
-                        KPICard(
-                            title = "العملاء النشطون",
-                            value = "${getKPILong(kpis, "activeCustomers")}",
-                            subtitle = "عميل نشط",
-                            icon = Icons.Default.People,
-                            color = AppTheme.colors.info
-                        )
-                    }
-                    item {
-                        KPICard(
-                            title = "قيمة المخزون",
-                            value = currencyFormatter.format(getKPIDouble(kpis, "inventoryValue")),
-                            subtitle = "${getKPILong(kpis, "lowStockItems")} منتج ناقص",
-                            icon = Icons.Default.Inventory,
-                            color = AppTheme.colors.warning
-                        )
-                    }
-                    item {
-                        KPICard(
-                            title = "المرتجعات المعلقة",
-                            value = "${getKPILong(kpis, "pendingReturns")}",
-                            subtitle = "مرتجع معلق",
-                            icon = Icons.Default.AssignmentReturn,
-                            color = AppTheme.colors.error
-                        )
-                    }
-                }
-            } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    repeat(4) {
-                        KPICardSkeleton(modifier = Modifier.weight(1f))
+                    EnhancedKPICard(
+                        title = "مبيعات اليوم",
+                        value = currencyFormatter.format(getKPIDouble(kpis, "todaysRevenue")),
+                        subtitle = "${getKPILong(kpis, "todaysSales")} عملية بيع",
+                        icon = Icons.Default.TrendingUp,
+                        color = AppTheme.colors.success,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    EnhancedKPICard(
+                        title = "العملاء النشطون",
+                        value = "${getKPILong(kpis, "activeCustomers")}",
+                        subtitle = "عميل نشط",
+                        icon = Icons.Default.People,
+                        color = AppTheme.colors.info,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    EnhancedKPICard(
+                        title = "قيمة المخزون",
+                        value = currencyFormatter.format(getKPIDouble(kpis, "inventoryValue")),
+                        subtitle = "${getKPILong(kpis, "lowStockItems")} منتج ناقص",
+                        icon = Icons.Default.Inventory,
+                        color = AppTheme.colors.warning,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    EnhancedKPICard(
+                        title = "المرتجعات المعلقة",
+                        value = "${getKPILong(kpis, "pendingReturns")}",
+                        subtitle = "مرتجع معلق",
+                        icon = Icons.Default.AssignmentReturn,
+                        color = AppTheme.colors.error,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            } else {
+                // Enhanced skeleton loading state with responsive full-width layout
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    repeat(4) { index ->
+                        EnhancedKPICardSkeleton(
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
             }
@@ -626,34 +742,41 @@ private fun RealTimeKPIsDashboard(
 }
 
 @Composable
-private fun KPICard(
+private fun EnhancedKPICard(
     title: String,
     value: String,
     subtitle: String,
     icon: ImageVector,
-    color: Color
+    color: Color,
+    modifier: Modifier = Modifier
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
     Card(
-        modifier = Modifier
-            .width(200.dp)
-            .height(120.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        modifier = modifier
+            .height(140.dp)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { /* Handle click if needed */ },
+        colors = CardStyles.elevatedCardColors(),
+        shape = RoundedCornerShape(18.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isHovered) 8.dp else 4.dp
+        )
     ) {
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Background gradient
+            // Enhanced gradient background
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         brush = Brush.verticalGradient(
                             colors = listOf(
-                                color.copy(alpha = 0.02f),
+                                color.copy(alpha = 0.03f),
                                 color.copy(alpha = 0.08f)
                             )
                         )
@@ -663,7 +786,7 @@ private fun KPICard(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp),
+                    .padding(20.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
@@ -671,99 +794,160 @@ private fun KPICard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.Top
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = title,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Medium
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = value,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = color
+                            color = color,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
+                    // Enhanced icon with better styling
                     Box(
                         modifier = Modifier
-                            .size(32.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(color.copy(alpha = 0.1f)),
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        color.copy(alpha = 0.15f),
+                                        color.copy(alpha = 0.25f)
+                                    )
+                                )
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = color.copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(12.dp)
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             icon,
                             contentDescription = null,
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(20.dp),
                             tint = color
                         )
                     }
                 }
 
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                // Enhanced subtitle with better styling
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun KPICardSkeleton(
+private fun EnhancedKPICardSkeleton(
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier.height(120.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        ),
-        shape = RoundedCornerShape(16.dp)
+        modifier = modifier
+            .height(140.dp),
+        colors = CardStyles.elevatedCardColors(),
+        shape = RoundedCornerShape(18.dp),
+        elevation = CardStyles.elevatedCardElevation()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
+                .padding(20.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
+                    // Title skeleton
                     Box(
                         modifier = Modifier
-                            .width(80.dp)
+                            .fillMaxWidth(0.7f)
                             .height(16.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                            .background(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f),
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)
+                                    )
+                                )
+                            )
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    // Value skeleton
                     Box(
                         modifier = Modifier
-                            .width(60.dp)
-                            .height(20.dp)
+                            .fillMaxWidth(0.8f)
+                            .height(24.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                            .background(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f),
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)
+                                    )
+                                )
+                            )
                     )
                 }
 
+                // Icon skeleton
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f),
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                                )
+                            )
+                        )
                 )
             }
 
+            // Subtitle skeleton
             Box(
                 modifier = Modifier
-                    .width(100.dp)
+                    .fillMaxWidth(0.6f)
                     .height(14.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                    .background(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f),
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)
+                            )
+                        )
+                    )
             )
         }
     }
@@ -841,54 +1025,135 @@ private fun getReportTitle(reportType: String): String {
 @Composable
 private fun ReportLoadingSkeleton() {
     Column(
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        // Summary cards skeleton
+        // Enhanced summary cards skeleton
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp)
         ) {
-            items(3) {
+            items(3) { index ->
                 Card(
                     modifier = Modifier
-                        .width(200.dp)
-                        .height(100.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                    )
+                        .width(220.dp)
+                        .height(120.dp),
+                    colors = CardStyles.elevatedCardColors(),
+                    shape = RoundedCornerShape(18.dp),
+                    elevation = CardStyles.elevatedCardElevation()
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(0.7f)
-                                .height(16.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(0.5f)
-                                .height(20.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(0.7f)
+                                        .height(16.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(
+                                            brush = Brush.horizontalGradient(
+                                                colors = listOf(
+                                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f),
+                                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)
+                                                )
+                                            )
+                                        )
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(0.8f)
+                                        .height(24.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(
+                                            brush = Brush.horizontalGradient(
+                                                colors = listOf(
+                                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f),
+                                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)
+                                                )
+                                            )
+                                        )
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        brush = Brush.radialGradient(
+                                            colors = listOf(
+                                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f),
+                                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                                            )
+                                        )
+                                    )
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // Chart skeleton
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(300.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-        )
+        // Enhanced chart skeleton with better styling
+        Card(
+            colors = CardStyles.defaultCardColors(),
+            shape = RoundedCornerShape(20.dp),
+            elevation = CardStyles.defaultCardElevation()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(320.dp)
+                    .padding(24.dp)
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Chart title skeleton
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.4f)
+                            .height(20.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f),
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)
+                                    )
+                                )
+                            )
+                    )
+
+                    // Chart area skeleton
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+                                    )
+                                )
+                            )
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -897,46 +1162,90 @@ private fun ReportErrorState(
     error: String,
     onRetry: () -> Unit
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f)
+        ),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
+        )
     ) {
-        Icon(
-            Icons.Default.Error,
-            contentDescription = null,
-            modifier = Modifier.size(48.dp),
-            tint = AppTheme.colors.error
-        )
-
-        Text(
-            text = "حدث خطأ في تحميل التقرير",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center
-        )
-
-        Text(
-            text = error,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-
-        Button(
-            onClick = onRetry,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary
-            )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            Icon(
-                Icons.Default.Refresh,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("إعادة المحاولة")
+            // Enhanced error icon with background
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                AppTheme.colors.error.copy(alpha = 0.1f),
+                                AppTheme.colors.error.copy(alpha = 0.2f)
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Error,
+                    contentDescription = null,
+                    modifier = Modifier.size(40.dp),
+                    tint = AppTheme.colors.error
+                )
+            }
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "حدث خطأ في تحميل التقرير",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center
+                )
+
+                Text(
+                    text = error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.2
+                )
+            }
+
+            // Enhanced retry button
+            Button(
+                onClick = onRetry,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AppTheme.colors.error
+                ),
+                shape = RoundedCornerShape(12.dp),
+                elevation = ButtonDefaults.buttonElevation(
+                    defaultElevation = 4.dp,
+                    pressedElevation = 2.dp
+                )
+            ) {
+                Icon(
+                    Icons.Default.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "إعادة المحاولة",
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
     }
 }
@@ -971,7 +1280,7 @@ private fun EmptyReportState() {
     }
 }
 
-// Sales Report Content
+// Enhanced Sales Report Content with improved design
 @Composable
 private fun SalesReportContent(
     salesReport: ComprehensiveSalesReportDTO?,
@@ -983,86 +1292,141 @@ private fun SalesReportContent(
     }
 
     Column(
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+        verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        // Summary cards
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            item {
-                MetricCard(
-                    title = "إجمالي المبيعات",
-                    value = "${salesReport.summary.totalSales}",
-                    change = salesReport.summary.salesGrowth?.let { "+${String.format("%.1f", it)}%" } ?: "N/A",
-                    isPositiveChange = salesReport.summary.salesGrowth?.let { it >= 0 } ?: true,
-                    icon = Icons.Default.ShoppingCart
-                )
-            }
-            item {
-                MetricCard(
-                    title = "إجمالي الإيرادات",
-                    value = currencyFormatter.format(salesReport.summary.totalRevenue),
-                    change = salesReport.summary.revenueGrowth?.let { "+${String.format("%.1f", it)}%" } ?: "N/A",
-                    isPositiveChange = salesReport.summary.revenueGrowth?.let { it >= 0 } ?: true,
-                    icon = Icons.Default.TrendingUp
-                )
-            }
-            item {
-                MetricCard(
-                    title = "متوسط قيمة الطلب",
-                    value = currencyFormatter.format(salesReport.summary.averageOrderValue),
-                    change = null,
-                    icon = Icons.Default.Receipt
-                )
-            }
-            item {
-                MetricCard(
-                    title = "العملاء الفريدون",
-                    value = "${salesReport.summary.uniqueCustomers ?: "N/A"}",
-                    change = null,
-                    icon = Icons.Default.People
-                )
-            }
-        }
-
-        // Top customers and products
+        // Enhanced summary cards with responsive full-width layout
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Top customers
+            MetricCard(
+                title = "إجمالي المبيعات",
+                value = "${salesReport.summary.totalSales}",
+                change = salesReport.summary.salesGrowth?.let {
+                    "${if (it >= 0) "+" else ""}${String.format("%.1f", it)}%"
+                },
+                isPositiveChange = salesReport.summary.salesGrowth?.let { it >= 0 } ?: true,
+                icon = Icons.Default.ShoppingCart,
+                modifier = Modifier.weight(1f)
+            )
+
+            MetricCard(
+                title = "إجمالي الإيرادات",
+                value = currencyFormatter.format(salesReport.summary.totalRevenue),
+                change = salesReport.summary.revenueGrowth?.let {
+                    "${if (it >= 0) "+" else ""}${String.format("%.1f", it)}%"
+                },
+                isPositiveChange = salesReport.summary.revenueGrowth?.let { it >= 0 } ?: true,
+                icon = Icons.Default.TrendingUp,
+                modifier = Modifier.weight(1f)
+            )
+
+            MetricCard(
+                title = "متوسط قيمة الطلب",
+                value = currencyFormatter.format(salesReport.summary.averageOrderValue),
+                change = null,
+                icon = Icons.Default.Receipt,
+                modifier = Modifier.weight(1f)
+            )
+
+            MetricCard(
+                title = "العملاء الفريدون",
+                value = "${salesReport.summary.uniqueCustomers ?: "غير متاح"}",
+                change = null,
+                icon = Icons.Default.People,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        // Enhanced top customers and products section
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            // Enhanced top customers card
             Card(
                 modifier = Modifier.weight(1f),
-                colors = CardStyles.defaultCardColors()
+                colors = CardStyles.elevatedCardColors(),
+                shape = RoundedCornerShape(18.dp),
+                elevation = CardStyles.elevatedCardElevation()
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Text(
-                        text = "أفضل العملاء",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "أفضل العملاء",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = AppTheme.colors.success.copy(alpha = 0.1f)
+                        ) {
+                            Text(
+                                text = "${salesReport.topCustomers.size}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = AppTheme.colors.success,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
 
-                    salesReport.topCustomers.take(5).forEach { customer ->
+                    salesReport.topCustomers.take(5).forEachIndexed { index, customer ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
-                                Text(
-                                    text = customer.customerName,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Text(
-                                    text = "${customer.totalOrders} طلب",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Ranking badge
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            when (index) {
+                                                0 -> Color(0xFFFFD700) // Gold
+                                                1 -> Color(0xFFC0C0C0) // Silver
+                                                2 -> Color(0xFFCD7F32) // Bronze
+                                                else -> MaterialTheme.colorScheme.surfaceVariant
+                                            }
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "${index + 1}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (index < 3) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                Column {
+                                    Text(
+                                        text = customer.customerName,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "${customer.totalOrders} طلب",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
+
                             Text(
                                 text = currencyFormatter.format(customer.totalSpent),
                                 style = MaterialTheme.typography.bodyMedium,
@@ -1070,48 +1434,115 @@ private fun SalesReportContent(
                                 color = AppTheme.colors.success
                             )
                         }
+
+                        if (index < salesReport.topCustomers.take(5).size - 1) {
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
                     }
                 }
             }
 
-            // Top products
+            // Enhanced top products card
             Card(
                 modifier = Modifier.weight(1f),
-                colors = CardStyles.defaultCardColors()
+                colors = CardStyles.elevatedCardColors(),
+                shape = RoundedCornerShape(18.dp),
+                elevation = CardStyles.elevatedCardElevation()
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Text(
-                        text = "أفضل المنتجات",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "أفضل المنتجات",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = AppTheme.colors.info.copy(alpha = 0.1f)
+                        ) {
+                            Text(
+                                text = "${salesReport.topProducts.size}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = AppTheme.colors.info,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
 
-                    salesReport.topProducts.take(5).forEach { product ->
+                    salesReport.topProducts.take(5).forEachIndexed { index, product ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
-                                Text(
-                                    text = product.productName,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Text(
-                                    text = "${product.quantitySold} قطعة",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Ranking badge
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            when (index) {
+                                                0 -> Color(0xFFFFD700) // Gold
+                                                1 -> Color(0xFFC0C0C0) // Silver
+                                                2 -> Color(0xFFCD7F32) // Bronze
+                                                else -> MaterialTheme.colorScheme.surfaceVariant
+                                            }
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "${index + 1}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (index < 3) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                Column {
+                                    Text(
+                                        text = product.productName,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "${product.quantitySold} قطعة",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
+
                             Text(
                                 text = currencyFormatter.format(product.revenue),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = AppTheme.colors.success
+                            )
+                        }
+
+                        if (index < salesReport.topProducts.take(5).size - 1) {
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                                modifier = Modifier.padding(vertical = 8.dp)
                             )
                         }
                     }
@@ -2273,48 +2704,93 @@ private fun ProfitabilityAnalysisSection(
     currencyFormatter: NumberFormat
 ) {
     Card(
-        colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardStyles.defaultCardElevation()
+        colors = CardStyles.elevatedCardColors(),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardStyles.elevatedCardElevation()
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier.padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            Text(
-                text = "تحليل الربحية",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            // Enhanced header with icon
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        AppTheme.colors.success.copy(alpha = 0.15f),
+                                        AppTheme.colors.success.copy(alpha = 0.25f)
+                                    )
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Analytics,
+                            contentDescription = null,
+                            tint = AppTheme.colors.success,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
 
-            // Profitability metrics overview
+                    Column {
+                        Text(
+                            text = "تحليل الربحية",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "تحليل شامل لأداء الربحية والتكاليف",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // Enhanced profitability metrics overview
             profitability.profitabilityMetrics?.let { metrics ->
                 LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(horizontal = 4.dp)
                 ) {
                     item {
                         MetricCard(
                             title = "إجمالي الربح",
                             value = currencyFormatter.format(metrics.totalProfit ?: 0.0),
                             icon = Icons.Default.TrendingUp,
-                            color = AppTheme.colors.success
+                            modifier = Modifier.width(220.dp)
                         )
                     }
                     item {
                         MetricCard(
                             title = "متوسط هامش الربح",
                             value = "${String.format("%.1f", metrics.avgProfitMargin ?: 0.0)}%",
-                            icon = Icons.Default.Analytics
+                            icon = Icons.Default.Analytics,
+                            modifier = Modifier.width(220.dp)
                         )
                     }
                     metrics.profitGrowth?.let { growth ->
                         item {
                             MetricCard(
                                 title = "نمو الربح",
-                                value = "${String.format("%.1f", growth)}%",
-                                icon = Icons.Default.TrendingUp,
-                                color = if (growth >= 0) AppTheme.colors.success else AppTheme.colors.error
+                                value = "${if (growth >= 0) "+" else ""}${String.format("%.1f", growth)}%",
+                                change = if (growth >= 0) "إيجابي" else "سلبي",
+                                isPositiveChange = growth >= 0,
+                                icon = if (growth >= 0) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
+                                modifier = Modifier.width(220.dp)
                             )
                         }
                     }
@@ -2745,112 +3221,257 @@ private fun CrossSellAnalysisSection(
     currencyFormatter: NumberFormat
 ) {
     Card(
-        colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardStyles.defaultCardElevation()
+        colors = CardStyles.elevatedCardColors(),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardStyles.elevatedCardElevation()
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier.padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            Text(
-                text = "تحليل البيع المتقاطع",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            // Basket analysis
-            crossSell.basketAnalysis?.let { basket ->
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+            // Enhanced header with icon
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "تحليل السلة",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        AppTheme.colors.info.copy(alpha = 0.15f),
+                                        AppTheme.colors.info.copy(alpha = 0.25f)
+                                    )
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
                     ) {
-                        item {
-                            MetricCard(
-                                title = "متوسط حجم السلة",
-                                value = "${String.format("%.1f", basket.avgBasketSize ?: 0.0)} منتج",
-                                icon = Icons.Default.ShoppingCart
+                        Icon(
+                            Icons.Default.Link,
+                            contentDescription = null,
+                            tint = AppTheme.colors.info,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Column {
+                        Text(
+                            text = "تحليل البيع المتقاطع",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "تحليل أنماط الشراء والفرص التجارية",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // Enhanced basket analysis
+            crossSell.basketAnalysis?.let { basket ->
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.ShoppingBasket,
+                                contentDescription = null,
+                                tint = AppTheme.colors.info,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = "تحليل السلة",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
-                        item {
-                            MetricCard(
-                                title = "متوسط قيمة السلة",
-                                value = currencyFormatter.format(basket.avgBasketValue ?: 0.0),
-                                icon = Icons.Default.AttachMoney
-                            )
+
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp)
+                        ) {
+                            item {
+                                MetricCard(
+                                    title = "متوسط حجم السلة",
+                                    value = "${String.format("%.1f", basket.avgBasketSize ?: 0.0)} منتج",
+                                    icon = Icons.Default.ShoppingCart,
+                                    modifier = Modifier.width(200.dp)
+                                )
+                            }
+                            item {
+                                MetricCard(
+                                    title = "متوسط قيمة السلة",
+                                    value = currencyFormatter.format(basket.avgBasketValue ?: 0.0),
+                                    icon = Icons.Default.AttachMoney,
+                                    modifier = Modifier.width(200.dp)
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            // Product pairs analysis
+            // Enhanced product pairs analysis
             crossSell.productPairs?.let { pairs ->
                 if (pairs.isNotEmpty()) {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+                        ),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
-                        Text(
-                            text = "أزواج المنتجات الأكثر شراءً معاً",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-
-                        pairs.take(5).forEach { pair ->
-                            Card(
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                                ),
-                                shape = RoundedCornerShape(12.dp)
+                        Column(
+                            modifier = Modifier.padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                Icon(
+                                    Icons.Default.Link,
+                                    contentDescription = null,
+                                    tint = AppTheme.colors.purple,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = "أزواج المنتجات الأكثر شراءً معاً",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = AppTheme.colors.purple.copy(alpha = 0.1f)
                                 ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "${pair.productA} + ${pair.productB}",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                        Text(
-                                            text = "${pair.frequency} مرة",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
+                                    Text(
+                                        text = "${pairs.size}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = AppTheme.colors.purple,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
 
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
+                            pairs.take(5).forEachIndexed { index, pair ->
+                                Card(
+                                    colors = CardStyles.elevatedCardColors(),
+                                    shape = RoundedCornerShape(14.dp),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
                                     ) {
-                                        pair.confidence?.let { confidence ->
-                                            Text(
-                                                text = "الثقة: ${String.format("%.1f", confidence)}%",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                // Ranking badge
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(24.dp)
+                                                        .clip(CircleShape)
+                                                        .background(AppTheme.colors.purple.copy(alpha = 0.2f)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        text = "${index + 1}",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = AppTheme.colors.purple
+                                                    )
+                                                }
+
+                                                Text(
+                                                    text = "${pair.productA} + ${pair.productB}",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                            }
+
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = AppTheme.colors.success.copy(alpha = 0.1f)
+                                            ) {
+                                                Text(
+                                                    text = "${pair.frequency} مرة",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = AppTheme.colors.success,
+                                                    fontWeight = FontWeight.Medium,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                )
+                                            }
                                         }
-                                        pair.lift?.let { lift ->
-                                            Text(
-                                                text = "الرفع: ${String.format("%.2f", lift)}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                        ) {
+                                            pair.confidence?.let { confidence ->
+                                                Column(
+                                                    horizontalAlignment = Alignment.CenterHorizontally
+                                                ) {
+                                                    Text(
+                                                        text = "الثقة",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                    Text(
+                                                        text = "${String.format("%.1f", confidence)}%",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = AppTheme.colors.info
+                                                    )
+                                                }
+                                            }
+                                            pair.lift?.let { lift ->
+                                                Column(
+                                                    horizontalAlignment = Alignment.CenterHorizontally
+                                                ) {
+                                                    Text(
+                                                        text = "الرفع",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                    Text(
+                                                        text = String.format("%.2f", lift),
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = if (lift > 1.0) AppTheme.colors.success else AppTheme.colors.warning
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -3251,7 +3872,8 @@ private fun MetricCard(
     isPositiveChange: Boolean = true,
     isNegative: Boolean = false,
     icon: ImageVector,
-    color: Color? = null
+    color: Color? = null,
+    modifier: Modifier = Modifier
 ) {
     val valueColor = when {
         isNegative -> AppTheme.colors.error
@@ -3266,8 +3888,7 @@ private fun MetricCard(
     }
 
     Card(
-        modifier = Modifier
-            .width(200.dp)
+        modifier = modifier
             .height(100.dp),
         colors = CardStyles.defaultCardColors(),
         shape = RoundedCornerShape(16.dp),

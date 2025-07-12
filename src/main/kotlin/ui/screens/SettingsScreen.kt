@@ -7,6 +7,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
@@ -26,6 +27,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,6 +38,17 @@ import ui.components.*
 import ui.theme.AppTheme
 import ui.theme.LocalThemeState
 import ui.theme.ThemeMode
+import utils.TaxSettingsExportUtils
+import utils.FileDialogUtils
+import data.preferences.TaxPreferencesManager
+import data.preferences.ThemePreferencesManager
+import data.preferences.TaxSettings
+import data.preferences.ValidationResult
+import data.preferences.CurrencyPreferencesManager
+import data.preferences.CurrencySettings
+import utils.CurrencyUtils
+import utils.Constants
+import utils.CurrencyInfo
 
 // Settings Tab Enum
 enum class SettingsTab(val title: String) {
@@ -61,6 +75,8 @@ fun SettingsScreen() {
     var showAccountDialog by remember { mutableStateOf(false) }
     var showPasswordDialog by remember { mutableStateOf(false) }
     var showSecurityDialog by remember { mutableStateOf(false) }
+    var showTaxSettingsDialog by remember { mutableStateOf(false) }
+    var showCurrencySettingsDialog by remember { mutableStateOf(false) }
 
     // For desktop application, we'll use window size detection
     val isTablet = true // Assume tablet/desktop for now
@@ -173,7 +189,9 @@ fun SettingsScreen() {
                             searchQuery = searchQuery,
                             onThemeClick = { showThemeDialog = true },
                             onLanguageClick = { showLanguageDialog = true },
-                            onNotificationClick = { showNotificationDialog = true }
+                            onNotificationClick = { showNotificationDialog = true },
+                            onTaxSettingsClick = { showTaxSettingsDialog = true },
+                            onCurrencySettingsClick = { showCurrencySettingsDialog = true }
                         )
                         SettingsTab.ACCOUNT -> EnhancedAccountSettingsContent(
                             searchQuery = searchQuery,
@@ -331,6 +349,30 @@ fun SettingsScreen() {
             }
         )
     }
+
+    if (showTaxSettingsDialog) {
+        EnhancedTaxSettingsDialog(
+            onDismiss = { showTaxSettingsDialog = false },
+            onSave = {
+                showTaxSettingsDialog = false
+                coroutineScope.launch {
+                    snackbarHostState.showSnackbar("تم حفظ إعدادات الضريبة بنجاح")
+                }
+            }
+        )
+    }
+
+    if (showCurrencySettingsDialog) {
+        EnhancedCurrencySettingsDialog(
+            onDismiss = { showCurrencySettingsDialog = false },
+            onSave = {
+                showCurrencySettingsDialog = false
+                coroutineScope.launch {
+                    snackbarHostState.showSnackbar("تم حفظ إعدادات العملة بنجاح")
+                }
+            }
+        )
+    }
 }
 
 // Enhanced Tab Row Component
@@ -394,7 +436,9 @@ private fun EnhancedGeneralSettingsContent(
     searchQuery: String,
     onThemeClick: () -> Unit,
     onLanguageClick: () -> Unit,
-    onNotificationClick: () -> Unit
+    onNotificationClick: () -> Unit,
+    onTaxSettingsClick: () -> Unit,
+    onCurrencySettingsClick: () -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -436,6 +480,26 @@ private fun EnhancedGeneralSettingsContent(
                 icon = Icons.Default.Notifications,
                 iconColor = AppTheme.colors.warning,
                 onClick = onNotificationClick
+            )
+        }
+
+        item {
+            EnhancedSettingsCard(
+                title = "إعدادات الضريبة",
+                description = "تخصيص معدل الضريبة وخيارات العرض",
+                icon = Icons.Default.Receipt,
+                iconColor = AppTheme.colors.success,
+                onClick = onTaxSettingsClick
+            )
+        }
+
+        item {
+            EnhancedSettingsCard(
+                title = "إعدادات العملة",
+                description = "اختيار العملة وتخصيص عرض الأسعار",
+                icon = Icons.Default.AttachMoney,
+                iconColor = AppTheme.colors.info,
+                onClick = onCurrencySettingsClick
             )
         }
 
@@ -613,7 +677,7 @@ private fun EnhancedThemeSelectionDialog(
     onDismiss: () -> Unit
 ) {
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         title = {
             Text(
                 text = "اختيار السمة",
@@ -1181,6 +1245,517 @@ private fun getThemeIcon(themeMode: ThemeMode): ImageVector {
     }
 }
 
+// Enhanced Tax Settings Dialog
+@Composable
+private fun EnhancedTaxSettingsDialog(
+    onDismiss: () -> Unit,
+    onSave: () -> Unit
+) {
+    // Import tax preferences manager
+    val taxPreferencesManager = remember { data.preferences.TaxPreferencesManager() }
+    val currentSettings = remember { taxPreferencesManager.loadTaxSettings() }
+
+    // State for tax settings
+    var taxPercentage by remember { mutableStateOf(taxPreferencesManager.decimalToPercentage(currentSettings.taxRate)) }
+    var showTaxBreakdown by remember { mutableStateOf(currentSettings.showTaxBreakdownInCart) }
+    var showTaxOnReceipts by remember { mutableStateOf(currentSettings.showTaxOnReceipts) }
+    var displayTaxInclusive by remember { mutableStateOf(currentSettings.displayTaxInclusivePricing) }
+    var calculateOnDiscounted by remember { mutableStateOf(currentSettings.calculateTaxOnDiscountedAmount) }
+
+    // Validation state
+    var taxPercentageError by remember { mutableStateOf<String?>(null) }
+
+    // Validate tax percentage
+    fun validateTaxPercentage(value: Double): Boolean {
+        return when {
+            value < 0.0 -> {
+                taxPercentageError = "معدل الضريبة لا يمكن أن يكون سالباً"
+                false
+            }
+            value > 100.0 -> {
+                taxPercentageError = "معدل الضريبة لا يمكن أن يتجاوز 100%"
+                false
+            }
+            else -> {
+                taxPercentageError = null
+                true
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Surface(
+                    color = AppTheme.colors.success.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Receipt,
+                        contentDescription = null,
+                        tint = AppTheme.colors.success,
+                        modifier = Modifier
+                            .size(24.dp)
+                            .padding(8.dp)
+                    )
+                }
+                Text(
+                    text = "إعدادات الضريبة",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        text = {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+                modifier = Modifier.height(500.dp)
+            ) {
+                // Tax Rate Configuration Section
+                item {
+                    TaxConfigurationSection(
+                        title = "معدل الضريبة",
+                        description = "تحديد نسبة الضريبة المطبقة على المبيعات"
+                    ) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = if (taxPercentage == 0.0) "" else taxPercentage.toString(),
+                                onValueChange = { value ->
+                                    val newValue = value.toDoubleOrNull() ?: 0.0
+                                    taxPercentage = newValue
+                                    validateTaxPercentage(newValue)
+                                },
+                                label = { Text("معدل الضريبة (%)") },
+                                suffix = { Text("%") },
+                                isError = taxPercentageError != null,
+                                supportingText = taxPercentageError?.let { { Text(it, color = MaterialTheme.colorScheme.error) } },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Decimal
+                                )
+                            )
+
+                            // Tax preview
+                            if (taxPercentageError == null && taxPercentage > 0) {
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                    ),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(
+                                            text = "معاينة الضريبة",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        val samplePrice = 100.0
+                                        val taxAmount = samplePrice * (taxPercentage / 100.0)
+                                        val totalWithTax = samplePrice + taxAmount
+
+                                        Text("سعر المنتج: ${CurrencyUtils.formatAmount(samplePrice)}", style = MaterialTheme.typography.bodyMedium)
+                                        Text("الضريبة: ${CurrencyUtils.formatAmount(taxAmount)}", style = MaterialTheme.typography.bodyMedium)
+                                        Text("الإجمالي: ${CurrencyUtils.formatAmount(totalWithTax)}",
+                                             style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Tax Display Options Section
+                item {
+                    TaxConfigurationSection(
+                        title = "خيارات عرض الضريبة",
+                        description = "تحديد كيفية عرض الضريبة في واجهة المستخدم"
+                    ) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            TaxToggleOption(
+                                title = "إظهار تفصيل الضريبة في السلة",
+                                description = "عرض مبلغ الضريبة منفصلاً في سلة التسوق",
+                                checked = showTaxBreakdown,
+                                onCheckedChange = { showTaxBreakdown = it }
+                            )
+
+                            TaxToggleOption(
+                                title = "إظهار الضريبة في الفواتير",
+                                description = "تضمين تفاصيل الضريبة في الفواتير المطبوعة",
+                                checked = showTaxOnReceipts,
+                                onCheckedChange = { showTaxOnReceipts = it }
+                            )
+
+                            TaxToggleOption(
+                                title = "عرض الأسعار شاملة الضريبة",
+                                description = "إظهار الأسعار مع الضريبة بدلاً من إضافتها منفصلة",
+                                checked = displayTaxInclusive,
+                                onCheckedChange = { displayTaxInclusive = it }
+                            )
+                        }
+                    }
+                }
+
+                // Tax Calculation Method Section
+                item {
+                    TaxConfigurationSection(
+                        title = "طريقة حساب الضريبة",
+                        description = "تحديد كيفية حساب الضريبة مع الخصومات"
+                    ) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            TaxCalculationMethodOption(
+                                title = "حساب الضريبة على المبلغ بعد الخصم",
+                                description = "الضريبة تُحسب على السعر النهائي بعد تطبيق الخصم",
+                                selected = calculateOnDiscounted,
+                                onClick = { calculateOnDiscounted = true }
+                            )
+
+                            TaxCalculationMethodOption(
+                                title = "حساب الضريبة على المبلغ الأصلي",
+                                description = "الضريبة تُحسب على السعر الأصلي قبل تطبيق الخصم",
+                                selected = !calculateOnDiscounted,
+                                onClick = { calculateOnDiscounted = false }
+                            )
+
+                            // Calculation example
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = "مثال على الحساب",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    val originalPrice = 100.0
+                                    val discount = 10.0
+                                    val discountedPrice = originalPrice - discount
+                                    val taxRate = taxPercentage / 100.0
+
+                                    Text("السعر الأصلي: ${CurrencyUtils.formatAmount(originalPrice)}", style = MaterialTheme.typography.bodySmall)
+                                    Text("الخصم: ${CurrencyUtils.formatAmount(discount)}", style = MaterialTheme.typography.bodySmall)
+                                    Text("السعر بعد الخصم: ${CurrencyUtils.formatAmount(discountedPrice)}", style = MaterialTheme.typography.bodySmall)
+
+                                    if (calculateOnDiscounted) {
+                                        val tax = discountedPrice * taxRate
+                                        Text("الضريبة (${taxPercentage}% على ${CurrencyUtils.formatAmount(discountedPrice)}): ${CurrencyUtils.formatAmount(tax)}",
+                                             style = MaterialTheme.typography.bodySmall, color = AppTheme.colors.success)
+                                        Text("الإجمالي: ${CurrencyUtils.formatAmount(discountedPrice + tax)}",
+                                             style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                    } else {
+                                        val tax = originalPrice * taxRate
+                                        Text("الضريبة (${taxPercentage}% على ${CurrencyUtils.formatAmount(originalPrice)}): ${CurrencyUtils.formatAmount(tax)}",
+                                             style = MaterialTheme.typography.bodySmall, color = AppTheme.colors.success)
+                                        Text("الإجمالي: ${CurrencyUtils.formatAmount(discountedPrice + tax)}",
+                                             style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Import/Export Section
+                item {
+                    TaxConfigurationSection(
+                        title = "النسخ الاحتياطي والاستيراد",
+                        description = "تصدير واستيراد إعدادات الضريبة"
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // Export Button
+                            OutlinedButton(
+                                onClick = {
+                                    // Export current settings
+                                    val currentSettings = data.preferences.TaxSettings(
+                                        taxRate = taxPreferencesManager.percentageToDecimal(taxPercentage),
+                                        showTaxBreakdownInCart = showTaxBreakdown,
+                                        showTaxOnReceipts = showTaxOnReceipts,
+                                        displayTaxInclusivePricing = displayTaxInclusive,
+                                        calculateTaxOnDiscountedAmount = calculateOnDiscounted
+                                    )
+
+                                    try {
+                                        val timestamp = java.time.LocalDateTime.now()
+                                            .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+                                        val fileName = "tax_settings_$timestamp.json"
+                                        val result = TaxSettingsExportUtils.exportTaxSettings(
+                                            currentSettings,
+                                            fileName,
+                                            "إعدادات الضريبة المصدرة من التطبيق"
+                                        )
+                                        // Show success message
+                                    } catch (e: Exception) {
+                                        // Show error message
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("تصدير")
+                            }
+
+                            // Import Button
+                            OutlinedButton(
+                                onClick = {
+                                    // Import settings logic would go here
+                                    // This would typically open a file picker
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("استيراد")
+                            }
+                        }
+
+                        // Regional Presets
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "الإعدادات المسبقة حسب المنطقة",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        val regionalSettings = TaxSettingsExportUtils.getRegionalTaxSettings()
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(regionalSettings.entries.toList()) { (region, settings) ->
+                                OutlinedButton(
+                                    onClick = {
+                                        taxPercentage = taxPreferencesManager.decimalToPercentage(settings.taxRate)
+                                        showTaxBreakdown = settings.showTaxBreakdownInCart
+                                        showTaxOnReceipts = settings.showTaxOnReceipts
+                                        displayTaxInclusive = settings.displayTaxInclusivePricing
+                                        calculateOnDiscounted = settings.calculateTaxOnDiscountedAmount
+                                        validateTaxPercentage(taxPercentage)
+                                    },
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(
+                                        text = region,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (validateTaxPercentage(taxPercentage)) {
+                        // Save settings
+                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                            val newSettings = data.preferences.TaxSettings(
+                                taxRate = taxPreferencesManager.percentageToDecimal(taxPercentage),
+                                showTaxBreakdownInCart = showTaxBreakdown,
+                                showTaxOnReceipts = showTaxOnReceipts,
+                                displayTaxInclusivePricing = displayTaxInclusive,
+                                calculateTaxOnDiscountedAmount = calculateOnDiscounted
+                            )
+                            taxPreferencesManager.saveTaxSettings(newSettings)
+                        }
+                        onSave()
+                    }
+                },
+                enabled = taxPercentageError == null,
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("حفظ الإعدادات")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("إلغاء")
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(20.dp)
+    )
+}
+
+// Helper components for tax settings dialog
+@Composable
+private fun TaxConfigurationSection(
+    title: String,
+    description: String,
+    content: @Composable () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            content()
+        }
+    }
+}
+
+@Composable
+private fun TaxToggleOption(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+            )
+        )
+    }
+}
+
+@Composable
+private fun TaxCalculationMethodOption(
+    title: String,
+    description: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected)
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+            else
+                MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(
+            width = if (selected) 2.dp else 1.dp,
+            color = if (selected)
+                MaterialTheme.colorScheme.primary
+            else
+                MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            if (selected) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = CircleShape,
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = "محدد",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier
+                            .size(16.dp)
+                            .padding(4.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
 // Enhanced Language Selection Dialog
 @Composable
 private fun EnhancedLanguageSelectionDialog(
@@ -1196,7 +1771,7 @@ private fun EnhancedLanguageSelectionDialog(
     var selectedLanguage by remember { mutableStateOf("العربية") }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         title = {
             Text(
                 text = "اختيار اللغة",
@@ -1281,7 +1856,7 @@ private fun EnhancedNotificationSettingsDialog(
     var enableInventoryAlerts by remember { mutableStateOf(true) }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         title = {
             Text(
                 text = "إعدادات الإشعارات",
@@ -1406,7 +1981,7 @@ private fun EnhancedBackupDialog(
     var includeSettings by remember { mutableStateOf(false) }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         title = {
             Text(
                 text = "إنشاء نسخة احتياطية",
@@ -1501,7 +2076,7 @@ private fun EnhancedExportDialog(
     val formats = listOf("Excel", "CSV", "JSON", "PDF")
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         title = {
             Text(
                 text = "تصدير البيانات",
@@ -1609,7 +2184,7 @@ private fun EnhancedAccountDialog(
     var company by remember { mutableStateOf("شركة التجارة المتقدمة") }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         title = {
             Text(
                 text = "معلومات الحساب",
@@ -1698,7 +2273,7 @@ private fun EnhancedPasswordDialog(
     var showConfirmPassword by remember { mutableStateOf(false) }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         title = {
             Text(
                 text = "تغيير كلمة المرور",
@@ -1814,7 +2389,7 @@ private fun EnhancedSecurityDialog(
     var sessionTimeoutMinutes by remember { mutableStateOf("30") }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         title = {
             Text(
                 text = "إعدادات الأمان",
@@ -1886,4 +2461,355 @@ private fun EnhancedSecurityDialog(
         containerColor = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(20.dp)
     )
+}
+
+// Enhanced Currency Settings Dialog
+@Composable
+private fun EnhancedCurrencySettingsDialog(
+    onDismiss: () -> Unit,
+    onSave: () -> Unit
+) {
+    val currencyPreferencesManager = remember { CurrencyPreferencesManager() }
+    val currentSettings = currencyPreferencesManager.loadCurrencySettings()
+
+    // State for currency settings
+    var selectedCurrency by remember { mutableStateOf(currentSettings.currencyCode) }
+    var showSymbolBefore by remember { mutableStateOf(currentSettings.showSymbolBeforeAmount) }
+    var decimalPlaces by remember { mutableStateOf(currentSettings.decimalPlaces) }
+    var useGroupingSeparator by remember { mutableStateOf(currentSettings.useGroupingSeparator) }
+
+    // Available currencies
+    val availableCurrencies = Constants.Currency.SUPPORTED_CURRENCIES
+
+    // Preview amount
+    val previewAmount = 1234.56
+    val previewSettings = CurrencySettings(
+        currencyCode = selectedCurrency,
+        currencySymbol = availableCurrencies[selectedCurrency]?.symbol ?: "₪",
+        displayName = availableCurrencies[selectedCurrency]?.displayName ?: "شيكل إسرائيلي",
+        locale = availableCurrencies[selectedCurrency]?.locale ?: "he_IL",
+        showSymbolBeforeAmount = showSymbolBefore,
+        decimalPlaces = decimalPlaces,
+        useGroupingSeparator = useGroupingSeparator
+    )
+
+    AlertDialog(
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    Icons.Default.AttachMoney,
+                    contentDescription = null,
+                    tint = AppTheme.colors.info,
+                    modifier = Modifier.size(28.dp)
+                )
+                Text(
+                    text = "إعدادات العملة",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        text = {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // Currency Selection
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = "اختيار العملة",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            LazyColumn(
+                                modifier = Modifier.height(200.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(availableCurrencies.entries.toList()) { (code, currencyInfo) ->
+                                    CurrencySelectionCard(
+                                        currencyInfo = currencyInfo,
+                                        isSelected = selectedCurrency == code,
+                                        onClick = { selectedCurrency = code }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Currency Display Options
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Text(
+                                text = "خيارات العرض",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            // Symbol Position
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "موضع رمز العملة",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = if (showSymbolBefore) "قبل المبلغ" else "بعد المبلغ",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Switch(
+                                    checked = showSymbolBefore,
+                                    onCheckedChange = { showSymbolBefore = it }
+                                )
+                            }
+
+                            // Decimal Places
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "عدد الخانات العشرية",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = "$decimalPlaces خانات",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(
+                                        onClick = { if (decimalPlaces > 0) decimalPlaces-- },
+                                        enabled = decimalPlaces > 0
+                                    ) {
+                                        Icon(Icons.Default.Remove, contentDescription = "تقليل")
+                                    }
+                                    Text(
+                                        text = decimalPlaces.toString(),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.width(24.dp),
+                                        textAlign = TextAlign.Center
+                                    )
+                                    IconButton(
+                                        onClick = { if (decimalPlaces < 4) decimalPlaces++ },
+                                        enabled = decimalPlaces < 4
+                                    ) {
+                                        Icon(Icons.Default.Add, contentDescription = "زيادة")
+                                    }
+                                }
+                            }
+
+                            // Grouping Separator
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "فاصل الآلاف",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = if (useGroupingSeparator) "مفعل (1,234.56)" else "معطل (1234.56)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Switch(
+                                    checked = useGroupingSeparator,
+                                    onCheckedChange = { useGroupingSeparator = it }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Preview
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = AppTheme.colors.info.copy(alpha = 0.1f)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = "معاينة التنسيق",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            val formattedAmount = CurrencyUtils.getSampleFormattedAmount(previewSettings, previewAmount)
+                            Text(
+                                text = "مثال: $formattedAmount",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = AppTheme.colors.info
+                            )
+
+                            Text(
+                                text = "العملة المختارة: ${availableCurrencies[selectedCurrency]?.displayName}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val currencyInfo = availableCurrencies[selectedCurrency]
+                    if (currencyInfo != null) {
+                        val newSettings = CurrencySettings(
+                            currencyCode = selectedCurrency,
+                            currencySymbol = currencyInfo.symbol,
+                            displayName = currencyInfo.displayName,
+                            locale = currencyInfo.locale,
+                            showSymbolBeforeAmount = showSymbolBefore,
+                            decimalPlaces = decimalPlaces,
+                            useGroupingSeparator = useGroupingSeparator
+                        )
+
+                        kotlinx.coroutines.GlobalScope.launch {
+                            currencyPreferencesManager.saveCurrencySettings(newSettings)
+                        }
+                    }
+                    onSave()
+                },
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("حفظ الإعدادات")
+            }
+        },
+        dismissButton = {
+            OutlinedButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("إلغاء")
+            }
+        }
+    )
+}
+
+// Currency Selection Card Component
+@Composable
+private fun CurrencySelectionCard(
+    currencyInfo: CurrencyInfo,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected)
+                AppTheme.colors.info.copy(alpha = 0.2f)
+            else
+                MaterialTheme.colorScheme.surface
+        ),
+        border = if (isSelected)
+            BorderStroke(2.dp, AppTheme.colors.info)
+        else
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Currency Symbol
+                Surface(
+                    shape = CircleShape,
+                    color = if (isSelected) AppTheme.colors.info else MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = currencyInfo.symbol,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+
+                Column {
+                    Text(
+                        text = currencyInfo.displayName,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                        color = if (isSelected) AppTheme.colors.info else MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "${currencyInfo.code} • ${currencyInfo.displayNameEnglish}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            if (isSelected) {
+                Icon(
+                    Icons.Default.CheckCircle,
+                    contentDescription = "مختار",
+                    tint = AppTheme.colors.info,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+    }
 }

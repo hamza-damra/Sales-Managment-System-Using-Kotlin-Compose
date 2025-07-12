@@ -73,4 +73,54 @@ object ColorUtils {
         val luminance = 0.299 * backgroundColor.red + 0.587 * backgroundColor.green + 0.114 * backgroundColor.blue
         return if (luminance > 0.5) Color.Black else Color.White
     }
+
+    /**
+     * Validate if a hex color string is valid
+     * Supports formats: #RGB, #RRGGBB, #AARRGGBB
+     */
+    fun isValidHexColor(hexColor: String): Boolean {
+        if (hexColor.isBlank()) return false
+
+        val cleanHex = hexColor.removePrefix("#")
+        if (cleanHex.length !in listOf(3, 6, 8)) return false
+
+        return cleanHex.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }
+    }
+
+    /**
+     * Get validation error message for invalid hex color
+     */
+    fun getColorValidationError(hexColor: String): String? {
+        if (hexColor.isBlank()) return "رمز اللون مطلوب"
+
+        if (!hexColor.startsWith("#")) return "رمز اللون يجب أن يبدأ بـ #"
+
+        val cleanHex = hexColor.removePrefix("#")
+        when {
+            cleanHex.length !in listOf(3, 6, 8) -> return "رمز اللون يجب أن يكون بصيغة #RGB أو #RRGGBB"
+            !cleanHex.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' } -> return "رمز اللون يحتوي على أحرف غير صالحة"
+            else -> return null
+        }
+    }
+
+    /**
+     * Normalize hex color to standard format (#RRGGBB)
+     */
+    fun normalizeHexColor(hexColor: String): String {
+        if (!isValidHexColor(hexColor)) return hexColor
+
+        val cleanHex = hexColor.removePrefix("#")
+        return when (cleanHex.length) {
+            3 -> {
+                // #RGB -> #RRGGBB
+                val r = cleanHex[0].toString().repeat(2)
+                val g = cleanHex[1].toString().repeat(2)
+                val b = cleanHex[2].toString().repeat(2)
+                "#$r$g$b"
+            }
+            6 -> "#$cleanHex"
+            8 -> "#${cleanHex.substring(2)}" // Remove alpha for standard format
+            else -> hexColor
+        }
+    }
 }

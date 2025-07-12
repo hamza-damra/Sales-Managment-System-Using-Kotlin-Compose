@@ -21,6 +21,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -28,6 +30,13 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -41,6 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import data.*
 import ui.components.*
 import ui.components.EnhancedFilterDropdown
@@ -55,6 +65,7 @@ import data.api.ProductDTO
 import ui.utils.ColorUtils
 import java.text.NumberFormat
 import java.util.*
+import utils.CurrencyUtils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.collectAsState
@@ -91,11 +102,9 @@ fun ProductsScreen(productViewModel: ui.viewmodels.ProductViewModel) {
         // Snackbar state for success messages
         val snackbarHostState = remember { SnackbarHostState() }
 
-        // Currency formatter for Arabic locale
+        // Currency formatter using configurable currency system
         val currencyFormatter = remember {
-            NumberFormat.getCurrencyInstance(Locale.Builder().setLanguage("ar").setRegion("SA").build()).apply {
-                currency = Currency.getInstance("SAR")
-            }
+            CurrencyUtils.getCurrencyFormatter()
         }
 
         // Load data when screen is first displayed
@@ -641,10 +650,7 @@ fun ProductsScreen(productViewModel: ui.viewmodels.ProductViewModel) {
 
         if (showDeleteConfirmation && productToDelete != null) {
             AlertDialog(
-                onDismissRequest = {
-                    showDeleteConfirmation = false
-                    productToDelete = null
-                },
+                onDismissRequest = {}, // Disabled click-outside-to-dismiss
                 title = { Text("تأكيد الحذف") },
                 text = { Text("هل أنت متأكد من حذف المنتج \"${productToDelete!!.name}\"؟") },
                 confirmButton = {
@@ -1185,6 +1191,27 @@ private fun ComprehensiveProductDialog(
     // Get categories from ViewModel
     val activeCategories by productViewModel.activeCategoriesForProducts.collectAsState()
 
+    // Focus manager for keyboard navigation
+    val focusManager = LocalFocusManager.current
+
+    // Focus requesters for explicit focus management
+    val priceFocusRequester = remember { FocusRequester() }
+    val stockQuantityFocusRequester = remember { FocusRequester() }
+    val descriptionFocusRequester = remember { FocusRequester() }
+    val skuFocusRequester = remember { FocusRequester() }
+    val costPriceFocusRequester = remember { FocusRequester() }
+    val brandFocusRequester = remember { FocusRequester() }
+    val modelNumberFocusRequester = remember { FocusRequester() }
+    val barcodeFocusRequester = remember { FocusRequester() }
+    val weightFocusRequester = remember { FocusRequester() }
+    val lengthFocusRequester = remember { FocusRequester() }
+    val widthFocusRequester = remember { FocusRequester() }
+    val heightFocusRequester = remember { FocusRequester() }
+    val minStockLevelFocusRequester = remember { FocusRequester() }
+    val maxStockLevelFocusRequester = remember { FocusRequester() }
+    val reorderPointFocusRequester = remember { FocusRequester() }
+    val reorderQuantityFocusRequester = remember { FocusRequester() }
+
     // Required fields
     var name by remember { mutableStateOf(product?.name ?: "") }
     var price by remember { mutableStateOf(product?.price?.toString() ?: "") }
@@ -1237,7 +1264,15 @@ private fun ComprehensiveProductDialog(
     }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
+        modifier = Modifier.onKeyEvent { keyEvent ->
+            if (keyEvent.key == Key.Escape && keyEvent.type == KeyEventType.KeyDown) {
+                onDismiss()
+                true
+            } else {
+                false
+            }
+        },
         title = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -1309,6 +1344,10 @@ private fun ComprehensiveProductDialog(
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                                 isError = name.isBlank(),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                keyboardActions = KeyboardActions(
+                                    onNext = { priceFocusRequester.requestFocus() }
+                                ),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -1335,9 +1374,18 @@ private fun ComprehensiveProductDialog(
                                             tint = MaterialTheme.colorScheme.primary
                                         )
                                     },
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusRequester(priceFocusRequester),
                                     singleLine = true,
                                     isError = price.toDoubleOrNull() == null,
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Decimal,
+                                        imeAction = ImeAction.Next
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onNext = { stockQuantityFocusRequester.requestFocus() }
+                                    ),
                                     shape = RoundedCornerShape(12.dp),
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -1359,8 +1407,58 @@ private fun ComprehensiveProductDialog(
                                             tint = MaterialTheme.colorScheme.primary
                                         )
                                     },
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusRequester(stockQuantityFocusRequester),
                                     singleLine = true,
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Number,
+                                        imeAction = if (showOptionalFields) ImeAction.Next else ImeAction.Done
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onNext = {
+                                            if (showOptionalFields) {
+                                                descriptionFocusRequester.requestFocus()
+                                            }
+                                        },
+                                        onDone = {
+                                            if (!showOptionalFields && isFormValid) {
+                                                focusManager.clearFocus()
+                                                val productDTO = data.api.ProductDTO(
+                                                    id = product?.id?.toLong(),
+                                                    name = name,
+                                                    description = description.takeIf { it.isNotBlank() },
+                                                    price = price.toDouble(),
+                                                    costPrice = costPrice.toDoubleOrNull(),
+                                                    stockQuantity = stockQuantity.toInt(),
+                                                    category = selectedCategory?.name,
+                                                    categoryId = selectedCategory?.id,
+                                                    categoryName = selectedCategory?.name,
+                                                    sku = sku.takeIf { it.isNotBlank() },
+                                                    brand = brand.takeIf { it.isNotBlank() },
+                                                    modelNumber = modelNumber.takeIf { it.isNotBlank() },
+                                                    barcode = barcode.takeIf { it.isNotBlank() },
+                                                    weight = weight.toDoubleOrNull(),
+                                                    length = length.toDoubleOrNull(),
+                                                    width = width.toDoubleOrNull(),
+                                                    height = height.toDoubleOrNull(),
+                                                    minStockLevel = minStockLevel.toIntOrNull(),
+                                                    maxStockLevel = maxStockLevel.toIntOrNull(),
+                                                    reorderPoint = reorderPoint.toIntOrNull(),
+                                                    reorderQuantity = reorderQuantity.toIntOrNull(),
+                                                    supplierName = supplierName.takeIf { it.isNotBlank() },
+                                                    supplierCode = supplierCode.takeIf { it.isNotBlank() },
+                                                    warrantyPeriod = warrantyPeriod.toIntOrNull(),
+                                                    unitOfMeasure = unitOfMeasure,
+                                                    taxRate = taxRate.toDoubleOrNull(),
+                                                    discountPercentage = discountPercentage.toDoubleOrNull(),
+                                                    locationInWarehouse = locationInWarehouse.takeIf { it.isNotBlank() },
+                                                    notes = notes.takeIf { it.isNotBlank() }
+                                                )
+                                                onSave(productDTO)
+                                            }
+                                        }
+                                    ),
                                     shape = RoundedCornerShape(12.dp),
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -1421,9 +1519,15 @@ private fun ComprehensiveProductDialog(
                                 OutlinedTextField(
                                     value = description,
                                     onValueChange = { description = it },
-                                    label = { Text("الوصف (اختياري)") },
-                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("الوصف") },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .focusRequester(descriptionFocusRequester),
                                     maxLines = 3,
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                    keyboardActions = KeyboardActions(
+                                        onNext = { skuFocusRequester.requestFocus() }
+                                    ),
                                     shape = RoundedCornerShape(12.dp),
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -1446,7 +1550,7 @@ private fun ComprehensiveProductDialog(
                                         value = selectedCategory?.name ?: "اختر الفئة",
                                         onValueChange = { },
                                         readOnly = true,
-                                        label = { Text("الفئة (اختياري)") },
+                                        label = { Text("الفئة") },
                                         trailingIcon = {
                                             ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryDropdownExpanded)
                                         },
@@ -1502,9 +1606,15 @@ private fun ComprehensiveProductDialog(
                                 OutlinedTextField(
                                     value = sku,
                                     onValueChange = { sku = it },
-                                    label = { Text("رمز المنتج (اختياري)") },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true
+                                    label = { Text("رمز المنتج") },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusRequester(skuFocusRequester),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                    keyboardActions = KeyboardActions(
+                                        onNext = { costPriceFocusRequester.requestFocus() }
+                                    )
                                 )
                             }
 
@@ -1515,17 +1625,32 @@ private fun ComprehensiveProductDialog(
                                 OutlinedTextField(
                                     value = costPrice,
                                     onValueChange = { costPrice = it },
-                                    label = { Text("سعر التكلفة (اختياري)") },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true
+                                    label = { Text("سعر التكلفة") },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusRequester(costPriceFocusRequester),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Decimal,
+                                        imeAction = ImeAction.Next
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onNext = { brandFocusRequester.requestFocus() }
+                                    )
                                 )
 
                                 OutlinedTextField(
                                     value = brand,
                                     onValueChange = { brand = it },
-                                    label = { Text("العلامة التجارية (اختياري)") },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true
+                                    label = { Text("العلامة التجارية") },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusRequester(brandFocusRequester),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                    keyboardActions = KeyboardActions(
+                                        onNext = { modelNumberFocusRequester.requestFocus() }
+                                    )
                                 )
                             }
 
@@ -1536,17 +1661,29 @@ private fun ComprehensiveProductDialog(
                                 OutlinedTextField(
                                     value = modelNumber,
                                     onValueChange = { modelNumber = it },
-                                    label = { Text("رقم الموديل (اختياري)") },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true
+                                    label = { Text("رقم الموديل") },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusRequester(modelNumberFocusRequester),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                    keyboardActions = KeyboardActions(
+                                        onNext = { barcodeFocusRequester.requestFocus() }
+                                    )
                                 )
 
                                 OutlinedTextField(
                                     value = barcode,
                                     onValueChange = { barcode = it },
-                                    label = { Text("الباركود (اختياري)") },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true
+                                    label = { Text("الباركود") },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusRequester(barcodeFocusRequester),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                    keyboardActions = KeyboardActions(
+                                        onNext = { weightFocusRequester.requestFocus() }
+                                    )
                                 )
                             }
 
@@ -1565,17 +1702,35 @@ private fun ComprehensiveProductDialog(
                                 OutlinedTextField(
                                     value = weight,
                                     onValueChange = { weight = it },
-                                    label = { Text("الوزن (كجم) (اختياري)") },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true
+                                    label = { Text("الوزن (كجم)") },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusRequester(weightFocusRequester),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Decimal,
+                                        imeAction = ImeAction.Next
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onNext = { lengthFocusRequester.requestFocus() }
+                                    )
                                 )
 
                                 OutlinedTextField(
                                     value = length,
                                     onValueChange = { length = it },
-                                    label = { Text("الطول (سم) (اختياري)") },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true
+                                    label = { Text("الطول (سم)") },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusRequester(lengthFocusRequester),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Decimal,
+                                        imeAction = ImeAction.Next
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onNext = { widthFocusRequester.requestFocus() }
+                                    )
                                 )
                             }
 
@@ -1586,17 +1741,35 @@ private fun ComprehensiveProductDialog(
                                 OutlinedTextField(
                                     value = width,
                                     onValueChange = { width = it },
-                                    label = { Text("العرض (سم) (اختياري)") },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true
+                                    label = { Text("العرض (سم)") },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusRequester(widthFocusRequester),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Decimal,
+                                        imeAction = ImeAction.Next
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onNext = { heightFocusRequester.requestFocus() }
+                                    )
                                 )
 
                                 OutlinedTextField(
                                     value = height,
                                     onValueChange = { height = it },
-                                    label = { Text("الارتفاع (سم) (اختياري)") },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true
+                                    label = { Text("الارتفاع (سم)") },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusRequester(heightFocusRequester),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Decimal,
+                                        imeAction = ImeAction.Next
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onNext = { minStockLevelFocusRequester.requestFocus() }
+                                    )
                                 )
                             }
 
@@ -1615,17 +1788,35 @@ private fun ComprehensiveProductDialog(
                                 OutlinedTextField(
                                     value = minStockLevel,
                                     onValueChange = { minStockLevel = it },
-                                    label = { Text("الحد الأدنى للمخزون (اختياري)") },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true
+                                    label = { Text("الحد الأدنى للمخزون") },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusRequester(minStockLevelFocusRequester),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Number,
+                                        imeAction = ImeAction.Next
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onNext = { maxStockLevelFocusRequester.requestFocus() }
+                                    )
                                 )
 
                                 OutlinedTextField(
                                     value = maxStockLevel,
                                     onValueChange = { maxStockLevel = it },
-                                    label = { Text("الحد الأقصى للمخزون (اختياري)") },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true
+                                    label = { Text("الحد الأقصى للمخزون") },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusRequester(maxStockLevelFocusRequester),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Number,
+                                        imeAction = ImeAction.Next
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onNext = { reorderPointFocusRequester.requestFocus() }
+                                    )
                                 )
                             }
 
@@ -1636,17 +1827,71 @@ private fun ComprehensiveProductDialog(
                                 OutlinedTextField(
                                     value = reorderPoint,
                                     onValueChange = { reorderPoint = it },
-                                    label = { Text("نقطة إعادة الطلب (اختياري)") },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true
+                                    label = { Text("نقطة إعادة الطلب") },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusRequester(reorderPointFocusRequester),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Number,
+                                        imeAction = ImeAction.Next
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onNext = { reorderQuantityFocusRequester.requestFocus() }
+                                    )
                                 )
 
                                 OutlinedTextField(
                                     value = reorderQuantity,
                                     onValueChange = { reorderQuantity = it },
-                                    label = { Text("كمية إعادة الطلب (اختياري)") },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true
+                                    label = { Text("كمية إعادة الطلب") },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusRequester(reorderQuantityFocusRequester),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Number,
+                                        imeAction = ImeAction.Done
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onDone = {
+                                            if (isFormValid) {
+                                                focusManager.clearFocus()
+                                                val productDTO = data.api.ProductDTO(
+                                                    id = product?.id?.toLong(),
+                                                    name = name,
+                                                    description = description.takeIf { it.isNotBlank() },
+                                                    price = price.toDouble(),
+                                                    costPrice = costPrice.toDoubleOrNull(),
+                                                    stockQuantity = stockQuantity.toInt(),
+                                                    category = selectedCategory?.name,
+                                                    categoryId = selectedCategory?.id,
+                                                    categoryName = selectedCategory?.name,
+                                                    sku = sku.takeIf { it.isNotBlank() },
+                                                    brand = brand.takeIf { it.isNotBlank() },
+                                                    modelNumber = modelNumber.takeIf { it.isNotBlank() },
+                                                    barcode = barcode.takeIf { it.isNotBlank() },
+                                                    weight = weight.toDoubleOrNull(),
+                                                    length = length.toDoubleOrNull(),
+                                                    width = width.toDoubleOrNull(),
+                                                    height = height.toDoubleOrNull(),
+                                                    minStockLevel = minStockLevel.toIntOrNull(),
+                                                    maxStockLevel = maxStockLevel.toIntOrNull(),
+                                                    reorderPoint = reorderPoint.toIntOrNull(),
+                                                    reorderQuantity = reorderQuantity.toIntOrNull(),
+                                                    supplierName = supplierName.takeIf { it.isNotBlank() },
+                                                    supplierCode = supplierCode.takeIf { it.isNotBlank() },
+                                                    warrantyPeriod = warrantyPeriod.toIntOrNull(),
+                                                    unitOfMeasure = unitOfMeasure,
+                                                    taxRate = taxRate.toDoubleOrNull(),
+                                                    discountPercentage = discountPercentage.toDoubleOrNull(),
+                                                    locationInWarehouse = locationInWarehouse.takeIf { it.isNotBlank() },
+                                                    notes = notes.takeIf { it.isNotBlank() }
+                                                )
+                                                onSave(productDTO)
+                                            }
+                                        }
+                                    )
                                 )
                             }
                         }
@@ -1655,129 +1900,82 @@ private fun ComprehensiveProductDialog(
             }
         },
         confirmButton = {
-            // Full-width button row with enhanced hover effects
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Cancel Button with Box-based hover effects
-                val cancelInteractionSource = remember { MutableInteractionSource() }
-                val isCancelHovered by cancelInteractionSource.collectIsHoveredAsState()
+            // Full-width Save button with enhanced hover effects
+            val saveInteractionSource = remember { MutableInteractionSource() }
+            val isSaveHovered by saveInteractionSource.collectIsHoveredAsState()
 
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(56.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            color = if (isCancelHovered)
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
-                            else
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                        .border(
-                            width = if (isCancelHovered) 1.5.dp else 1.dp,
-                            color = if (isCancelHovered)
-                                MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
-                            else
-                                MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                        .clickable(
-                            interactionSource = cancelInteractionSource,
-                            indication = null
-                        ) { onDismiss() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "إلغاء",
-                        color = if (isCancelHovered)
-                            MaterialTheme.colorScheme.onSurface
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        color = if (isSaveHovered && isFormValid)
+                            MaterialTheme.colorScheme.primary.copy(alpha = 1f)
+                        else if (isFormValid)
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
                         else
-                            MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.Medium,
-                        style = MaterialTheme.typography.bodyMedium
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(12.dp)
                     )
-                }
-
-                // Save Button with Box-based hover effects
-                val saveInteractionSource = remember { MutableInteractionSource() }
-                val isSaveHovered by saveInteractionSource.collectIsHoveredAsState()
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(56.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            color = if (isSaveHovered && isFormValid)
-                                MaterialTheme.colorScheme.primary.copy(alpha = 1f)
-                            else if (isFormValid)
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
-                            else
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                        .border(
-                            width = if (isSaveHovered && isFormValid) 2.dp else 1.dp,
-                            color = if (isSaveHovered && isFormValid)
-                                MaterialTheme.colorScheme.primary
-                            else if (isFormValid)
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                            else
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                        .clickable(
-                            interactionSource = saveInteractionSource,
-                            indication = null,
-                            enabled = isFormValid
-                        ) {
-                            if (isFormValid) {
-                                val productDTO = data.api.ProductDTO(
-                                    id = product?.id?.toLong(),
-                                    name = name,
-                                    description = description.takeIf { it.isNotBlank() },
-                                    price = price.toDouble(),
-                                    costPrice = costPrice.toDoubleOrNull(),
-                                    stockQuantity = stockQuantity.toInt(),
-                                    category = selectedCategory?.name,
-                                    categoryId = selectedCategory?.id,
-                                    categoryName = selectedCategory?.name,
-                                    sku = sku.takeIf { it.isNotBlank() },
-                                    brand = brand.takeIf { it.isNotBlank() },
-                                    modelNumber = modelNumber.takeIf { it.isNotBlank() },
-                                    barcode = barcode.takeIf { it.isNotBlank() },
-                                    weight = weight.toDoubleOrNull(),
-                                    length = length.toDoubleOrNull(),
-                                    width = width.toDoubleOrNull(),
-                                    height = height.toDoubleOrNull(),
-                                    minStockLevel = minStockLevel.toIntOrNull(),
-                                    maxStockLevel = maxStockLevel.toIntOrNull(),
-                                    reorderPoint = reorderPoint.toIntOrNull(),
-                                    reorderQuantity = reorderQuantity.toIntOrNull(),
-                                    supplierName = supplierName.takeIf { it.isNotBlank() },
-                                    supplierCode = supplierCode.takeIf { it.isNotBlank() },
-                                    warrantyPeriod = warrantyPeriod.toIntOrNull(),
-                                    unitOfMeasure = unitOfMeasure,
-                                    taxRate = taxRate.toDoubleOrNull(),
-                                    discountPercentage = discountPercentage.toDoubleOrNull(),
-                                    locationInWarehouse = locationInWarehouse.takeIf { it.isNotBlank() },
-                                    notes = notes.takeIf { it.isNotBlank() }
-                                )
-                                onSave(productDTO)
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (product != null) "تحديث" else "حفظ",
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontWeight = FontWeight.SemiBold,
-                        style = MaterialTheme.typography.bodyMedium
+                    .border(
+                        width = if (isSaveHovered && isFormValid) 2.dp else 1.dp,
+                        color = if (isSaveHovered && isFormValid)
+                            MaterialTheme.colorScheme.primary
+                        else if (isFormValid)
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                        else
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                        shape = RoundedCornerShape(12.dp)
                     )
-                }
+                    .clickable(
+                        interactionSource = saveInteractionSource,
+                        indication = null,
+                        enabled = isFormValid
+                    ) {
+                        if (isFormValid) {
+                            val productDTO = data.api.ProductDTO(
+                                id = product?.id?.toLong(),
+                                name = name,
+                                description = description.takeIf { it.isNotBlank() },
+                                price = price.toDouble(),
+                                costPrice = costPrice.toDoubleOrNull(),
+                                stockQuantity = stockQuantity.toInt(),
+                                category = selectedCategory?.name,
+                                categoryId = selectedCategory?.id,
+                                categoryName = selectedCategory?.name,
+                                sku = sku.takeIf { it.isNotBlank() },
+                                brand = brand.takeIf { it.isNotBlank() },
+                                modelNumber = modelNumber.takeIf { it.isNotBlank() },
+                                barcode = barcode.takeIf { it.isNotBlank() },
+                                weight = weight.toDoubleOrNull(),
+                                length = length.toDoubleOrNull(),
+                                width = width.toDoubleOrNull(),
+                                height = height.toDoubleOrNull(),
+                                minStockLevel = minStockLevel.toIntOrNull(),
+                                maxStockLevel = maxStockLevel.toIntOrNull(),
+                                reorderPoint = reorderPoint.toIntOrNull(),
+                                reorderQuantity = reorderQuantity.toIntOrNull(),
+                                supplierName = supplierName.takeIf { it.isNotBlank() },
+                                supplierCode = supplierCode.takeIf { it.isNotBlank() },
+                                warrantyPeriod = warrantyPeriod.toIntOrNull(),
+                                unitOfMeasure = unitOfMeasure,
+                                taxRate = taxRate.toDoubleOrNull(),
+                                discountPercentage = discountPercentage.toDoubleOrNull(),
+                                locationInWarehouse = locationInWarehouse.takeIf { it.isNotBlank() },
+                                notes = notes.takeIf { it.isNotBlank() }
+                            )
+                            onSave(productDTO)
+                        }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (product != null) "تحديث" else "حفظ",
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
         },
         dismissButton = { },
@@ -1794,7 +1992,13 @@ private fun ProductDetailsDialog(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = {},
+        properties = DialogProperties(
+            dismissOnClickOutside = false,
+            dismissOnBackPress = true
+        )
+    ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2204,7 +2408,13 @@ fun DeleteConfirmationDialog(
         isVisible = true
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = {},
+        properties = DialogProperties(
+            dismissOnClickOutside = false,
+            dismissOnBackPress = true
+        )
+    ) {
         AnimatedVisibility(
             visible = isVisible,
             enter = scaleIn(
@@ -2449,7 +2659,13 @@ private fun ExportDialog(
     onExportCsv: () -> Unit,
     onExportJson: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = {},
+        properties = DialogProperties(
+            dismissOnClickOutside = false,
+            dismissOnBackPress = true
+        )
+    ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2518,7 +2734,13 @@ private fun ImportDialog(
     onDismiss: () -> Unit,
     onImport: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = {},
+        properties = DialogProperties(
+            dismissOnClickOutside = false,
+            dismissOnBackPress = true
+        )
+    ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2666,7 +2888,13 @@ private fun ImportPreviewDialog(
     onDismiss: () -> Unit,
     onConfirmUpload: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = {},
+        properties = DialogProperties(
+            dismissOnClickOutside = false,
+            dismissOnBackPress = true
+        )
+    ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()

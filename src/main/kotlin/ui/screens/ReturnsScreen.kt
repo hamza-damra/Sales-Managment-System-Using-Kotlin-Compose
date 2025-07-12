@@ -35,6 +35,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import data.*
 import data.api.*
 import data.di.AppDependencies
@@ -49,6 +57,8 @@ import ui.utils.ResponsiveUtils.getScreenInfo
 import ui.viewmodels.ReturnsViewModel
 import androidx.compose.runtime.collectAsState
 import utils.FileDialogUtils
+import utils.CurrencyUtils
+import data.preferences.CurrencyPreferencesManager
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -691,10 +701,7 @@ fun ReturnsScreen() {
 
         if (showDeleteConfirmation && returnToDelete != null) {
             AlertDialog(
-                onDismissRequest = {
-                    showDeleteConfirmation = false
-                    returnToDelete = null
-                },
+                onDismissRequest = {}, // Disabled click-outside-to-dismiss
                 title = { Text("تأكيد الحذف") },
                 text = { Text("هل أنت متأكد من حذف هذا المرتجع؟") },
                 confirmButton = {
@@ -994,7 +1001,7 @@ private fun EnhancedReturnsContent(
             ) {
                 EnhancedReturnsStatCard(
                     title = "تم الاسترداد",
-                    value = "${String.format("%.2f", totalRefundAmount)} ر.س",
+                    value = CurrencyUtils.formatAmount(totalRefundAmount),
                     subtitle = "إجمالي المبلغ",
                     icon = Icons.Default.AccountBalance,
                     iconColor = AppTheme.colors.success,
@@ -1500,7 +1507,7 @@ private fun EnhancedReturnDetailsPanel(
                     DetailRow("العميل", returnItem.customerName ?: "غير محدد")
                     DetailRow("تاريخ الإرجاع", returnItem.returnDate?.take(10) ?: "غير محدد")
                     DetailRow("سبب الإرجاع", getReasonDisplayName(returnItem.reason))
-                    DetailRow("المبلغ الإجمالي", "${String.format("%.2f", returnItem.totalRefundAmount)} ر.س")
+                    DetailRow("المبلغ الإجمالي", CurrencyUtils.formatAmount(returnItem.totalRefundAmount))
                     returnItem.refundMethod?.let { method ->
                         DetailRow("طريقة الاسترداد", when (method) {
                             "ORIGINAL_PAYMENT" -> "الطريقة الأصلية"
@@ -1555,7 +1562,7 @@ private fun EnhancedReturnDetailsPanel(
                                 fontWeight = FontWeight.Medium
                             )
                             Text(
-                                text = "${item.returnQuantity} × ${String.format("%.2f", item.originalUnitPrice)} ر.س",
+                                text = "${item.returnQuantity} × ${CurrencyUtils.formatAmount(item.originalUnitPrice)}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium
                             )
@@ -1582,7 +1589,7 @@ private fun EnhancedReturnDetailsPanel(
                             )
                         }
                         Text(
-                            text = "إجمالي الاسترداد: ${String.format("%.2f", item.refundAmount)} ر.س",
+                            text = "إجمالي الاسترداد: ${CurrencyUtils.formatAmount(item.refundAmount)}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Medium
@@ -1858,8 +1865,11 @@ fun EnhancedNewReturnDialog(
         "STORE_CREDIT" to "رصيد المتجر"
     )
 
+    // Focus manager for keyboard navigation
+    val focusManager = LocalFocusManager.current
+
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         title = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -2002,7 +2012,7 @@ fun EnhancedNewReturnDialog(
                                 onExpandedChange = { showSaleDropdown = it }
                             ) {
                                 OutlinedTextField(
-                                    value = selectedSale?.let { "فاتورة #${it.id} - ${it.totalAmount} ريال" } ?: "",
+                                    value = selectedSale?.let { "فاتورة #${it.id} - ${CurrencyUtils.formatAmount(it.totalAmount)}" } ?: "",
                                     onValueChange = { },
                                     readOnly = true,
                                     label = { Text("الفاتورة") },
@@ -2045,7 +2055,7 @@ fun EnhancedNewReturnDialog(
                                                     Column {
                                                         Text("فاتورة #${sale.id}")
                                                         Text(
-                                                            text = "${sale.totalAmount} ريال - ${sale.items.size} منتج",
+                                                            text = "${CurrencyUtils.formatAmount(sale.totalAmount)} - ${sale.items.size} منتج",
                                                             style = MaterialTheme.typography.bodySmall,
                                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                                         )
@@ -2187,6 +2197,38 @@ fun EnhancedNewReturnDialog(
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 minLines = 2,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                keyboardActions = KeyboardActions(
+                                    onDone = {
+                                        val isValid = selectedCustomer != null && selectedSale != null
+                                        if (isValid && !isLoading) {
+                                            focusManager.clearFocus()
+                                            val returnDTO = ReturnDTO(
+                                                id = null,
+                                                customerId = selectedCustomer!!.id!!,
+                                                originalSaleId = selectedSale!!.id!!,
+                                                reason = selectedReason,
+                                                status = "PENDING",
+                                                totalRefundAmount = selectedSale!!.totalAmount,
+                                                refundMethod = refundMethod,
+                                                notes = notes.takeIf { it.isNotBlank() },
+                                                items = selectedSaleItems.map { saleItem ->
+                                                    ReturnItemDTO(
+                                                        id = null,
+                                                        returnId = null,
+                                                        originalSaleItemId = saleItem.id ?: 0L,
+                                                        productId = saleItem.productId,
+                                                        returnQuantity = saleItem.quantity,
+                                                        originalUnitPrice = saleItem.unitPrice,
+                                                        refundAmount = saleItem.totalPrice ?: 0.0,
+                                                        itemCondition = "GOOD"
+                                                    )
+                                                }
+                                            )
+                                            onConfirm(returnDTO)
+                                        }
+                                    }
+                                ),
                                 shape = RoundedCornerShape(12.dp)
                             )
                         }
@@ -2230,7 +2272,7 @@ fun EnhancedNewReturnDialog(
                                                 fontWeight = FontWeight.Medium
                                             )
                                             Text(
-                                                text = "الكمية: ${item.quantity} - السعر: ${item.unitPrice} ريال",
+                                                text = "الكمية: ${item.quantity} - السعر: ${CurrencyUtils.formatAmount(item.unitPrice)}",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -2393,8 +2435,14 @@ private fun EnhancedEditReturnDialog(
     var notes by remember { mutableStateOf(returnItem.notes ?: "") }
     var refundAmount by remember { mutableStateOf(returnItem.totalRefundAmount.toString()) }
 
+    // Focus manager for keyboard navigation
+    val focusManager = LocalFocusManager.current
+
+    // Focus requesters for explicit focus management
+    val notesFocusRequester = remember { FocusRequester() }
+
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         title = {
             Text(
                 text = "تعديل المرتجع #${returnItem.id}",
@@ -2548,6 +2596,14 @@ private fun EnhancedEditReturnDialog(
                         onValueChange = { refundAmount = it },
                         label = { Text("مبلغ الاسترداد") },
                         modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal,
+                            imeAction = ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onNext = { notesFocusRequester.requestFocus() }
+                        ),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -2561,8 +2617,25 @@ private fun EnhancedEditReturnDialog(
                         value = notes,
                         onValueChange = { notes = it },
                         label = { Text("ملاحظات") },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(notesFocusRequester),
                         minLines = 3,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                if (!isLoading) {
+                                    focusManager.clearFocus()
+                                    val updatedReturn = returnItem.copy(
+                                        reason = selectedReason,
+                                        status = selectedStatus,
+                                        notes = notes,
+                                        totalRefundAmount = refundAmount.toDoubleOrNull() ?: returnItem.totalRefundAmount
+                                    )
+                                    onSave(updatedReturn)
+                                }
+                            }
+                        ),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -3365,7 +3438,7 @@ private fun EnhancedReturnsStatistics(
                 item {
                     ModernStatCard(
                         title = "تم الاسترداد",
-                        value = "12.5K ر.س",
+                        value = "12.5K ${CurrencyUtils.getCurrencySymbol()}",
                         subtitle = "قيمة مستردة",
                         icon = Icons.Default.AccountBalance,
                         iconColor = AppTheme.colors.success,
@@ -3784,7 +3857,7 @@ private fun EnhancedReturnCardFromDTO(
                 }
 
                 Text(
-                    text = "${String.format("%.2f", returnItem.totalRefundAmount)} ر.س",
+                    text = CurrencyUtils.formatAmount(returnItem.totalRefundAmount),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary

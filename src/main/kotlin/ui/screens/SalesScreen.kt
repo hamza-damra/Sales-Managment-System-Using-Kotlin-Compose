@@ -53,6 +53,7 @@ import ui.theme.CardStyles
 import ui.viewmodels.SalesViewModel
 import services.PdfReceiptService
 import services.CanvasPdfReceiptService
+import data.preferences.TaxPreferencesManager
 import utils.FileDialogUtils
 import java.text.NumberFormat
 import java.util.*
@@ -62,6 +63,8 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import kotlinx.datetime.*
 import java.io.File
+import utils.CurrencyUtils
+import data.preferences.CurrencyPreferencesManager
 
 /**
  * Comprehensive Sales Screen with full backend integration, PDF generation, and advanced features
@@ -78,7 +81,15 @@ fun SalesScreen(
     val salesViewModel = remember {
         SalesViewModel(salesRepository, customerRepository, productRepository, promotionRepository)
     }
-    
+
+    // Tax settings
+    val taxSettings by salesViewModel.taxSettings.collectAsState()
+
+    // Refresh tax settings when screen loads
+    LaunchedEffect(Unit) {
+        salesViewModel.refreshTaxSettings()
+    }
+
     // Collect state from ViewModel
     val sales by salesViewModel.sales.collectAsState()
     val customers by salesViewModel.customers.collectAsState()
@@ -116,11 +127,9 @@ fun SalesScreen(
     
     val coroutineScope = rememberCoroutineScope()
 
-    // Currency formatter for Arabic locale
+    // Currency formatter using configurable currency system
     val currencyFormatter = remember {
-        NumberFormat.getCurrencyInstance(Locale("ar", "SA")).apply {
-            currency = Currency.getInstance("SAR")
-        }
+        CurrencyUtils.getCurrencyFormatter()
     }
     
     // Auto-refresh sales data every 30 seconds
@@ -217,6 +226,7 @@ fun SalesScreen(
                         promotionCode = promotionCode,
                         isValidatingPromotion = isValidatingPromotion,
                         promotionError = promotionError,
+                        taxSettings = taxSettings,
                         isProcessingSale = isProcessingSale,
                         currencyFormatter = currencyFormatter,
                         availableProducts = products,
@@ -343,6 +353,7 @@ fun SalesScreen(
         if (showProductSelection) {
             EnhancedProductSelectionDialog(
                 products = products,
+                taxSettings = taxSettings,
                 onProductSelected = { product, quantity ->
                     salesViewModel.addProductToCart(product, quantity)
                     showProductSelection = false
@@ -922,6 +933,7 @@ private fun EnhancedNewSaleContent(
     promotionCode: String,
     isValidatingPromotion: Boolean,
     promotionError: String?,
+    taxSettings: data.preferences.TaxSettings,
     isProcessingSale: Boolean,
     currencyFormatter: NumberFormat,
     availableProducts: List<ProductDTO>,
@@ -993,6 +1005,7 @@ private fun EnhancedNewSaleContent(
                 canCheckout = selectedProducts.isNotEmpty() && selectedCustomer != null,
                 currencyFormatter = currencyFormatter,
                 selectedCustomer = selectedCustomer,
+                taxSettings = taxSettings,
                 onPromotionCodeChange = onPromotionCodeChange,
                 onApplyPromotion = onApplyPromotion,
                 onClearPromotion = onClearPromotion,
@@ -1626,6 +1639,7 @@ private fun CheckoutSection(
     canCheckout: Boolean,
     currencyFormatter: NumberFormat,
     selectedCustomer: CustomerDTO?,
+    taxSettings: data.preferences.TaxSettings,
     onPromotionCodeChange: (String) -> Unit,
     onApplyPromotion: (String) -> Unit,
     onClearPromotion: () -> Unit,
@@ -1671,7 +1685,11 @@ private fun CheckoutSection(
                     )
                 }
 
-                TotalRow("الضريبة (15%)", currencyFormatter.format(cartTax))
+                // Show tax breakdown only if enabled in settings
+                if (taxSettings.showTaxBreakdownInCart) {
+                    val taxPercentage = String.format("%.1f", taxSettings.taxRate * 100)
+                    TotalRow("الضريبة ($taxPercentage%)", currencyFormatter.format(cartTax))
+                }
                 HorizontalDivider(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
                     thickness = 1.dp
@@ -2210,6 +2228,7 @@ private fun StatusBadge(status: String) {
 @Composable
 private fun EnhancedProductSelectionDialog(
     products: List<ProductDTO>,
+    taxSettings: data.preferences.TaxSettings,
     onProductSelected: (ProductDTO, Int) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -2221,7 +2240,7 @@ private fun EnhancedProductSelectionDialog(
     }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         modifier = Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.8f),
         title = {
             Column {
@@ -2283,6 +2302,7 @@ private fun EnhancedProductSelectionDialog(
                     items(filteredProducts) { product ->
                         ProductSelectionItem(
                             product = product,
+                            taxSettings = taxSettings,
                             onSelect = { quantity ->
                                 onProductSelected(product, quantity)
                             }
@@ -2306,6 +2326,7 @@ private fun EnhancedProductSelectionDialog(
 @Composable
 private fun ProductSelectionItem(
     product: ProductDTO,
+    taxSettings: data.preferences.TaxSettings,
     onSelect: (Int) -> Unit
 ) {
     var quantity by remember { mutableStateOf(1) }
@@ -2341,12 +2362,33 @@ private fun ProductSelectionItem(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Text(
-                        text = NumberFormat.getCurrencyInstance(Locale("ar", "SA")).format(product.price),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    // Display price based on tax settings
+                    val displayPrice = if (taxSettings.displayTaxInclusivePricing) {
+                        product.price * (1 + taxSettings.taxRate)
+                    } else {
+                        product.price
+                    }
+                    val priceLabel = if (taxSettings.displayTaxInclusivePricing) {
+                        "شامل الضريبة"
+                    } else {
+                        "قبل الضريبة"
+                    }
+
+                    Column {
+                        Text(
+                            text = CurrencyUtils.formatAmount(displayPrice),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        if (taxSettings.displayTaxInclusivePricing) {
+                            Text(
+                                text = priceLabel,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
 
                 // Stock indicator
@@ -2438,7 +2480,7 @@ private fun EnhancedCustomerSelectionDialog(
     }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         modifier = Modifier.fillMaxWidth(0.9f),
         title = {
             Column {
@@ -2679,7 +2721,7 @@ private fun SaleSuccessDialogImproved(
     }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         confirmButton = {
             // Done button
             val doneInteractionSource = remember { MutableInteractionSource() }
@@ -3241,7 +3283,7 @@ private fun EnhancedSaleDetailsDialog(
     onCancelSale: ((Long) -> Unit)? = null
 ) {
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         modifier = Modifier.fillMaxWidth(0.9f),
         title = {
             Row(

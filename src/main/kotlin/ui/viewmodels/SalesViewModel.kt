@@ -5,6 +5,9 @@ import data.repository.SalesRepository
 import data.repository.CustomerRepository
 import data.repository.ProductRepository
 import data.repository.PromotionRepository
+import data.preferences.TaxPreferencesManager
+import data.preferences.TaxSettings
+import utils.TaxCalculationUtils
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.*
@@ -14,15 +17,49 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlin.math.round
 
 /**
  * ViewModel for sales management with comprehensive backend integration
  */
+
+// Constants for calculations
+private const val CURRENCY_DECIMAL_PLACES = 2
+
+/**
+ * Utility function to round currency values to 2 decimal places
+ */
+private fun roundToCurrency(amount: Double): Double {
+    return TaxCalculationUtils.roundToCurrency(amount)
+}
+
+/**
+ * Utility function to calculate item subtotal
+ */
+private fun calculateItemSubtotal(unitPrice: Double, quantity: Int): Double {
+    return roundToCurrency(unitPrice * quantity)
+}
+
+/**
+ * Utility function to calculate item tax amount
+ */
+private fun calculateItemTax(subtotal: Double, taxRate: Double): Double {
+    return roundToCurrency(subtotal * taxRate)
+}
+
+/**
+ * Utility function to calculate item total (subtotal + tax)
+ */
+private fun calculateItemTotal(subtotal: Double, taxRate: Double): Double {
+    val tax = calculateItemTax(subtotal, taxRate)
+    return roundToCurrency(subtotal + tax)
+}
 class SalesViewModel(
     private val salesRepository: SalesRepository,
     private val customerRepository: CustomerRepository,
     private val productRepository: ProductRepository,
-    private val promotionRepository: PromotionRepository
+    private val promotionRepository: PromotionRepository,
+    private val taxPreferencesManager: TaxPreferencesManager = TaxPreferencesManager()
 ) {
     private val viewModelScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     
@@ -57,6 +94,10 @@ class SalesViewModel(
     private val _statusFilter = MutableStateFlow<String?>(null)
     val statusFilter: StateFlow<String?> = _statusFilter.asStateFlow()
 
+    // Tax settings state
+    private val _taxSettings = MutableStateFlow(taxPreferencesManager.loadTaxSettings())
+    val taxSettings: StateFlow<TaxSettings> = _taxSettings.asStateFlow()
+
     // Promotion-related state
     private val _appliedPromotion = MutableStateFlow<PromotionDTO?>(null)
     val appliedPromotion: StateFlow<PromotionDTO?> = _appliedPromotion.asStateFlow()
@@ -73,22 +114,37 @@ class SalesViewModel(
     private val _promotionError = MutableStateFlow<String?>(null)
     val promotionError: StateFlow<String?> = _promotionError.asStateFlow()
 
-    // Computed properties
+    // Computed properties with proper calculation logic
     val cartSubtotal: StateFlow<Double> = _selectedProducts.map { items ->
-        items.sumOf { it.subtotal ?: (it.unitPrice * it.quantity) }
+        val subtotal = items.sumOf { item ->
+            // Use consistent calculation: unitPrice * quantity
+            roundToCurrency(item.unitPrice * item.quantity)
+        }
+        roundToCurrency(subtotal)
     }.stateIn(viewModelScope, SharingStarted.Lazily, 0.0)
 
-    val cartTax: StateFlow<Double> = cartSubtotal.map { subtotal ->
-        subtotal * 0.15 // 15% tax rate
+    val cartTax: StateFlow<Double> = combine(
+        cartSubtotal,
+        _promotionDiscount,
+        _taxSettings
+    ) { subtotal, discount, taxSettings ->
+        // Calculate tax based on settings
+        val baseAmount = if (taxSettings.calculateTaxOnDiscountedAmount) {
+            maxOf(0.0, subtotal - discount)
+        } else {
+            subtotal
+        }
+        roundToCurrency(baseAmount * taxSettings.taxRate)
     }.stateIn(viewModelScope, SharingStarted.Lazily, 0.0)
 
     val cartTotal: StateFlow<Double> = combine(
-        _selectedProducts,
+        cartSubtotal,
         _promotionDiscount,
         cartTax
-    ) { items, discount, tax ->
-        val subtotal = items.sumOf { it.totalPrice ?: (it.unitPrice * it.quantity) }
-        maxOf(0.0, subtotal - discount + tax)
+    ) { subtotal, discount, tax ->
+        // Proper order: subtotal - discount + tax_on_discounted_amount
+        val discountedSubtotal = maxOf(0.0, subtotal - discount)
+        roundToCurrency(discountedSubtotal + tax)
     }.stateIn(viewModelScope, SharingStarted.Lazily, 0.0)
     
     // Filtered sales based on search and status
@@ -136,21 +192,42 @@ class SalesViewModel(
     
     // Cart management
     fun addProductToCart(product: ProductDTO, quantity: Int = 1) {
+        // Validate inputs
+        if (quantity <= 0) {
+            println("⚠️ Invalid quantity: $quantity. Must be greater than 0.")
+            return
+        }
+        if (product.price < 0) {
+            println("⚠️ Invalid price: ${product.price}. Must be non-negative.")
+            return
+        }
+
         val currentItems = _selectedProducts.value.toMutableList()
         val existingItemIndex = currentItems.indexOfFirst { it.productId == product.id }
-        
+
+        val currentTaxSettings = _taxSettings.value
+
         if (existingItemIndex >= 0) {
-            // Update existing item
+            // Update existing item with proper calculations
             val existingItem = currentItems[existingItemIndex]
             val newQuantity = existingItem.quantity + quantity
+            val subtotal = calculateItemSubtotal(product.price, newQuantity)
+            val taxAmount = calculateItemTax(subtotal, currentTaxSettings.taxRate)
+            val totalPrice = calculateItemTotal(subtotal, currentTaxSettings.taxRate)
+
             val updatedItem = existingItem.copy(
                 quantity = newQuantity,
-                subtotal = product.price * newQuantity,
-                totalPrice = product.price * newQuantity * 1.15 // Including tax
+                subtotal = subtotal,
+                taxAmount = taxAmount,
+                totalPrice = totalPrice
             )
             currentItems[existingItemIndex] = updatedItem
         } else {
-            // Add new item
+            // Add new item with proper calculations
+            val subtotal = calculateItemSubtotal(product.price, quantity)
+            val taxAmount = calculateItemTax(subtotal, currentTaxSettings.taxRate)
+            val totalPrice = calculateItemTotal(subtotal, currentTaxSettings.taxRate)
+
             val newItem = SaleItemDTO(
                 productId = product.id!!,
                 productName = product.name,
@@ -160,33 +237,47 @@ class SalesViewModel(
                 costPrice = product.costPrice,
                 discountPercentage = 0.0,
                 discountAmount = 0.0,
-                taxPercentage = 15.0,
-                taxAmount = product.price * quantity * 0.15,
-                subtotal = product.price * quantity,
-                totalPrice = product.price * quantity * 1.15,
+                taxPercentage = currentTaxSettings.taxRate * 100, // Store as percentage
+                taxAmount = taxAmount,
+                subtotal = subtotal,
+                totalPrice = totalPrice,
                 unitOfMeasure = "PCS"
             )
             currentItems.add(newItem)
         }
-        
+
         _selectedProducts.value = currentItems
     }
     
     fun updateCartItemQuantity(productId: Long, newQuantity: Int) {
+        // Validate quantity
+        if (newQuantity < 0) {
+            println("⚠️ Invalid quantity: $newQuantity. Must be non-negative.")
+            return
+        }
+
         val currentItems = _selectedProducts.value.toMutableList()
         val itemIndex = currentItems.indexOfFirst { it.productId == productId }
-        
+
         if (itemIndex >= 0) {
             if (newQuantity > 0) {
                 val item = currentItems[itemIndex]
+                val currentTaxSettings = _taxSettings.value
+
+                // Recalculate with proper order and rounding
+                val subtotal = calculateItemSubtotal(item.unitPrice, newQuantity)
+                val taxAmount = calculateItemTax(subtotal, currentTaxSettings.taxRate)
+                val totalPrice = calculateItemTotal(subtotal, currentTaxSettings.taxRate)
+
                 val updatedItem = item.copy(
                     quantity = newQuantity,
-                    subtotal = item.unitPrice * newQuantity,
-                    totalPrice = item.unitPrice * newQuantity * 1.15,
-                    taxAmount = item.unitPrice * newQuantity * 0.15
+                    subtotal = subtotal,
+                    taxAmount = taxAmount,
+                    totalPrice = totalPrice
                 )
                 currentItems[itemIndex] = updatedItem
             } else {
+                // Remove item if quantity is 0
                 currentItems.removeAt(itemIndex)
             }
             _selectedProducts.value = currentItems
@@ -371,22 +462,35 @@ class SalesViewModel(
             val promotion = promotions.find { it.couponCode == code && it.isActive }
 
             if (promotion != null) {
-                // Calculate discount based on promotion type
-                val currentTotal = cartSubtotal.value
+                // Calculate discount based on promotion type with proper validation
+                val currentSubtotal = cartSubtotal.value
+
+                // Validate minimum order amount first
+                if (promotion.minimumOrderAmount != null && currentSubtotal < promotion.minimumOrderAmount) {
+                    _promotionError.value = "الحد الأدنى للطلب هو ${roundToCurrency(promotion.minimumOrderAmount)}"
+                    _isValidatingPromotion.value = false
+                    return
+                }
+
                 val discount = when (promotion.type) {
                     "PERCENTAGE" -> {
-                        val discountAmount = currentTotal * (promotion.discountValue / 100)
-                        promotion.maximumDiscountAmount?.let { maxDiscount ->
+                        val discountAmount = currentSubtotal * (promotion.discountValue / 100)
+                        val finalDiscount = promotion.maximumDiscountAmount?.let { maxDiscount ->
                             minOf(discountAmount, maxDiscount)
                         } ?: discountAmount
+                        roundToCurrency(finalDiscount)
                     }
-                    "FIXED_AMOUNT" -> promotion.discountValue
+                    "FIXED_AMOUNT" -> {
+                        // Ensure discount doesn't exceed subtotal
+                        val maxDiscount = minOf(promotion.discountValue, currentSubtotal)
+                        roundToCurrency(maxDiscount)
+                    }
                     else -> 0.0
                 }
 
-                // Check minimum order amount
-                if (promotion.minimumOrderAmount != null && currentTotal < promotion.minimumOrderAmount) {
-                    _promotionError.value = "الحد الأدنى للطلب هو ${promotion.minimumOrderAmount}"
+                // Validate discount amount
+                if (discount > currentSubtotal) {
+                    _promotionError.value = "قيمة الخصم تتجاوز إجمالي الطلب"
                     _isValidatingPromotion.value = false
                     return
                 }
@@ -394,7 +498,7 @@ class SalesViewModel(
                 _appliedPromotion.value = promotion
                 _promotionDiscount.value = discount
                 _promotionCode.value = code
-                println("🔍 SalesViewModel - Promotion applied: ${promotion.name}, Discount: $discount")
+                println("🔍 SalesViewModel - Promotion applied: ${promotion.name}, Discount: $discount, Subtotal: $currentSubtotal")
             } else {
                 _promotionError.value = "رمز الكوبون غير صحيح أو منتهي الصلاحية"
             }
@@ -428,6 +532,47 @@ class SalesViewModel(
         return salesRepository.getTotalRevenue()
     }
 
+    // Tax settings methods
+    fun updateTaxSettings(newSettings: TaxSettings) {
+        viewModelScope.launch {
+            try {
+                taxPreferencesManager.saveTaxSettings(newSettings)
+                _taxSettings.value = newSettings
+
+                // Recalculate all cart items with new tax rate
+                recalculateCartItems()
+
+                println("✅ Tax settings updated successfully")
+            } catch (e: Exception) {
+                println("❌ Failed to update tax settings: ${e.message}")
+            }
+        }
+    }
+
+    fun refreshTaxSettings() {
+        _taxSettings.value = taxPreferencesManager.loadTaxSettings()
+        recalculateCartItems()
+    }
+
+    private fun recalculateCartItems() {
+        val currentItems = _selectedProducts.value.toMutableList()
+        val currentTaxSettings = _taxSettings.value
+
+        val updatedItems = currentItems.map { item ->
+            val subtotal = calculateItemSubtotal(item.unitPrice, item.quantity)
+            val taxAmount = calculateItemTax(subtotal, currentTaxSettings.taxRate)
+            val totalPrice = calculateItemTotal(subtotal, currentTaxSettings.taxRate)
+
+            item.copy(
+                taxPercentage = currentTaxSettings.taxRate * 100,
+                taxAmount = taxAmount,
+                totalPrice = totalPrice
+            )
+        }
+
+        _selectedProducts.value = updatedItems
+    }
+
     // Promotion-related methods
     fun updatePromotionCode(code: String) {
         _promotionCode.value = code.uppercase()
@@ -443,5 +588,64 @@ class SalesViewModel(
 
     fun clearPromotionError() {
         _promotionError.value = null
+    }
+
+    /**
+     * Test function to verify calculation logic works correctly
+     * This can be called during development to validate calculations
+     */
+    fun testCalculations() {
+        println("🧮 Testing Sales Calculation Logic:")
+        val currentTaxRate = _taxSettings.value.taxRate
+
+        // Test 1: Basic calculations
+        val price1 = 100.0
+        val qty1 = 2
+        val subtotal1 = calculateItemSubtotal(price1, qty1)
+        val tax1 = calculateItemTax(subtotal1, currentTaxRate)
+        val total1 = calculateItemTotal(subtotal1, currentTaxRate)
+
+        println("Test 1 - Basic: Price=$price1, Qty=$qty1, Tax Rate=${currentTaxRate * 100}%")
+        println("  Subtotal: $subtotal1 (expected: 200.0)")
+        println("  Tax: $tax1 (expected: ${200.0 * currentTaxRate})")
+        println("  Total: $total1 (expected: ${200.0 + (200.0 * currentTaxRate)})")
+
+        // Test 2: Rounding precision
+        val price2 = 33.33
+        val qty2 = 3
+        val subtotal2 = calculateItemSubtotal(price2, qty2)
+        val tax2 = calculateItemTax(subtotal2, currentTaxRate)
+        val total2 = calculateItemTotal(subtotal2, currentTaxRate)
+
+        println("Test 2 - Rounding: Price=$price2, Qty=$qty2")
+        println("  Subtotal: $subtotal2 (expected: 99.99)")
+        println("  Tax: $tax2 (expected: ${99.99 * currentTaxRate})")
+        println("  Total: $total2 (expected: ${99.99 + (99.99 * currentTaxRate)})")
+
+        // Test 3: Discount calculation
+        val subtotal3 = 200.0
+        val discountPercent = 10.0
+        val discountAmount = roundToCurrency(subtotal3 * (discountPercent / 100))
+        val discountedSubtotal = subtotal3 - discountAmount
+        val taxOnDiscounted = calculateItemTax(discountedSubtotal, currentTaxRate)
+        val finalTotal = roundToCurrency(discountedSubtotal + taxOnDiscounted)
+
+        println("Test 3 - Discount: Subtotal=$subtotal3, Discount=$discountPercent%")
+        println("  Discount Amount: $discountAmount (expected: 20.0)")
+        println("  Discounted Subtotal: $discountedSubtotal (expected: 180.0)")
+        println("  Tax on Discounted: $taxOnDiscounted (expected: ${180.0 * currentTaxRate})")
+        println("  Final Total: $finalTotal (expected: ${180.0 + (180.0 * currentTaxRate)})")
+
+        // Test 4: Edge cases
+        val zeroPrice = calculateItemSubtotal(0.0, 5)
+        val zeroQty = calculateItemSubtotal(100.0, 0)
+        val smallPrice = calculateItemSubtotal(0.01, 1)
+
+        println("Test 4 - Edge Cases:")
+        println("  Zero price: $zeroPrice (expected: 0.0)")
+        println("  Zero quantity: $zeroQty (expected: 0.0)")
+        println("  Small price: $smallPrice (expected: 0.01)")
+
+        println("🧮 Calculation tests completed!")
     }
 }

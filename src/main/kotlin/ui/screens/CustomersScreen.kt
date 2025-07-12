@@ -40,6 +40,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import data.*
 import data.api.*
 import ui.components.*
@@ -50,6 +58,7 @@ import ui.viewmodels.CustomerViewModel
 import ui.viewmodels.ViewModelFactory
 import java.text.NumberFormat
 import java.util.*
+import utils.CurrencyUtils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -83,11 +92,9 @@ fun CustomersScreen() {
         var foreignKeyError by remember { mutableStateOf<ApiException.ForeignKeyConstraintError?>(null) }
         val coroutineScope = rememberCoroutineScope()
 
-        // Currency formatter for Arabic locale
+        // Currency formatter using configurable currency system
         val currencyFormatter = remember {
-            NumberFormat.getCurrencyInstance(Locale("ar", "SA")).apply {
-                currency = Currency.getInstance("SAR")
-            }
+            CurrencyUtils.getCurrencyFormatter()
         }
 
         // Extract cities from customers for filtering
@@ -1201,8 +1208,25 @@ private fun EnhancedCustomerDialog(
     var website by remember { mutableStateOf(customer?.website ?: "") }
     var notes by remember { mutableStateOf(customer?.notes ?: "") }
 
+    // Focus manager for keyboard navigation
+    val focusManager = LocalFocusManager.current
+
+    // Focus requesters for explicit focus management
+    val firstNameFocusRequester = remember { FocusRequester() }
+    val lastNameFocusRequester = remember { FocusRequester() }
+    val phoneFocusRequester = remember { FocusRequester() }
+    val emailFocusRequester = remember { FocusRequester() }
+    val addressFocusRequester = remember { FocusRequester() }
+    val billingAddressFocusRequester = remember { FocusRequester() }
+    val shippingAddressFocusRequester = remember { FocusRequester() }
+    val creditLimitFocusRequester = remember { FocusRequester() }
+    val companyNameFocusRequester = remember { FocusRequester() }
+    val taxNumberFocusRequester = remember { FocusRequester() }
+    val websiteFocusRequester = remember { FocusRequester() }
+    val notesFocusRequester = remember { FocusRequester() }
+
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         title = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -1273,6 +1297,10 @@ private fun EnhancedCustomerDialog(
                             },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(
+                                onNext = { firstNameFocusRequester.requestFocus() }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             enabled = !isLoading,
                             colors = OutlinedTextFieldDefaults.colors(
@@ -1289,8 +1317,14 @@ private fun EnhancedCustomerDialog(
                                 value = firstName,
                                 onValueChange = { firstName = it },
                                 label = { Text("الاسم الأول") },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(firstNameFocusRequester),
                                 singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                keyboardActions = KeyboardActions(
+                                    onNext = { lastNameFocusRequester.requestFocus() }
+                                ),
                                 shape = RoundedCornerShape(12.dp),
                                 enabled = !isLoading,
                                 colors = OutlinedTextFieldDefaults.colors(
@@ -1302,8 +1336,14 @@ private fun EnhancedCustomerDialog(
                                 value = lastName,
                                 onValueChange = { lastName = it },
                                 label = { Text("اسم العائلة") },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(lastNameFocusRequester),
                                 singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                keyboardActions = KeyboardActions(
+                                    onNext = { phoneFocusRequester.requestFocus() }
+                                ),
                                 shape = RoundedCornerShape(12.dp),
                                 enabled = !isLoading,
                                 colors = OutlinedTextFieldDefaults.colors(
@@ -1324,8 +1364,17 @@ private fun EnhancedCustomerDialog(
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(phoneFocusRequester),
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Phone,
+                                imeAction = ImeAction.Next
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onNext = { emailFocusRequester.requestFocus() }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             enabled = !isLoading,
                             colors = OutlinedTextFieldDefaults.colors(
@@ -1345,8 +1394,17 @@ private fun EnhancedCustomerDialog(
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(emailFocusRequester),
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Email,
+                                imeAction = ImeAction.Next
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onNext = { addressFocusRequester.requestFocus() }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             enabled = !isLoading,
                             colors = OutlinedTextFieldDefaults.colors(
@@ -1387,8 +1445,14 @@ private fun EnhancedCustomerDialog(
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(addressFocusRequester),
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(
+                                onNext = { billingAddressFocusRequester.requestFocus() }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             enabled = !isLoading,
                             colors = OutlinedTextFieldDefaults.colors(
@@ -1401,8 +1465,14 @@ private fun EnhancedCustomerDialog(
                             value = billingAddress,
                             onValueChange = { billingAddress = it },
                             label = { Text("عنوان الفواتير") },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(billingAddressFocusRequester),
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(
+                                onNext = { shippingAddressFocusRequester.requestFocus() }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             enabled = !isLoading,
                             colors = OutlinedTextFieldDefaults.colors(
@@ -1415,8 +1485,14 @@ private fun EnhancedCustomerDialog(
                             value = shippingAddress,
                             onValueChange = { shippingAddress = it },
                             label = { Text("عنوان الشحن") },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(shippingAddressFocusRequester),
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(
+                                onNext = { creditLimitFocusRequester.requestFocus() }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             enabled = !isLoading,
                             colors = OutlinedTextFieldDefaults.colors(
@@ -1548,8 +1624,17 @@ private fun EnhancedCustomerDialog(
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(creditLimitFocusRequester),
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Decimal,
+                                imeAction = ImeAction.Next
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onNext = { companyNameFocusRequester.requestFocus() }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             enabled = !isLoading,
                             colors = OutlinedTextFieldDefaults.colors(
@@ -1569,8 +1654,73 @@ private fun EnhancedCustomerDialog(
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(companyNameFocusRequester),
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(
+                                onNext = { taxNumberFocusRequester.requestFocus() }
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isLoading,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+
+                        // Tax Number Field
+                        OutlinedTextField(
+                            value = taxNumber,
+                            onValueChange = { taxNumber = it },
+                            label = { Text("الرقم الضريبي") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Receipt,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(taxNumberFocusRequester),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(
+                                onNext = { websiteFocusRequester.requestFocus() }
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isLoading,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+
+                        // Website Field
+                        OutlinedTextField(
+                            value = website,
+                            onValueChange = { website = it },
+                            label = { Text("الموقع الإلكتروني") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Language,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(websiteFocusRequester),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Uri,
+                                imeAction = ImeAction.Next
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onNext = { notesFocusRequester.requestFocus() }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             enabled = !isLoading,
                             colors = OutlinedTextFieldDefaults.colors(
@@ -1583,9 +1733,39 @@ private fun EnhancedCustomerDialog(
                             value = notes,
                             onValueChange = { notes = it },
                             label = { Text("ملاحظات") },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(notesFocusRequester),
                             minLines = 2,
                             maxLines = 3,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(
+                                onDone = {
+                                    val isValid = name.isNotBlank()
+                                    if (isValid && !isLoading) {
+                                        focusManager.clearFocus()
+                                        val newCustomer = CustomerDTO(
+                                            id = customer?.id,
+                                            name = name,
+                                            firstName = firstName.takeIf { it.isNotBlank() },
+                                            lastName = lastName.takeIf { it.isNotBlank() },
+                                            phone = phone.takeIf { it.isNotBlank() },
+                                            email = email.takeIf { it.isNotBlank() },
+                                            address = address.takeIf { it.isNotBlank() },
+                                            billingAddress = billingAddress.takeIf { it.isNotBlank() },
+                                            shippingAddress = shippingAddress.takeIf { it.isNotBlank() },
+                                            customerType = customerType,
+                                            customerStatus = customerStatus,
+                                            creditLimit = creditLimit.toDoubleOrNull(),
+                                            taxNumber = taxNumber.takeIf { it.isNotBlank() },
+                                            companyName = companyName.takeIf { it.isNotBlank() },
+                                            website = website.takeIf { it.isNotBlank() },
+                                            notes = notes.takeIf { it.isNotBlank() }
+                                        )
+                                        onSave(newCustomer)
+                                    }
+                                }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             enabled = !isLoading,
                             colors = OutlinedTextFieldDefaults.colors(
@@ -1738,7 +1918,13 @@ private fun CustomerDetailsDialog(
         chartColors[(customer.id?.toInt() ?: 0) % chartColors.size]
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = {},
+        properties = DialogProperties(
+            dismissOnClickOutside = false,
+            dismissOnBackPress = true
+        )
+    ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2048,7 +2234,7 @@ private fun ForeignKeyWarningDialog(
     onDismiss: () -> Unit
 ) {
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         title = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -2257,7 +2443,7 @@ private fun CascadeDeleteConfirmationDialog(
     onDismiss: () -> Unit
 ) {
     AlertDialog(
-        onDismissRequest = if (!isLoading) onDismiss else {{}},
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         title = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -2435,7 +2621,7 @@ private fun DeleteConfirmationDialog(
     onDismiss: () -> Unit
 ) {
     AlertDialog(
-        onDismissRequest = if (!isLoading) onDismiss else {{}},
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         title = {
             Text(
                 text = "تأكيد الحذف",

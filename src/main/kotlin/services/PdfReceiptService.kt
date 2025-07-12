@@ -31,10 +31,8 @@ import java.util.*
 object PdfReceiptService {
 
     // Arabic locale formatters
-    private val arabicLocale = Locale("ar", "SA")
-    private val currencyFormatter = NumberFormat.getCurrencyInstance(arabicLocale).apply {
-        currency = Currency.getInstance("SAR")
-    }
+    private val arabicLocale = Locale("ar")
+    private val currencyFormatter = utils.CurrencyUtils.getCurrencyFormatter()
     private val arabicDateFormatter = SimpleDateFormat("dd/MM/yyyy HH:mm", arabicLocale)
     private val arabicNumberFormat = NumberFormat.getNumberInstance(arabicLocale)
 
@@ -278,7 +276,7 @@ object PdfReceiptService {
     }
 
     /**
-     * Format currency for Arabic locale with proper SAR symbol placement
+     * Format currency for Arabic locale with proper symbol placement
      */
     private fun formatArabicCurrency(amount: Double): String {
         return currencyFormatter.format(amount)
@@ -686,7 +684,7 @@ object PdfReceiptService {
             document.add(createArabicParagraph("3. الأرقام والعملة:", arabicFont, 14f, true))
             document.add(createArabicParagraph("الأرقام العربية: ١٢٣٤٥٦٧٨٩٠", arabicFont, 12f))
             document.add(createArabicParagraph("الأرقام الإنجليزية: 1234567890", arabicFont, 12f))
-            document.add(createArabicParagraph("العملة: ١٠٠ ريال سعودي", arabicFont, 12f))
+            document.add(createArabicParagraph("العملة: ١٠٠ شيكل إسرائيلي", arabicFont, 12f))
             document.add(createArabicParagraph("", arabicFont, 12f)) // Spacer
 
             // Test dates

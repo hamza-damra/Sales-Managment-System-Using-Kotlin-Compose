@@ -81,6 +81,10 @@ class AppContainer {
         StockMovementApiService(httpClient)
     }
 
+    val purchaseOrderApiService: PurchaseOrderApiService by lazy {
+        PurchaseOrderApiService(httpClient)
+    }
+
     // Repositories
     val customerRepository: CustomerRepository by lazy { 
         CustomerRepository(customerApiService) 
@@ -126,6 +130,10 @@ class AppContainer {
         StockMovementRepository(stockMovementApiService)
     }
 
+    val purchaseOrderRepository: PurchaseOrderRepository by lazy {
+        PurchaseOrderRepository(purchaseOrderApiService)
+    }
+
     // ViewModels
     val dashboardViewModel: DashboardViewModel by lazy {
         DashboardViewModel(dashboardRepository)
@@ -161,6 +169,10 @@ class AppContainer {
 
     val reportsViewModel: ui.viewmodels.ReportsViewModel by lazy {
         ui.viewmodels.ReportsViewModel(reportsRepository)
+    }
+
+    val purchaseOrderViewModel: PurchaseOrderViewModel by lazy {
+        PurchaseOrderViewModel(purchaseOrderRepository, supplierRepository)
     }
 
     /**

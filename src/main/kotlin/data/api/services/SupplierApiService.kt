@@ -7,10 +7,14 @@ import io.ktor.client.request.*
 import io.ktor.http.*
 
 /**
- * API service for supplier management operations
+ * Enhanced API service for supplier management operations
+ * Implements all endpoints from Supplier-API-Documentation.md
  */
 class SupplierApiService(private val httpClient: HttpClient) {
-    
+
+    /**
+     * Get all suppliers with pagination and filtering
+     */
     suspend fun getAllSuppliers(
         page: Int = ApiConfig.Pagination.DEFAULT_PAGE,
         size: Int = ApiConfig.Pagination.DEFAULT_SIZE,
@@ -29,14 +33,20 @@ class SupplierApiService(private val httpClient: HttpClient) {
             response.body<PageResponse<SupplierDTO>>()
         }
     }
-    
+
+    /**
+     * Get supplier by ID
+     */
     suspend fun getSupplierById(id: Long): NetworkResult<SupplierDTO> {
         return safeApiCall {
             val response = httpClient.get("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.supplierById(id)}")
             response.body<SupplierDTO>()
         }
     }
-    
+
+    /**
+     * Create new supplier
+     */
     suspend fun createSupplier(supplier: SupplierDTO): NetworkResult<SupplierDTO> {
         return safeApiCall {
             val response = httpClient.post("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.SUPPLIERS}") {
@@ -46,7 +56,10 @@ class SupplierApiService(private val httpClient: HttpClient) {
             response.body<SupplierDTO>()
         }
     }
-    
+
+    /**
+     * Update existing supplier
+     */
     suspend fun updateSupplier(id: Long, supplier: SupplierDTO): NetworkResult<SupplierDTO> {
         return safeApiCall {
             val response = httpClient.put("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.supplierById(id)}") {
@@ -56,13 +69,19 @@ class SupplierApiService(private val httpClient: HttpClient) {
             response.body<SupplierDTO>()
         }
     }
-    
+
+    /**
+     * Delete supplier
+     */
     suspend fun deleteSupplier(id: Long): NetworkResult<Unit> {
         return safeApiCall {
             httpClient.delete("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.supplierById(id)}")
         }
     }
-    
+
+    /**
+     * Search suppliers across multiple fields
+     */
     suspend fun searchSuppliers(
         query: String,
         page: Int = ApiConfig.Pagination.DEFAULT_PAGE,
@@ -82,7 +101,67 @@ class SupplierApiService(private val httpClient: HttpClient) {
         }
     }
 
-    suspend fun getSupplierAnalytics(id: Long): NetworkResult<SupplierAnalyticsDTO> {
+    /**
+     * Get supplier with associated purchase orders
+     */
+    suspend fun getSupplierWithOrders(id: Long): NetworkResult<SupplierDTO> {
+        return safeApiCall {
+            val response = httpClient.get("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.supplierWithOrders(id)}")
+            response.body<SupplierDTO>()
+        }
+    }
+
+    /**
+     * Get top rated suppliers
+     */
+    suspend fun getTopRatedSuppliers(minRating: Double = 4.0): NetworkResult<List<SupplierDTO>> {
+        return safeApiCall {
+            val response = httpClient.get("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.SUPPLIERS_TOP_RATED}") {
+                parameter("minRating", minRating)
+            }
+            response.body<List<SupplierDTO>>()
+        }
+    }
+
+    /**
+     * Get high value suppliers
+     */
+    suspend fun getHighValueSuppliers(minAmount: Double = 10000.0): NetworkResult<List<SupplierDTO>> {
+        return safeApiCall {
+            val response = httpClient.get("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.SUPPLIERS_HIGH_VALUE}") {
+                parameter("minAmount", minAmount)
+            }
+            response.body<List<SupplierDTO>>()
+        }
+    }
+
+    /**
+     * Update supplier rating
+     */
+    suspend fun updateSupplierRating(id: Long, rating: Double): NetworkResult<SupplierDTO> {
+        return safeApiCall {
+            val response = httpClient.put("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.supplierRating(id)}") {
+                contentType(ContentType.Application.Json)
+                setBody(mapOf("rating" to rating))
+            }
+            response.body<SupplierDTO>()
+        }
+    }
+
+    /**
+     * Get supplier analytics
+     */
+    suspend fun getSupplierAnalytics(): NetworkResult<SupplierAnalyticsOverviewDTO> {
+        return safeApiCall {
+            val response = httpClient.get("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.SUPPLIERS_ANALYTICS}")
+            response.body<SupplierAnalyticsOverviewDTO>()
+        }
+    }
+
+    /**
+     * Get individual supplier analytics
+     */
+    suspend fun getSupplierAnalyticsById(id: Long): NetworkResult<SupplierAnalyticsDTO> {
         return safeApiCall {
             val response = httpClient.get("${ApiConfig.BASE_URL}${ApiConfig.Endpoints.supplierAnalytics(id)}")
             response.body<SupplierAnalyticsDTO>()

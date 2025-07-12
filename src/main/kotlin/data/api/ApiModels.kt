@@ -2,6 +2,7 @@ package data.api
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.datetime.LocalTime
 
 // Authentication DTOs
 @Serializable
@@ -327,6 +328,164 @@ data class MonthlyOrderTrendDTO(
     val totalAmount: Double
 )
 
+@Serializable
+data class SupplierAnalyticsOverviewDTO(
+    val totalSuppliers: Int,
+    val activeSuppliers: Int,
+    val averageRating: Double,
+    val totalValue: Double,
+    val topPerformingSuppliers: Int,
+    val newSuppliersThisMonth: Int
+)
+
+// Purchase Order DTOs
+@Serializable
+data class PurchaseOrderDTO(
+    val id: Long? = null,
+    val orderNumber: String? = null, // Auto-generated if not provided
+    val supplierId: Long,
+    val supplierName: String? = null, // Read-only, populated by backend
+
+    // Dates
+    val orderDate: String? = null, // ISO datetime, defaults to now
+    val expectedDeliveryDate: String? = null, // ISO datetime
+    val actualDeliveryDate: String? = null, // ISO datetime
+    val sentDate: String? = null, // ISO datetime, set when status = SENT
+
+    // Status & Priority
+    val status: String? = null, // PENDING, APPROVED, SENT, DELIVERED, CANCELLED
+    val priority: String? = null, // LOW, NORMAL, HIGH, URGENT
+
+    // Financial Fields
+    val totalAmount: Double, // Required, 2 decimal places
+    val subtotal: Double? = null, // Calculated from items
+    val taxAmount: Double? = null, // Calculated from taxRate
+    val taxRate: Double? = null, // Default: 15.0 (percentage)
+    val shippingCost: Double? = null, // Default: 0.00
+    val discountAmount: Double? = null, // Default: 0.00
+
+    // Terms & Address
+    val paymentTerms: String? = null, // Inherited from supplier if not provided
+    val deliveryTerms: String? = null, // Inherited from supplier if not provided
+    val shippingAddress: String, // Required
+
+    // Metadata
+    val notes: String? = null,
+    val createdBy: String? = null,
+    val approvedBy: String? = null,
+    val approvedDate: String? = null, // ISO datetime
+    val createdAt: String? = null, // ISO datetime, read-only
+    val updatedAt: String? = null, // ISO datetime, read-only
+
+    // Items
+    val items: List<PurchaseOrderItemDTO> = emptyList(), // Required, minimum 1 item
+
+    // Computed Fields (Read-only)
+    val itemsCount: Int? = null, // Total number of items
+    val isFullyReceived: Boolean? = null, // True if all items received
+    val receivingProgress: Double? = null // Percentage (0.0-100.0)
+)
+
+@Serializable
+data class PurchaseOrderItemDTO(
+    val id: Long? = null, // Auto-generated
+    val purchaseOrderId: Long? = null, // Set by backend
+    val productId: Long, // Required
+    val productName: String? = null, // Read-only, populated by backend
+    val productSku: String? = null, // Read-only, populated by backend
+
+    // Quantities & Pricing
+    val quantity: Int, // Required, minimum 1
+    val unitPrice: Double, // Required, greater than 0 (using unitPrice to match backend)
+    val totalPrice: Double, // Required, should equal quantity * unitPrice
+
+    // Receiving Information
+    val receivedQuantity: Int? = null, // Default: 0
+    val pendingQuantity: Int? = null, // Calculated: quantity - receivedQuantity
+
+    // Tax & Discount
+    val taxPercentage: Double? = null, // Default: 0.0
+    val taxAmount: Double? = null, // Calculated
+    val discountPercentage: Double? = null, // Default: 0.0
+    val discountAmount: Double? = null, // Calculated
+    val subtotal: Double? = null, // Calculated: quantity * unitPrice
+
+    // Metadata
+    val notes: String? = null,
+
+    // Computed Fields (Read-only)
+    val isFullyReceived: Boolean? = null, // True if receivedQuantity >= quantity
+    val isPartiallyReceived: Boolean? = null, // True if 0 < receivedQuantity < quantity
+    val remainingQuantity: Int? = null, // Same as pendingQuantity
+    val receivedValue: Double? = null, // receivedQuantity * unitPrice
+    val receiptStatus: String? = null // "Not Received", "Partial", "Complete"
+)
+
+@Serializable
+data class PurchaseOrderAnalyticsDTO(
+    val totalOrders: Int,
+    val totalValue: Double,
+    val averageOrderValue: Double,
+    val pendingOrders: Int,
+    val approvedOrders: Int,
+    val deliveredOrders: Int,
+    val cancelledOrders: Int,
+    val onTimeDeliveryRate: Double,
+    val topSuppliers: List<TopSupplierDTO>,
+    val monthlyTrends: List<MonthlyOrderTrendDTO>
+)
+
+@Serializable
+data class TopSupplierDTO(
+    val supplierId: Long,
+    val supplierName: String,
+    val orderCount: Int,
+    val totalValue: Double
+)
+
+@Serializable
+data class StatusUpdateRequestDTO(
+    val status: String,
+    val notes: String? = null,
+    val actualDeliveryDate: String? = null
+)
+
+@Serializable
+data class ApprovalRequestDTO(
+    val approvalNotes: String? = null
+)
+
+@Serializable
+data class ReceiveItemsRequestDTO(
+    val receivedItems: List<ReceivedItemDTO>,
+    val actualDeliveryDate: String? = null,
+    val receivingNotes: String? = null
+)
+
+@Serializable
+data class ReceivedItemDTO(
+    val itemId: Long,
+    val receivedQuantity: Int,
+    val notes: String? = null
+)
+
+@Serializable
+data class SendOrderRequestDTO(
+    val sendMethod: String, // EMAIL, FAX, etc.
+    val recipientEmail: String? = null,
+    val subject: String? = null,
+    val message: String? = null,
+    val includePdf: Boolean = true
+)
+
+@Serializable
+data class SendOrderResponseDTO(
+    val success: Boolean,
+    val message: String,
+    val sentDate: String? = null,
+    val sentTo: String? = null
+)
+
 // Return DTOs
 @Serializable
 data class ReturnDTO(
@@ -598,12 +757,15 @@ data class InventoryDTO(
     val managerName: String? = null,
     val managerPhone: String? = null,
     val managerEmail: String? = null,
-    val capacity: Int? = null,
+    val length: Double? = null, // warehouse dimensions in meters
+    val width: Double? = null, // warehouse dimensions in meters
+    val height: Double? = null, // warehouse dimensions in meters
     val currentStockCount: Int = 0,
     val status: InventoryStatus = InventoryStatus.ACTIVE,
     val warehouseCode: String? = null,
     val isMainWarehouse: Boolean = false,
-    val operatingHours: String? = null,
+    val startWorkTime: LocalTime? = null,
+    val endWorkTime: LocalTime? = null,
     val contactPhone: String? = null,
     val contactEmail: String? = null,
     val notes: String? = null,
@@ -612,7 +774,28 @@ data class InventoryDTO(
     val categoryCount: Int = 0,
     val capacityUtilization: Double = 0.0,
     val isNearCapacity: Boolean = false
-)
+) {
+    // Calculated properties for work times
+    val hasWorkTimes: Boolean
+        get() = startWorkTime != null && endWorkTime != null
+
+    val isWorkTimeValid: Boolean
+        get() = if (hasWorkTimes) {
+            startWorkTime!! < endWorkTime!!
+        } else true
+
+    val workDurationMinutes: Int?
+        get() = if (hasWorkTimes && isWorkTimeValid) {
+            val startMinutes = startWorkTime!!.hour * 60 + startWorkTime!!.minute
+            val endMinutes = endWorkTime!!.hour * 60 + endWorkTime!!.minute
+            if (endMinutes > startMinutes) {
+                endMinutes - startMinutes
+            } else {
+                // Handle overnight shifts (e.g., 22:00 to 06:00)
+                (24 * 60) - startMinutes + endMinutes
+            }
+        } else null
+}
 
 @Serializable
 data class InventoryCreateRequest(
@@ -623,11 +806,14 @@ data class InventoryCreateRequest(
     val managerName: String? = null,
     val managerPhone: String? = null,
     val managerEmail: String? = null,
-    val capacity: Int? = null,
+    val length: Double? = null, // warehouse dimensions in meters
+    val width: Double? = null, // warehouse dimensions in meters
+    val height: Double? = null, // warehouse dimensions in meters
     val currentStockCount: Int = 0,
     val warehouseCode: String? = null,
     val isMainWarehouse: Boolean = false,
-    val operatingHours: String? = null,
+    val startWorkTime: LocalTime? = null,
+    val endWorkTime: LocalTime? = null,
     val contactPhone: String? = null,
     val contactEmail: String? = null,
     val notes: String? = null
@@ -642,11 +828,14 @@ data class InventoryUpdateRequest(
     val managerName: String? = null,
     val managerPhone: String? = null,
     val managerEmail: String? = null,
-    val capacity: Int? = null,
+    val length: Double? = null, // warehouse dimensions in meters
+    val width: Double? = null, // warehouse dimensions in meters
+    val height: Double? = null, // warehouse dimensions in meters
     val currentStockCount: Int = 0,
     val warehouseCode: String? = null,
     val isMainWarehouse: Boolean = false,
-    val operatingHours: String? = null,
+    val startWorkTime: LocalTime? = null,
+    val endWorkTime: LocalTime? = null,
     val contactPhone: String? = null,
     val contactEmail: String? = null,
     val notes: String? = null

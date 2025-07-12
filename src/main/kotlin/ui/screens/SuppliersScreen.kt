@@ -33,7 +33,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
@@ -622,10 +628,7 @@ fun SuppliersScreen(
 
         if (showDeleteConfirmation && supplierToDelete != null) {
             AlertDialog(
-                onDismissRequest = {
-                    showDeleteConfirmation = false
-                    supplierToDelete = null
-                },
+                onDismissRequest = {}, // Disabled click-outside-to-dismiss
                 title = { Text("تأكيد الحذف") },
                 text = { Text("هل أنت متأكد من حذف هذا المورد؟ لا يمكن التراجع عن هذا الإجراء.") },
                 confirmButton = {
@@ -1639,7 +1642,13 @@ private fun EnhancedEditSupplierDialog(
     var paymentTerms by remember { mutableStateOf(supplier.paymentTerms ?: "NET_30") }
     var deliveryTerms by remember { mutableStateOf(supplier.deliveryTerms ?: "FOB_DESTINATION") }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = {},
+        properties = DialogProperties(
+            dismissOnClickOutside = false,
+            dismissOnBackPress = true
+        )
+    ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2037,8 +2046,21 @@ private fun EnhancedAddSupplierDialog(
     var paymentTerms by remember { mutableStateOf("NET_30") }
     var deliveryTerms by remember { mutableStateOf("FOB_DESTINATION") }
 
+    // Focus manager for keyboard navigation
+    val focusManager = LocalFocusManager.current
+
+    // Focus requesters for explicit focus management
+    val contactPersonFocusRequester = remember { FocusRequester() }
+    val phoneFocusRequester = remember { FocusRequester() }
+    val emailFocusRequester = remember { FocusRequester() }
+    val addressFocusRequester = remember { FocusRequester() }
+    val websiteFocusRequester = remember { FocusRequester() }
+    val taxNumberFocusRequester = remember { FocusRequester() }
+    val paymentTermsFocusRequester = remember { FocusRequester() }
+    val deliveryTermsFocusRequester = remember { FocusRequester() }
+
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         confirmButton = {
             // Full-width button row with enhanced hover effects
             Row(
@@ -2218,7 +2240,12 @@ private fun EnhancedAddSupplierDialog(
                                 Icon(Icons.Default.Business, contentDescription = null)
                             },
                             modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
                             isError = name.isBlank(),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(
+                                onNext = { contactPersonFocusRequester.requestFocus() }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             enabled = !isLoading
                         )
@@ -2230,7 +2257,14 @@ private fun EnhancedAddSupplierDialog(
                             leadingIcon = {
                                 Icon(Icons.Default.Person, contentDescription = null)
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(contactPersonFocusRequester),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(
+                                onNext = { phoneFocusRequester.requestFocus() }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             enabled = !isLoading
                         )
@@ -2246,8 +2280,16 @@ private fun EnhancedAddSupplierDialog(
                                 leadingIcon = {
                                     Icon(Icons.Default.Phone, contentDescription = null)
                                 },
-                                modifier = Modifier.weight(1f),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(phoneFocusRequester),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Phone,
+                                    imeAction = ImeAction.Next
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onNext = { emailFocusRequester.requestFocus() }
+                                ),
                                 singleLine = true,
                                 shape = RoundedCornerShape(12.dp),
                                 enabled = !isLoading
@@ -2260,8 +2302,16 @@ private fun EnhancedAddSupplierDialog(
                                 leadingIcon = {
                                     Icon(Icons.Default.Email, contentDescription = null)
                                 },
-                                modifier = Modifier.weight(1f),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(emailFocusRequester),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Email,
+                                    imeAction = ImeAction.Next
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onNext = { addressFocusRequester.requestFocus() }
+                                ),
                                 singleLine = true,
                                 shape = RoundedCornerShape(12.dp),
                                 enabled = !isLoading
@@ -2296,7 +2346,14 @@ private fun EnhancedAddSupplierDialog(
                             leadingIcon = {
                                 Icon(Icons.Default.LocationOn, contentDescription = null)
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(addressFocusRequester),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(
+                                onNext = { websiteFocusRequester.requestFocus() }
+                            ),
                             shape = RoundedCornerShape(12.dp),
                             enabled = !isLoading
                         )
@@ -2312,8 +2369,17 @@ private fun EnhancedAddSupplierDialog(
                                 leadingIcon = {
                                     Icon(Icons.Default.Language, contentDescription = null)
                                 },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(websiteFocusRequester),
                                 singleLine = true,
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Uri,
+                                    imeAction = ImeAction.Next
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onNext = { taxNumberFocusRequester.requestFocus() }
+                                ),
                                 shape = RoundedCornerShape(12.dp),
                                 enabled = !isLoading
                             )
@@ -2325,8 +2391,14 @@ private fun EnhancedAddSupplierDialog(
                                 leadingIcon = {
                                     Icon(Icons.Default.Receipt, contentDescription = null)
                                 },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(taxNumberFocusRequester),
                                 singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                keyboardActions = KeyboardActions(
+                                    onNext = { paymentTermsFocusRequester.requestFocus() }
+                                ),
                                 shape = RoundedCornerShape(12.dp),
                                 enabled = !isLoading
                             )
@@ -2444,8 +2516,14 @@ private fun EnhancedAddSupplierDialog(
                                 value = paymentTerms,
                                 onValueChange = { paymentTerms = it },
                                 label = { Text("شروط الدفع") },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(paymentTermsFocusRequester),
                                 singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                keyboardActions = KeyboardActions(
+                                    onNext = { deliveryTermsFocusRequester.requestFocus() }
+                                ),
                                 shape = RoundedCornerShape(12.dp),
                                 enabled = !isLoading
                             )
@@ -2454,8 +2532,29 @@ private fun EnhancedAddSupplierDialog(
                                 value = deliveryTerms,
                                 onValueChange = { deliveryTerms = it },
                                 label = { Text("شروط التسليم") },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(deliveryTermsFocusRequester),
                                 singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                keyboardActions = KeyboardActions(
+                                    onDone = {
+                                        val isValid = name.isNotBlank()
+                                        if (isValid && !isLoading) {
+                                            focusManager.clearFocus()
+                                            val supplier = SupplierData(
+                                                name = name,
+                                                contactPerson = contactPerson.takeIf { it.isNotBlank() } ?: "",
+                                                phone = phone.takeIf { it.isNotBlank() } ?: "",
+                                                email = email.takeIf { it.isNotBlank() } ?: "",
+                                                address = address.takeIf { it.isNotBlank() } ?: "",
+                                                paymentTerms = paymentTerms,
+                                                deliveryTerms = deliveryTerms
+                                            )
+                                            onSave(supplier)
+                                        }
+                                    }
+                                ),
                                 shape = RoundedCornerShape(12.dp),
                                 enabled = !isLoading
                             )

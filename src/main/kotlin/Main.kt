@@ -35,21 +35,36 @@ import ui.theme.AppThemeProviderWithPersistence
 import ui.theme.ThemeState
 import java.text.NumberFormat
 import java.util.*
+import data.preferences.CurrencyPreferencesManager
+import utils.CurrencyUtils
+import kotlinx.coroutines.runBlocking
 
 fun main() = application {
+    // Perform currency migration on startup
+    runBlocking {
+        val currencyPreferencesManager = CurrencyPreferencesManager()
+        currencyPreferencesManager.migrateFromLegacyCurrency()
+    }
+
+    val windowState = rememberWindowState(width = 1400.dp, height = 900.dp)
+
+    val closeApplication = {
+        // Clean up resources before closing
+        AppDependencies.container.cleanup()
+        exitApplication()
+    }
+
     Window(
-        onCloseRequest = {
-            // Clean up resources before closing
-            AppDependencies.container.cleanup()
-            exitApplication()
-        },
+        onCloseRequest = closeApplication,
         title = "نظام إدارة المبيعات - Sales Management System",
-        state = rememberWindowState(width = 1400.dp, height = 900.dp)
+        state = windowState,
+        undecorated = true, // Remove system title bar to use custom one
+        resizable = true
     ) {
         AppThemeProviderWithPersistence(
             preferencesManager = AppDependencies.container.themePreferencesManager
         ) {
-            App()
+            AppWithCustomTitleBar(windowState, closeApplication)
         }
     }
 }
@@ -58,9 +73,7 @@ fun main() = application {
 object UiUtils {
     // تنسيق العملة
     fun formatCurrency(amount: Double): String {
-        val formatter = NumberFormat.getCurrencyInstance(Locale("ar", "SA"))
-        formatter.currency = Currency.getInstance("SAR")
-        return formatter.format(amount)
+        return CurrencyUtils.formatAmount(amount)
     }
 
     // تنسيق النسبة المئوية
@@ -109,6 +122,33 @@ data class NavigationItem(
     val isSelected: Boolean,
     val onClick: () -> Unit
 )
+
+@Composable
+fun FrameWindowScope.AppWithCustomTitleBar(windowState: WindowState, onClose: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // Custom title bar
+        CustomTitleBar(
+            onClose = onClose,
+            onMinimize = { windowState.isMinimized = true },
+            onMaximize = {
+                windowState.placement = if (windowState.placement == WindowPlacement.Maximized) {
+                    WindowPlacement.Floating
+                } else {
+                    WindowPlacement.Maximized
+                }
+            }
+        )
+
+        // Main app content
+        Box(modifier = Modifier.weight(1f)) {
+            App()
+        }
+    }
+}
 
 @Composable
 fun App() {
@@ -493,21 +533,70 @@ fun FrameWindowScope.CustomTitleBar(
         // أزرار التحكم على الشمال (النهاية في RTL)
         Row(
             modifier = Modifier.align(Alignment.CenterEnd).padding(end = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             // زر التصغير
-            IconButton(onClick = onMinimize, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.Minimize, "تصغير", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            TitleBarButton(
+                onClick = onMinimize,
+                icon = Icons.Default.Minimize,
+                contentDescription = "تصغير",
+                isCloseButton = false
+            )
             // زر التكبير
-            IconButton(onClick = onMaximize, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.CropSquare, "تكبير", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            TitleBarButton(
+                onClick = onMaximize,
+                icon = Icons.Default.CropSquare,
+                contentDescription = "تكبير",
+                isCloseButton = false
+            )
             // زر الإغلاق
-            IconButton(onClick = onClose, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.Close, "إغلاق", tint = AppTheme.colors.error)
-            }
+            TitleBarButton(
+                onClick = onClose,
+                icon = Icons.Default.Close,
+                contentDescription = "إغلاق",
+                isCloseButton = true
+            )
         }
+    }
+}
+
+@Composable
+fun TitleBarButton(
+    onClick: () -> Unit,
+    icon: ImageVector,
+    contentDescription: String,
+    isCloseButton: Boolean = false
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Box(
+        modifier = Modifier
+            .size(32.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(
+                color = when {
+                    isCloseButton && isHovered -> Color(0xFFE81123) // Windows-style red for close button
+                    isHovered -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+                    else -> Color.Transparent
+                }
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = when {
+                isCloseButton && isHovered -> Color.White
+                isCloseButton -> MaterialTheme.colorScheme.error
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier.size(16.dp)
+        )
     }
 }
 

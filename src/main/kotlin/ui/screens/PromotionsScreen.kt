@@ -32,6 +32,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import ui.components.*
 import ui.components.EnhancedFilterDropdown
 import ui.theme.AppTheme
@@ -685,7 +693,7 @@ fun PromotionsScreen(promotionViewModel: ui.viewmodels.PromotionViewModel) {
 
         if (showDeleteConfirmation && promotionToDelete != null) {
             AlertDialog(
-                onDismissRequest = { showDeleteConfirmation = false },
+                onDismissRequest = {}, // Disabled click-outside-to-dismiss
                 title = { Text("تأكيد الحذف") },
                 text = { Text("هل أنت متأكد من حذف هذا العرض؟") },
                 confirmButton = {
@@ -931,6 +939,17 @@ fun EnhancedNewPromotionDialog(
     // Loading state
     val isProcessing by promotionViewModel.isProcessing.collectAsState()
 
+    // Focus manager for keyboard navigation
+    val focusManager = LocalFocusManager.current
+
+    // Focus requesters for explicit focus management
+    val descriptionFocusRequester = remember { FocusRequester() }
+    val discountValueFocusRequester = remember { FocusRequester() }
+    val couponCodeFocusRequester = remember { FocusRequester() }
+    val minimumOrderAmountFocusRequester = remember { FocusRequester() }
+    val maximumDiscountAmountFocusRequester = remember { FocusRequester() }
+    val usageLimitFocusRequester = remember { FocusRequester() }
+
     // Real-time coupon code uniqueness validation
     LaunchedEffect(couponCode) {
         if (couponCode.isNotBlank() && couponCode.length >= 3 && validateCouponCodeFormat(couponCode)) {
@@ -968,7 +987,13 @@ fun EnhancedNewPromotionDialog(
                      isMinOrderValid && isMaxDiscountValid && isUsageLimitValid
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = {},
+        properties = DialogProperties(
+            dismissOnClickOutside = false,
+            dismissOnBackPress = true
+        )
+    ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1030,7 +1055,12 @@ fun EnhancedNewPromotionDialog(
                         )
                     },
                     modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
                     isError = name.isBlank() || name.length < 3,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(
+                        onNext = { descriptionFocusRequester.requestFocus() }
+                    ),
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -1065,9 +1095,15 @@ fun EnhancedNewPromotionDialog(
                             tint = MaterialTheme.colorScheme.primary
                         )
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(descriptionFocusRequester),
                     minLines = 2,
                     maxLines = 3,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(
+                        onNext = { discountValueFocusRequester.requestFocus() }
+                    ),
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -1115,8 +1151,18 @@ fun EnhancedNewPromotionDialog(
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusRequester(discountValueFocusRequester),
+                        singleLine = true,
                         isError = discountValue.toDoubleOrNull() == null || !validateDiscountValue(type, discountValue),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal,
+                            imeAction = ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onNext = { couponCodeFocusRequester.requestFocus() }
+                        ),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -1164,8 +1210,15 @@ fun EnhancedNewPromotionDialog(
                             }
                         }
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(couponCodeFocusRequester),
+                    singleLine = true,
                     isError = couponCode.isBlank() || couponCode.length < 3 || !validateCouponCodeFormat(couponCode) || !isCouponCodeUnique,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(
+                        onNext = { minimumOrderAmountFocusRequester.requestFocus() }
+                    ),
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -1347,7 +1400,17 @@ fun EnhancedNewPromotionDialog(
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(minimumOrderAmountFocusRequester),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Decimal,
+                                    imeAction = ImeAction.Next
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onNext = { maximumDiscountAmountFocusRequester.requestFocus() }
+                                ),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -1366,7 +1429,17 @@ fun EnhancedNewPromotionDialog(
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(maximumDiscountAmountFocusRequester),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Decimal,
+                                    imeAction = ImeAction.Next
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onNext = { usageLimitFocusRequester.requestFocus() }
+                                ),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -1391,7 +1464,40 @@ fun EnhancedNewPromotionDialog(
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(usageLimitFocusRequester),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Number,
+                                    imeAction = ImeAction.Done
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onDone = {
+                                        if (isFormValid && !isProcessing) {
+                                            focusManager.clearFocus()
+                                            val promotionDTO = PromotionDTO(
+                                                id = null,
+                                                name = name.trim(),
+                                                description = description.trim().takeIf { it.isNotBlank() },
+                                                type = type,
+                                                discountValue = discountValue.toDoubleOrNull() ?: 0.0,
+                                                minimumOrderAmount = minimumOrderAmount.toDoubleOrNull(),
+                                                maximumDiscountAmount = maximumDiscountAmount.toDoubleOrNull(),
+                                                startDate = formatDateForApi(startDate),
+                                                endDate = formatDateForApi(endDate),
+                                                usageLimit = usageLimit.toIntOrNull(),
+                                                usageCount = 0,
+                                                customerEligibility = customerEligibility,
+                                                couponCode = couponCode.trim(),
+                                                autoApply = autoApply,
+                                                stackable = stackable,
+                                                isActive = true
+                                            )
+                                            onSave(promotionDTO)
+                                        }
+                                    }
+                                ),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -1596,7 +1702,7 @@ private fun DatePickerDialog(
     val datePickerState = rememberDatePickerState()
 
     DatePickerDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         confirmButton = {
             Button(
                 onClick = {
@@ -1628,7 +1734,7 @@ fun EnhancedNewCouponDialog(
 ) {
     // Temporary implementation - will be replaced
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         title = { Text("إضافة كوبون جديد") },
         text = { Text("نموذج إضافة كوبون جديد") },
         confirmButton = {
@@ -2550,7 +2656,7 @@ fun EnhancedNewPromotionDialogDuplicate(
     var discountValue by remember { mutableStateOf("") }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {}, // Disabled click-outside-to-dismiss
         title = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -2761,7 +2867,13 @@ fun EnhancedNewCouponDialogDuplicate(
     var discountType by remember { mutableStateOf("نسبة مئوية") }
     var discountValue by remember { mutableStateOf("") }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = {},
+        properties = DialogProperties(
+            dismissOnClickOutside = false,
+            dismissOnBackPress = true
+        )
+    ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()

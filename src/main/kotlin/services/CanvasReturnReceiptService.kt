@@ -26,11 +26,8 @@ import java.io.ByteArrayOutputStream
  */
 object CanvasReturnReceiptService {
 
-    private val arabicLocale = Locale("ar", "SA")
-    private val currencyFormatter = NumberFormat.getCurrencyInstance(arabicLocale).apply {
-        currency = Currency.getInstance("SAR")
-    }
-    private val arabicDateFormatter = SimpleDateFormat("dd/MM/yyyy HH:mm", arabicLocale)
+    private val currencyFormatter = utils.CurrencyUtils.getCurrencyFormatter()
+    private val arabicDateFormatter = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("ar"))
     
     // Canvas dimensions
     private const val PAGE_WIDTH = 595f  // A4 width in points

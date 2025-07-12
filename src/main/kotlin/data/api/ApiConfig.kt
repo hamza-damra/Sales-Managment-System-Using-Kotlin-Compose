@@ -47,8 +47,25 @@ object ApiConfig {
         // Suppliers
         const val SUPPLIERS = "/api/suppliers"
         const val SUPPLIERS_SEARCH = "/api/suppliers/search"
+        const val SUPPLIERS_TOP_RATED = "/api/suppliers/top-rated"
+        const val SUPPLIERS_HIGH_VALUE = "/api/suppliers/high-value"
+        const val SUPPLIERS_ANALYTICS = "/api/suppliers/analytics"
         fun supplierById(id: Long) = "/api/suppliers/$id"
+        fun supplierWithOrders(id: Long) = "/api/suppliers/$id/orders"
+        fun supplierRating(id: Long) = "/api/suppliers/$id/rating"
         fun supplierAnalytics(id: Long) = "/api/suppliers/$id/analytics"
+
+        // Purchase Orders
+        const val PURCHASE_ORDERS = "/api/purchase-orders"
+        const val PURCHASE_ORDERS_SEARCH = "/api/purchase-orders/search"
+        const val PURCHASE_ORDERS_ANALYTICS = "/api/purchase-orders/analytics"
+        fun purchaseOrderById(id: Long) = "/api/purchase-orders/$id"
+        fun purchaseOrderStatus(id: Long) = "/api/purchase-orders/$id/status"
+        fun purchaseOrderApprove(id: Long) = "/api/purchase-orders/$id/approve"
+        fun purchaseOrderReceive(id: Long) = "/api/purchase-orders/$id/receive"
+        fun purchaseOrdersBySupplier(supplierId: Long) = "/api/purchase-orders/supplier/$supplierId"
+        fun purchaseOrderPdf(id: Long) = "/api/purchase-orders/$id/pdf"
+        fun purchaseOrderSend(id: Long) = "/api/purchase-orders/$id/send"
 
         // Returns
         const val RETURNS = "/api/returns"
@@ -133,6 +150,13 @@ object ApiConfig {
         const val REPORTS_CUSTOMER_ANALYTICS = "/api/reports/customer-analytics"
         const val REPORTS_INVENTORY = "/api/reports/inventory"
         const val REPORTS_DASHBOARD = "/api/reports/dashboard"
+
+        // Tax Configuration (for future backend integration)
+        const val TAX_SETTINGS = "/api/settings/tax"
+        const val TAX_RATES = "/api/settings/tax/rates"
+        const val TAX_REGIONS = "/api/settings/tax/regions"
+        fun taxRateByRegion(region: String) = "/api/settings/tax/rates/$region"
+        fun taxSettingsValidate() = "/api/settings/tax/validate"
     }
     
     // HTTP Configuration

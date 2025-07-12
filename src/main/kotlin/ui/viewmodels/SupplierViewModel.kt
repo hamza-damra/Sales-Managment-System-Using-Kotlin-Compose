@@ -45,9 +45,19 @@ class SupplierViewModel(
     // Analytics state
     private val _supplierAnalytics = MutableStateFlow<SupplierAnalyticsDTO?>(null)
     val supplierAnalytics: StateFlow<SupplierAnalyticsDTO?> = _supplierAnalytics.asStateFlow()
-    
+
+    private val _supplierAnalyticsOverview = MutableStateFlow<SupplierAnalyticsOverviewDTO?>(null)
+    val supplierAnalyticsOverview: StateFlow<SupplierAnalyticsOverviewDTO?> = _supplierAnalyticsOverview.asStateFlow()
+
     private val _isLoadingAnalytics = MutableStateFlow(false)
     val isLoadingAnalytics: StateFlow<Boolean> = _isLoadingAnalytics.asStateFlow()
+
+    // Top rated and high value suppliers
+    private val _topRatedSuppliers = MutableStateFlow<List<SupplierDTO>>(emptyList())
+    val topRatedSuppliers: StateFlow<List<SupplierDTO>> = _topRatedSuppliers.asStateFlow()
+
+    private val _highValueSuppliers = MutableStateFlow<List<SupplierDTO>>(emptyList())
+    val highValueSuppliers: StateFlow<List<SupplierDTO>> = _highValueSuppliers.asStateFlow()
     
     // Operation states
     private val _isCreating = MutableStateFlow(false)
@@ -190,48 +200,59 @@ class SupplierViewModel(
     // CRUD operations
     suspend fun createSupplier(supplierData: SupplierData): NetworkResult<SupplierDTO> {
         _isCreating.value = true
-        
+
         val supplierDTO = SupplierDTO(
             name = supplierData.name,
-            contactPerson = supplierData.contactPerson,
-            phone = supplierData.phone,
-            email = supplierData.email,
-            address = supplierData.address,
+            contactPerson = supplierData.contactPerson.ifBlank { null },
+            phone = supplierData.phone.ifBlank { null },
+            email = supplierData.email.ifBlank { null },
+            address = supplierData.address.ifBlank { null },
+            city = supplierData.city.ifBlank { null },
+            country = supplierData.country.ifBlank { null },
+            taxNumber = supplierData.taxNumber.ifBlank { null },
             paymentTerms = supplierData.paymentTerms,
             deliveryTerms = supplierData.deliveryTerms,
-            status = "ACTIVE"
+            rating = supplierData.rating,
+            status = supplierData.status,
+            notes = supplierData.notes.ifBlank { null }
         )
-        
+
         val result = supplierRepository.createSupplier(supplierDTO)
-        
+
         result.onSuccess { createdSupplier ->
             _lastCreatedSupplier.value = createdSupplier
         }
-        
+
         _isCreating.value = false
         return result
     }
-    
+
     suspend fun updateSupplier(id: Long, supplierData: SupplierData): NetworkResult<SupplierDTO> {
         _isUpdating.value = true
-        
+
         val supplierDTO = SupplierDTO(
             id = id,
             name = supplierData.name,
-            contactPerson = supplierData.contactPerson,
-            phone = supplierData.phone,
-            email = supplierData.email,
-            address = supplierData.address,
+            contactPerson = supplierData.contactPerson.ifBlank { null },
+            phone = supplierData.phone.ifBlank { null },
+            email = supplierData.email.ifBlank { null },
+            address = supplierData.address.ifBlank { null },
+            city = supplierData.city.ifBlank { null },
+            country = supplierData.country.ifBlank { null },
+            taxNumber = supplierData.taxNumber.ifBlank { null },
             paymentTerms = supplierData.paymentTerms,
-            deliveryTerms = supplierData.deliveryTerms
+            deliveryTerms = supplierData.deliveryTerms,
+            rating = supplierData.rating,
+            status = supplierData.status,
+            notes = supplierData.notes.ifBlank { null }
         )
-        
+
         val result = supplierRepository.updateSupplier(id, supplierDTO)
-        
+
         result.onSuccess { updatedSupplier ->
             _lastUpdatedSupplier.value = updatedSupplier
         }
-        
+
         _isUpdating.value = false
         return result
     }
@@ -246,18 +267,74 @@ class SupplierViewModel(
     // Analytics functions
     suspend fun loadSupplierAnalytics(supplierId: Long) {
         _isLoadingAnalytics.value = true
-        
+
         viewModelScope.launch {
             try {
-                // This would be implemented when analytics API is available
-                // For now, we'll create mock analytics data
-                _supplierAnalytics.value = null
+                val result = supplierRepository.getSupplierAnalyticsById(supplierId)
+                result.onSuccess { analytics ->
+                    _supplierAnalytics.value = analytics
+                }.onError { exception ->
+                    supplierRepository.clearError()
+                }
             } catch (e: Exception) {
                 // Handle error
             } finally {
                 _isLoadingAnalytics.value = false
             }
         }
+    }
+
+    suspend fun loadSupplierAnalyticsOverview() {
+        _isLoadingAnalytics.value = true
+
+        viewModelScope.launch {
+            try {
+                val result = supplierRepository.getSupplierAnalytics()
+                result.onSuccess { overview ->
+                    _supplierAnalyticsOverview.value = overview
+                }.onError { exception ->
+                    supplierRepository.clearError()
+                }
+            } catch (e: Exception) {
+                // Handle error
+            } finally {
+                _isLoadingAnalytics.value = false
+            }
+        }
+    }
+
+    suspend fun loadTopRatedSuppliers(minRating: Double = 4.0) {
+        viewModelScope.launch {
+            try {
+                val result = supplierRepository.getTopRatedSuppliers(minRating)
+                result.onSuccess { suppliers ->
+                    _topRatedSuppliers.value = suppliers
+                }.onError { exception ->
+                    supplierRepository.clearError()
+                }
+            } catch (e: Exception) {
+                // Handle error
+            }
+        }
+    }
+
+    suspend fun loadHighValueSuppliers(minAmount: Double = 10000.0) {
+        viewModelScope.launch {
+            try {
+                val result = supplierRepository.getHighValueSuppliers(minAmount)
+                result.onSuccess { suppliers ->
+                    _highValueSuppliers.value = suppliers
+                }.onError { exception ->
+                    supplierRepository.clearError()
+                }
+            } catch (e: Exception) {
+                // Handle error
+            }
+        }
+    }
+
+    suspend fun updateSupplierRating(id: Long, rating: Double): NetworkResult<SupplierDTO> {
+        return supplierRepository.updateSupplierRating(id, rating)
     }
     
     // Utility functions
@@ -278,15 +355,21 @@ class SupplierViewModel(
     }
 }
 
-// Data class for supplier form data
+// Enhanced data class for supplier form data
 data class SupplierData(
     val name: String,
     val contactPerson: String,
     val phone: String,
     val email: String,
     val address: String,
+    val city: String = "",
+    val country: String = "",
+    val taxNumber: String = "",
     val paymentTerms: String = "NET_30",
-    val deliveryTerms: String = "FOB_DESTINATION"
+    val deliveryTerms: String = "FOB_DESTINATION",
+    val rating: Double = 0.0,
+    val status: String = "ACTIVE",
+    val notes: String = ""
 )
 
 // UI State for supplier management
