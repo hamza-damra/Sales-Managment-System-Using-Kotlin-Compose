@@ -260,23 +260,6 @@ fun NavigationSidebar(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        // App Title
-        Text(
-            text = "نظام إدارة المبيعات",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(vertical = 20.dp),
-            textAlign = TextAlign.Right
-        )
-
-        HorizontalDivider(
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            thickness = 1.dp
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
         // Navigation Items
         Screen.values().forEach { screen ->
             NavigationItem(
@@ -407,36 +390,6 @@ fun NavigationSidebar(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Footer info
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = AppTheme.colors.info.copy(alpha = 0.1f)
-            ),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Icon(
-                    Icons.Default.Info,
-                    contentDescription = null,
-                    tint = AppTheme.colors.info,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "إصدار 1.0",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Right
-                )
-            }
-        }
-    }
 }
 
 @Composable
