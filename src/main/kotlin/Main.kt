@@ -39,14 +39,24 @@ import data.preferences.CurrencyPreferencesManager
 import utils.CurrencyUtils
 import kotlinx.coroutines.runBlocking
 
-fun main() = application {
+fun main(args: Array<String>) = application {
+    // Check for command line arguments
+    val isFullscreen = args.contains("--fullscreen") ||
+                      System.getProperty("app.fullscreen") == "true" ||
+                      checkRegistryForFullscreen()
+
     // Perform currency migration on startup
     runBlocking {
         val currencyPreferencesManager = CurrencyPreferencesManager()
         currencyPreferencesManager.migrateFromLegacyCurrency()
     }
 
-    val windowState = rememberWindowState(width = 1400.dp, height = 900.dp)
+    // Configure window state based on fullscreen mode
+    val windowState = if (isFullscreen) {
+        rememberWindowState(placement = WindowPlacement.Fullscreen)
+    } else {
+        rememberWindowState(width = 1400.dp, height = 900.dp)
+    }
 
     val closeApplication = {
         // Clean up resources before closing
@@ -56,16 +66,41 @@ fun main() = application {
 
     Window(
         onCloseRequest = closeApplication,
-        title = "نظام إدارة المبيعات - Sales Management System",
+        title = "Sales Management System - نظام إدارة المبيعات",
         state = windowState,
         undecorated = true, // Remove system title bar to use custom one
-        resizable = true
+        resizable = !isFullscreen // Disable resizing in fullscreen mode
     ) {
         AppThemeProviderWithPersistence(
             preferencesManager = AppDependencies.container.themePreferencesManager
         ) {
-            AppWithCustomTitleBar(windowState, closeApplication)
+            AppWithCustomTitleBar(windowState, closeApplication, isFullscreen)
         }
+    }
+}
+
+/**
+ * Check Windows registry for fullscreen mode setting
+ */
+private fun checkRegistryForFullscreen(): Boolean {
+    return try {
+        // On Windows, check registry for fullscreen setting
+        if (System.getProperty("os.name").lowercase().contains("windows")) {
+            val process = ProcessBuilder(
+                "reg", "query",
+                "HKLM\\SOFTWARE\\HamzaDamra\\SalesManagementSystem",
+                "/v", "FullscreenMode"
+            ).start()
+
+            val output = process.inputStream.bufferedReader().readText()
+            process.waitFor()
+
+            output.contains("0x1") || output.contains("1")
+        } else {
+            false
+        }
+    } catch (e: Exception) {
+        false
     }
 }
 
@@ -114,7 +149,8 @@ enum class Screen(val title: String, val icon: ImageVector) {
     RETURNS("المرتجعات والإلغاءات", Icons.Default.AssignmentReturn),
     PROMOTIONS("العروض والخصومات", Icons.Default.LocalOffer),
     REPORTS("التقارير والتحليلات", Icons.Default.Analytics),
-    SETTINGS("الإعدادات", Icons.Default.Settings)
+    SETTINGS("الإعدادات", Icons.Default.Settings),
+    UPDATE("التحديثات", Icons.Default.SystemUpdate)
 }
 
 data class NavigationItem(
@@ -124,7 +160,11 @@ data class NavigationItem(
 )
 
 @Composable
-fun FrameWindowScope.AppWithCustomTitleBar(windowState: WindowState, onClose: () -> Unit) {
+fun FrameWindowScope.AppWithCustomTitleBar(
+    windowState: WindowState,
+    onClose: () -> Unit,
+    isFullscreen: Boolean = false
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -183,58 +223,65 @@ fun MainAppContent(appContainer: AppContainer) {
             Row(
                 modifier = Modifier.fillMaxSize()
             ) {
-            // Main Content - العرض الرئيسي على اليمين في RTL
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .padding(28.dp)
-            ) {
-                when (currentScreen) {
-                    Screen.DASHBOARD -> DashboardScreen(
-                        dashboardViewModel = appContainer.dashboardViewModel,
-                        onNavigateToSales = { currentScreen = Screen.SALES },
-                        onNavigateToProducts = { currentScreen = Screen.PRODUCTS },
-                        onNavigateToCustomers = { currentScreen = Screen.CUSTOMERS },
-                        onNavigateToInventory = { currentScreen = Screen.INVENTORY },
-                        onNavigateToReports = { currentScreen = Screen.REPORTS }
-                    )
-                    Screen.SALES -> SalesScreen(
-                        salesRepository = appContainer.salesRepository,
-                        customerRepository = appContainer.customerRepository,
-                        productRepository = appContainer.productRepository,
-                        promotionRepository = appContainer.promotionRepository,
-                        notificationService = appContainer.notificationService
-                    )
-                    Screen.PRODUCTS -> ProductsScreen(
-                        productViewModel = appContainer.productViewModel
-                    )
-                    Screen.CATEGORIES -> CategoriesScreen(
-                        categoryViewModel = appContainer.categoryViewModel,
-                        inventoryViewModel = appContainer.inventoryViewModel
-                    )
-                    Screen.CUSTOMERS -> CustomersScreen()
-                    Screen.INVENTORY -> InventoryScreen(
-                        inventoryViewModel = appContainer.inventoryViewModel
-                    )
-                    Screen.SUPPLIERS -> SuppliersScreen(
-                        supplierViewModel = appContainer.supplierViewModel
-                    )
-                    Screen.RETURNS -> ReturnsScreen() // TODO: Replace with ViewModel
-                    Screen.PROMOTIONS -> PromotionsScreen(promotionViewModel = appContainer.promotionViewModel)
-                    Screen.REPORTS -> ReportsScreen(
-                        reportsViewModel = appContainer.reportsViewModel
-                    )
-                    Screen.SETTINGS -> SettingsScreen() // TODO: Replace with ViewModel
-                }
-            }
-
-                // Navigation Sidebar - شريط التنقل على اليسار في RTL
+                // Navigation Sidebar - شريط التنقل على اليمين في RTL
                 NavigationSidebar(
                     currentScreen = currentScreen,
                     onScreenSelected = { currentScreen = it },
                     authService = appContainer.authService
                 )
+
+                // Main Content - العرض الرئيسي على اليسار في RTL
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .padding(28.dp)
+                ) {
+                    when (currentScreen) {
+                        Screen.DASHBOARD -> DashboardScreen(
+                            dashboardViewModel = appContainer.dashboardViewModel,
+                            onNavigateToSales = { currentScreen = Screen.SALES },
+                            onNavigateToProducts = { currentScreen = Screen.PRODUCTS },
+                            onNavigateToCustomers = { currentScreen = Screen.CUSTOMERS },
+                            onNavigateToInventory = { currentScreen = Screen.INVENTORY },
+                            onNavigateToReports = { currentScreen = Screen.REPORTS }
+                        )
+                        Screen.SALES -> SalesScreen(
+                            salesRepository = appContainer.salesRepository,
+                            customerRepository = appContainer.customerRepository,
+                            productRepository = appContainer.productRepository,
+                            promotionRepository = appContainer.promotionRepository,
+                            notificationService = appContainer.notificationService
+                        )
+                        Screen.PRODUCTS -> ProductsScreen(
+                            productViewModel = appContainer.productViewModel
+                        )
+                        Screen.CATEGORIES -> CategoriesScreen(
+                            categoryViewModel = appContainer.categoryViewModel,
+                            inventoryViewModel = appContainer.inventoryViewModel
+                        )
+                        Screen.CUSTOMERS -> CustomersScreen()
+                        Screen.INVENTORY -> InventoryScreen(
+                            inventoryViewModel = appContainer.inventoryViewModel
+                        )
+                        Screen.SUPPLIERS -> SuppliersScreen(
+                            supplierViewModel = appContainer.supplierViewModel
+                        )
+                        Screen.RETURNS -> ReturnsScreen() // TODO: Replace with ViewModel
+                        Screen.PROMOTIONS -> PromotionsScreen(promotionViewModel = appContainer.promotionViewModel)
+                        Screen.REPORTS -> ReportsScreen(
+                            reportsViewModel = appContainer.reportsViewModel
+                        )
+                        Screen.SETTINGS -> SettingsScreen(
+                            onNavigateToUpdates = { currentScreen = Screen.UPDATE }
+                        )
+                        Screen.UPDATE -> UpdateScreen(
+                            updateRepository = appContainer.updateRepository,
+                            updateService = appContainer.updateService,
+                            notificationService = appContainer.notificationService
+                        )
+                    }
+                }
             }
 
             // Global notification overlay
@@ -407,35 +454,7 @@ fun NavigationSidebar(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
 
-        // Footer info
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = AppTheme.colors.info.copy(alpha = 0.1f)
-            ),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Icon(
-                    Icons.Default.Info,
-                    contentDescription = null,
-                    tint = AppTheme.colors.info,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "إصدار 1.0",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Right
-                )
-            }
-        }
     }
 }
 
@@ -530,17 +549,17 @@ fun FrameWindowScope.CustomTitleBar(
             }
         }
 
-        // أزرار التحكم على الشمال (النهاية في RTL)
+        // أزرار التحكم على اليمين (البداية في RTL)
         Row(
-            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 8.dp),
+            modifier = Modifier.align(Alignment.CenterStart).padding(start = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // زر التصغير
+            // زر الإغلاق
             TitleBarButton(
-                onClick = onMinimize,
-                icon = Icons.Default.Minimize,
-                contentDescription = "تصغير",
-                isCloseButton = false
+                onClick = onClose,
+                icon = Icons.Default.Close,
+                contentDescription = "إغلاق",
+                isCloseButton = true
             )
             // زر التكبير
             TitleBarButton(
@@ -549,12 +568,12 @@ fun FrameWindowScope.CustomTitleBar(
                 contentDescription = "تكبير",
                 isCloseButton = false
             )
-            // زر الإغلاق
+            // زر التصغير
             TitleBarButton(
-                onClick = onClose,
-                icon = Icons.Default.Close,
-                contentDescription = "إغلاق",
-                isCloseButton = true
+                onClick = onMinimize,
+                icon = Icons.Default.Minimize,
+                contentDescription = "تصغير",
+                isCloseButton = false
             )
         }
     }

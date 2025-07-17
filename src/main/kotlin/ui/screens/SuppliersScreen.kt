@@ -140,29 +140,35 @@ fun SuppliersScreen(
         }
 
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-            RTLRow(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Left Panel - Supplier Management
-                Card(
+            // Show shimmer layout when loading and no suppliers data
+            if (isLoading && suppliers.isEmpty()) {
+                SuppliersScreenShimmerLayout(
+                    showDetailsPanel = showSupplierDetails && selectedSupplier != null
+                )
+            } else {
+                RTLRow(
                     modifier = Modifier
-                        .weight(2f)
-                        .fillMaxHeight(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    shape = RoundedCornerShape(24.dp),
-                    elevation = CardDefaults.cardElevation(
-                        defaultElevation = 0.dp
-                    ),
-                    border = BorderStroke(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
-                    )
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    // Left Panel - Supplier Management
+                    Card(
+                        modifier = Modifier
+                            .weight(2f)
+                            .fillMaxHeight(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        shape = RoundedCornerShape(24.dp),
+                        elevation = CardDefaults.cardElevation(
+                            defaultElevation = 0.dp
+                        ),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                        )
+                    ) {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -539,6 +545,7 @@ fun SuppliersScreen(
                     }
                 }
             }
+            }
 
             // Export status message
             exportMessage?.let { message ->
@@ -876,20 +883,6 @@ private fun EnhancedSuppliersContent(
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
-                }
-            }
-        }
-
-        // Loading state
-        if (isLoading && suppliers.isEmpty()) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
                 }
             }
         }

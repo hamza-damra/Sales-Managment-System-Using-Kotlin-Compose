@@ -43,12 +43,13 @@ object HttpClientProvider {
                 })
             }
 
-            // Logging
+            // Logging - Enable for development and debugging
             install(Logging) {
                 logger = Logger.DEFAULT
-                level = LogLevel.ALL
+                level = LogLevel.INFO
                 filter { request ->
-                    request.url.host.contains("localhost")
+                    // Enable logging for all requests in development
+                    true
                 }
             }
 
@@ -81,12 +82,13 @@ object HttpClientProvider {
                 })
             }
             
-            // Logging
+            // Logging - Enable for development and debugging
             install(Logging) {
                 logger = Logger.DEFAULT
-                level = LogLevel.ALL
+                level = LogLevel.INFO
                 filter { request ->
-                    request.url.host.contains("localhost")
+                    // Enable logging for all requests in development
+                    true
                 }
             }
             

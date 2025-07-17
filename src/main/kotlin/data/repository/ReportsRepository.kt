@@ -2,6 +2,7 @@ package data.repository
 
 import data.api.*
 import data.api.services.ReportsApiService
+import data.api.services.ProductApiService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -10,7 +11,10 @@ import kotlinx.serialization.json.JsonElement
 /**
  * Enhanced repository for comprehensive enterprise reporting
  */
-class ReportsRepository(private val reportsApiService: ReportsApiService) {
+class ReportsRepository(
+    private val reportsApiService: ReportsApiService,
+    private val productApiService: ProductApiService
+) {
 
     // State management
     private val _isLoading = MutableStateFlow(false)
@@ -44,6 +48,10 @@ class ReportsRepository(private val reportsApiService: ReportsApiService) {
     // Legacy state
     private val _dashboardSummary = MutableStateFlow<DashboardSummaryDTO?>(null)
     val dashboardSummary: StateFlow<DashboardSummaryDTO?> = _dashboardSummary.asStateFlow()
+
+    // Recent Products state
+    private val _recentProducts = MutableStateFlow<List<RecentProductDTO>>(emptyList())
+    val recentProducts: StateFlow<List<RecentProductDTO>> = _recentProducts.asStateFlow()
 
     // Sales Reports
     suspend fun loadComprehensiveSalesReport(request: ReportRequestDTO): NetworkResult<ComprehensiveSalesReportDTO> {
@@ -615,5 +623,79 @@ class ReportsRepository(private val reportsApiService: ReportsApiService) {
         _promotionReport.value = null
         _realTimeKPIs.value = null
         _dashboardSummary.value = null
+        _recentProducts.value = emptyList()
+    }
+
+    // Recent Products methods
+    suspend fun loadRecentProducts(
+        days: Int = 30,
+        category: String? = null,
+        categoryId: Long? = null,
+        includeInventory: Boolean = false,
+        page: Int = 0,
+        size: Int = 50,
+        sortBy: String = "lastSoldDate",
+        sortDir: String = "desc"
+    ): NetworkResult<List<RecentProductDTO>> {
+        _isLoading.value = true
+        _error.value = null
+
+        val result = productApiService.getRecentProducts(
+            days = days,
+            category = category,
+            categoryId = categoryId,
+            includeInventory = includeInventory,
+            page = page,
+            size = size,
+            sortBy = sortBy,
+            sortDir = sortDir
+        )
+
+        _isLoading.value = false
+
+        return when (result) {
+            is NetworkResult.Success -> {
+                _recentProducts.value = result.data.content
+                println("✅ ReportsRepository - Loaded ${result.data.content.size} recent products")
+                NetworkResult.Success(result.data.content)
+            }
+            is NetworkResult.Error -> {
+                println("❌ ReportsRepository - Error loading recent products: ${result.exception.message}")
+                _error.value = result.exception.message
+                NetworkResult.Error(result.exception)
+            }
+            is NetworkResult.Loading -> {
+                // Keep loading state
+                NetworkResult.Loading
+            }
+        }
+    }
+
+    suspend fun loadRecentProductsBasic(days: Int = 30): NetworkResult<List<RecentProductDTO>> {
+        _isLoading.value = true
+        _error.value = null
+
+        val result = productApiService.getRecentProductsBasic(days)
+
+        _isLoading.value = false
+
+        return when (result) {
+            is NetworkResult.Success -> {
+                // Extract products from the new response structure
+                val products = result.data.products.content
+                _recentProducts.value = products
+                println("✅ ReportsRepository - Loaded ${products.size} recent products (basic)")
+                NetworkResult.Success(products)
+            }
+            is NetworkResult.Error -> {
+                println("❌ ReportsRepository - Error loading recent products (basic): ${result.exception.message}")
+                _error.value = result.exception.message
+                NetworkResult.Error(result.exception)
+            }
+            is NetworkResult.Loading -> {
+                // Keep loading state
+                NetworkResult.Loading
+            }
+        }
     }
 }

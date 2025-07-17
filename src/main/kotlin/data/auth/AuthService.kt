@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
+import utils.I18nManager
 
 /**
  * Authentication service for handling login, signup, and token management
@@ -71,10 +72,16 @@ class AuthService(
             if (result.isError) {
                 val error = (result as NetworkResult.Error).exception
                 val errorMessage = when (error) {
-                    is ApiException.NetworkError -> "Network error: Cannot connect to server. Make sure backend is running on localhost:8081"
-                    is ApiException.HttpError -> "HTTP ${error.statusCode}: ${error.statusText}"
-                    is ApiException.AuthenticationError -> "Invalid username or password"
-                    else -> "Login failed: ${error.message}"
+                    is ApiException.NetworkError -> I18nManager.getString("auth.error.network")
+                    is ApiException.HttpError -> {
+                        when (error.statusCode) {
+                            401 -> I18nManager.getString("auth.error.invalid_credentials")
+                            403 -> I18nManager.getString("auth.error.access_forbidden")
+                            else -> error.errorBody ?: I18nManager.getString("error.server")
+                        }
+                    }
+                    is ApiException.AuthenticationError -> I18nManager.getString("auth.error.invalid_credentials")
+                    else -> I18nManager.getString("error.unknown")
                 }
 
                 println("❌ Login failed: $errorMessage")
@@ -151,10 +158,34 @@ class AuthService(
         }.also { result ->
             when (result) {
                 is NetworkResult.Error -> {
-                    println("❌ Signup failed: ${result.exception.message}")
+                    val error = result.exception
+                    val errorMessage = when (error) {
+                        is ApiException.NetworkError -> I18nManager.getString("auth.error.network")
+                        is ApiException.HttpError -> {
+                            when (error.statusCode) {
+                                400 -> {
+                                    // Parse validation errors from response body
+                                    when {
+                                        error.errorBody?.contains("username", ignoreCase = true) == true ->
+                                            I18nManager.getString("auth.error.username_exists")
+                                        error.errorBody?.contains("email", ignoreCase = true) == true ->
+                                            I18nManager.getString("auth.error.email_exists")
+                                        else -> I18nManager.getString("error.validation")
+                                    }
+                                }
+                                401 -> I18nManager.getString("auth.error.invalid_credentials")
+                                403 -> I18nManager.getString("auth.error.access_forbidden")
+                                else -> error.errorBody ?: I18nManager.getString("error.server")
+                            }
+                        }
+                        is ApiException.ValidationError -> I18nManager.getString("error.validation")
+                        else -> I18nManager.getString("error.unknown")
+                    }
+
+                    println("❌ Signup failed: $errorMessage")
                     _authState.value = _authState.value.copy(
                         isLoading = false,
-                        error = result.exception.message ?: "Signup failed"
+                        error = errorMessage
                     )
                 }
                 is NetworkResult.Success -> {

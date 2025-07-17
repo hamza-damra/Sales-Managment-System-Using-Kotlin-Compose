@@ -919,14 +919,12 @@ fun EnhancedNewPromotionDialog(
     var type by remember { mutableStateOf("PERCENTAGE") }
     var discountValue by remember { mutableStateOf("") }
     var minimumOrderAmount by remember { mutableStateOf("") }
-    var maximumDiscountAmount by remember { mutableStateOf("") }
     var startDate by remember { mutableStateOf("") }
     var endDate by remember { mutableStateOf("") }
     var usageLimit by remember { mutableStateOf("") }
     var customerEligibility by remember { mutableStateOf("ALL") }
     var couponCode by remember { mutableStateOf("") }
     var autoApply by remember { mutableStateOf(false) }
-    var stackable by remember { mutableStateOf(false) }
 
     // UI state
     var showOptionalFields by remember { mutableStateOf(false) }
@@ -947,7 +945,6 @@ fun EnhancedNewPromotionDialog(
     val discountValueFocusRequester = remember { FocusRequester() }
     val couponCodeFocusRequester = remember { FocusRequester() }
     val minimumOrderAmountFocusRequester = remember { FocusRequester() }
-    val maximumDiscountAmountFocusRequester = remember { FocusRequester() }
     val usageLimitFocusRequester = remember { FocusRequester() }
 
     // Real-time coupon code uniqueness validation
@@ -964,7 +961,7 @@ fun EnhancedNewPromotionDialog(
     }
 
     // Form validation
-    LaunchedEffect(name, type, discountValue, startDate, endDate, couponCode, isCouponCodeUnique, minimumOrderAmount, maximumDiscountAmount, usageLimit) {
+    LaunchedEffect(name, type, discountValue, startDate, endDate, couponCode, isCouponCodeUnique, minimumOrderAmount, usageLimit) {
         val isNameValid = name.isNotBlank() && name.length >= 3
         val isDiscountValid = discountValue.toDoubleOrNull() != null &&
                              discountValue.toDoubleOrNull()!! > 0 &&
@@ -978,13 +975,11 @@ fun EnhancedNewPromotionDialog(
                                isCouponCodeUnique
         val isMinOrderValid = minimumOrderAmount.isBlank() ||
                              (minimumOrderAmount.toDoubleOrNull() != null && minimumOrderAmount.toDoubleOrNull()!! >= 0)
-        val isMaxDiscountValid = maximumDiscountAmount.isBlank() ||
-                                (maximumDiscountAmount.toDoubleOrNull() != null && maximumDiscountAmount.toDoubleOrNull()!! > 0)
         val isUsageLimitValid = usageLimit.isBlank() ||
                                (usageLimit.toIntOrNull() != null && usageLimit.toIntOrNull()!! > 0)
 
         isFormValid = isNameValid && isDiscountValid && areDatesValid && isCouponCodeValid &&
-                     isMinOrderValid && isMaxDiscountValid && isUsageLimitValid
+                     isMinOrderValid && isUsageLimitValid
     }
 
     Dialog(
@@ -1384,69 +1379,35 @@ fun EnhancedNewPromotionDialog(
                     Column(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        // Minimum Order Amount and Maximum Discount
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = minimumOrderAmount,
-                                onValueChange = { minimumOrderAmount = it },
-                                label = { Text("الحد الأدنى للطلب") },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Default.ShoppingCart,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .focusRequester(minimumOrderAmountFocusRequester),
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(
-                                    keyboardType = KeyboardType.Decimal,
-                                    imeAction = ImeAction.Next
-                                ),
-                                keyboardActions = KeyboardActions(
-                                    onNext = { maximumDiscountAmountFocusRequester.requestFocus() }
-                                ),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                        // Minimum Order Amount
+                        OutlinedTextField(
+                            value = minimumOrderAmount,
+                            onValueChange = { minimumOrderAmount = it },
+                            label = { Text("الحد الأدنى للطلب") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.ShoppingCart,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(minimumOrderAmountFocusRequester),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Decimal,
+                                imeAction = ImeAction.Next
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onNext = { usageLimitFocusRequester.requestFocus() }
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
                             )
-
-                            OutlinedTextField(
-                                value = maximumDiscountAmount,
-                                onValueChange = { maximumDiscountAmount = it },
-                                label = { Text("الحد الأقصى للخصم") },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Default.MonetizationOn,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .focusRequester(maximumDiscountAmountFocusRequester),
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(
-                                    keyboardType = KeyboardType.Decimal,
-                                    imeAction = ImeAction.Next
-                                ),
-                                keyboardActions = KeyboardActions(
-                                    onNext = { usageLimitFocusRequester.requestFocus() }
-                                ),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                                )
-                            )
-                        }
+                        )
 
                         // Usage Limit and Customer Eligibility
                         Row(
@@ -1483,7 +1444,6 @@ fun EnhancedNewPromotionDialog(
                                                 type = type,
                                                 discountValue = discountValue.toDoubleOrNull() ?: 0.0,
                                                 minimumOrderAmount = minimumOrderAmount.toDoubleOrNull(),
-                                                maximumDiscountAmount = maximumDiscountAmount.toDoubleOrNull(),
                                                 startDate = formatDateForApi(startDate),
                                                 endDate = formatDateForApi(endDate),
                                                 usageLimit = usageLimit.toIntOrNull(),
@@ -1491,7 +1451,6 @@ fun EnhancedNewPromotionDialog(
                                                 customerEligibility = customerEligibility,
                                                 couponCode = couponCode.trim(),
                                                 autoApply = autoApply,
-                                                stackable = stackable,
                                                 isActive = true
                                             )
                                             onSave(promotionDTO)
@@ -1528,46 +1487,23 @@ fun EnhancedNewPromotionDialog(
 
 
 
-                        // Checkboxes
+                        // Auto Apply Checkbox
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Checkbox(
-                                    checked = autoApply,
-                                    onCheckedChange = { autoApply = it },
-                                    colors = CheckboxDefaults.colors(
-                                        checkedColor = MaterialTheme.colorScheme.primary
-                                    )
+                            Checkbox(
+                                checked = autoApply,
+                                onCheckedChange = { autoApply = it },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = MaterialTheme.colorScheme.primary
                                 )
-                                Text(
-                                    text = "تطبيق تلقائي",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.padding(start = 8.dp)
-                                )
-                            }
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Checkbox(
-                                    checked = stackable,
-                                    onCheckedChange = { stackable = it },
-                                    colors = CheckboxDefaults.colors(
-                                        checkedColor = MaterialTheme.colorScheme.primary
-                                    )
-                                )
-                                Text(
-                                    text = "قابل للتراكم",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.padding(start = 8.dp)
-                                )
-                            }
+                            )
+                            Text(
+                                text = "تطبيق تلقائي",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(start = 8.dp)
+                            )
                         }
                     }
                 }
@@ -1597,7 +1533,6 @@ fun EnhancedNewPromotionDialog(
                                     type = type,
                                     discountValue = discountValue.toDouble(),
                                     minimumOrderAmount = minimumOrderAmount.toDoubleOrNull(),
-                                    maximumDiscountAmount = maximumDiscountAmount.toDoubleOrNull(),
                                     startDate = formatDateForApi(startDate),
                                     endDate = formatDateForApi(endDate),
                                     isActive = true,
@@ -1605,8 +1540,7 @@ fun EnhancedNewPromotionDialog(
                                     usageCount = 0,
                                     customerEligibility = customerEligibility,
                                     couponCode = couponCode, // Now required, not nullable
-                                    autoApply = autoApply,
-                                    stackable = stackable
+                                    autoApply = autoApply
                                 )
                                 onSave(promotionDTO)
                             }

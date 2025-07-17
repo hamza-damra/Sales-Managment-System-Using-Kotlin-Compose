@@ -167,8 +167,77 @@ class ProductRepository(private val productApiService: ProductApiService) {
     }
     
     fun getProductsByCategory(category: String): List<ProductDTO> {
-        return _products.value.filter { 
-            it.category?.equals(category, ignoreCase = true) == true 
+        return _products.value.filter {
+            it.category?.equals(category, ignoreCase = true) == true
         }
+    }
+
+    // Recent Products API methods
+    private val _recentProducts = MutableStateFlow<List<RecentProductDTO>>(emptyList())
+    val recentProducts: StateFlow<List<RecentProductDTO>> = _recentProducts.asStateFlow()
+
+    private val _isLoadingRecent = MutableStateFlow(false)
+    val isLoadingRecent: StateFlow<Boolean> = _isLoadingRecent.asStateFlow()
+
+    private val _recentError = MutableStateFlow<String?>(null)
+    val recentError: StateFlow<String?> = _recentError.asStateFlow()
+
+    suspend fun loadRecentProducts(
+        days: Int = 30,
+        category: String? = null,
+        categoryId: Long? = null,
+        includeInventory: Boolean = false,
+        page: Int = 0,
+        size: Int = 20,
+        sortBy: String = "lastSoldDate",
+        sortDir: String = "desc"
+    ): NetworkResult<PageResponse<RecentProductDTO>> {
+        _isLoadingRecent.value = true
+        _recentError.value = null
+
+        val result = productApiService.getRecentProducts(
+            days = days,
+            category = category,
+            categoryId = categoryId,
+            includeInventory = includeInventory,
+            page = page,
+            size = size,
+            sortBy = sortBy,
+            sortDir = sortDir
+        )
+
+        result.onSuccess { pageResponse ->
+            if (page == 0) {
+                _recentProducts.value = pageResponse.content
+            } else {
+                _recentProducts.value = _recentProducts.value + pageResponse.content
+            }
+        }.onError { exception ->
+            _recentError.value = exception.message
+        }
+
+        _isLoadingRecent.value = false
+        return result
+    }
+
+    suspend fun loadRecentProductsBasic(days: Int = 30): NetworkResult<RecentProductsResponseDTO> {
+        _isLoadingRecent.value = true
+        _recentError.value = null
+
+        val result = productApiService.getRecentProductsBasic(days)
+
+        result.onSuccess { recentProductsResponse ->
+            // Extract products from the new response structure
+            _recentProducts.value = recentProductsResponse.products.content
+        }.onError { exception ->
+            _recentError.value = exception.message
+        }
+
+        _isLoadingRecent.value = false
+        return result
+    }
+
+    fun clearRecentError() {
+        _recentError.value = null
     }
 }

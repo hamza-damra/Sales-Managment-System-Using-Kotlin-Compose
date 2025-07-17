@@ -17,53 +17,107 @@ object ErrorMessageTranslator {
         details: ErrorDetails? = null
     ): String {
         return when {
+            // Authentication errors
+            errorMessage.contains("Invalid username or password", ignoreCase = true) ||
+            errorMessage.contains("Authentication failed", ignoreCase = true) -> {
+                "اسم المستخدم أو كلمة المرور غير صحيحة"
+            }
+
+            errorMessage.contains("Username is required", ignoreCase = true) ||
+            errorMessage.contains("Username cannot be empty", ignoreCase = true) -> {
+                "اسم المستخدم مطلوب"
+            }
+
+            errorMessage.contains("Password is required", ignoreCase = true) ||
+            errorMessage.contains("Password cannot be empty", ignoreCase = true) -> {
+                "كلمة المرور مطلوبة"
+            }
+
+            errorMessage.contains("Email is required", ignoreCase = true) ||
+            errorMessage.contains("Email cannot be empty", ignoreCase = true) -> {
+                "البريد الإلكتروني مطلوب"
+            }
+
+            errorMessage.contains("Invalid email format", ignoreCase = true) ||
+            errorMessage.contains("Email format is invalid", ignoreCase = true) -> {
+                "تنسيق البريد الإلكتروني غير صحيح"
+            }
+
+            errorMessage.contains("First name is required", ignoreCase = true) ||
+            errorMessage.contains("First name cannot be empty", ignoreCase = true) -> {
+                "الاسم الأول مطلوب"
+            }
+
+            errorMessage.contains("Last name is required", ignoreCase = true) ||
+            errorMessage.contains("Last name cannot be empty", ignoreCase = true) -> {
+                "اسم العائلة مطلوب"
+            }
+
+            errorMessage.contains("Username already exists", ignoreCase = true) ||
+            errorMessage.contains("Username is already taken", ignoreCase = true) -> {
+                "اسم المستخدم موجود بالفعل"
+            }
+
+            errorMessage.contains("Email already exists", ignoreCase = true) ||
+            errorMessage.contains("Email is already registered", ignoreCase = true) -> {
+                "البريد الإلكتروني مسجل بالفعل"
+            }
+
+            errorMessage.contains("Registration successful", ignoreCase = true) ||
+            errorMessage.contains("Account created successfully", ignoreCase = true) -> {
+                "تم إنشاء الحساب بنجاح"
+            }
+
+            errorMessage.contains("Login successful", ignoreCase = true) -> {
+                "تم تسجيل الدخول بنجاح"
+            }
+
             // Customer deletion errors
             errorCode == "CUSTOMER_HAS_SALES" -> {
                 val count = extractNumberFromMessage(errorMessage)
-                val customerName = details?.resourceType ?: "العميل"
                 if (count != null) {
-                    "لا يمكن حذف العميل لأنه مرتبط بـ $count من المبيعات. يرجى إكمال أو إلغاء جميع المبيعات المرتبطة بهذا العميل أولاً."
+                    I18nManager.getString("error.customer.delete_has_sales").replace("%d", count)
                 } else {
-                    "لا يمكن حذف العميل لأنه مرتبط بمبيعات في النظام. يرجى إكمال أو إلغاء جميع المبيعات المرتبطة بهذا العميل أولاً."
+                    I18nManager.getString("error.customer.delete_has_sales")
                 }
             }
-            
+
             errorCode == "CUSTOMER_HAS_RETURNS" -> {
                 val count = extractNumberFromMessage(errorMessage)
                 if (count != null) {
-                    "لا يمكن حذف العميل لأنه مرتبط بـ $count من المرتجعات. يرجى معالجة جميع المرتجعات المرتبطة بهذا العميل أولاً."
+                    I18nManager.getString("error.customer.delete_has_returns").replace("%d", count)
                 } else {
-                    "لا يمكن حذف العميل لأنه مرتبط بمرتجعات في النظام. يرجى معالجة جميع المرتجعات المرتبطة بهذا العميل أولاً."
+                    I18nManager.getString("error.customer.delete_has_returns")
                 }
             }
-            
+
             // Product deletion errors
             errorCode == "PRODUCT_HAS_SALES" -> {
                 val count = extractNumberFromMessage(errorMessage)
                 if (count != null) {
-                    "لا يمكن حذف المنتج لأنه مرتبط بـ $count من المبيعات. يرجى إكمال أو إلغاء جميع المبيعات المرتبطة بهذا المنتج أولاً."
+                    I18nManager.getString("error.product.delete_has_sales").replace("%d", count)
                 } else {
-                    "لا يمكن حذف المنتج لأنه مرتبط بمبيعات في النظام. يرجى إكمال أو إلغاء جميع المبيعات المرتبطة بهذا المنتج أولاً."
+                    I18nManager.getString("error.product.delete_has_sales")
                 }
             }
-            
+
             // Supplier deletion errors
             errorCode == "SUPPLIER_HAS_PRODUCTS" -> {
                 val count = extractNumberFromMessage(errorMessage)
                 if (count != null) {
-                    "لا يمكن حذف المورد لأنه مرتبط بـ $count من المنتجات. يرجى إعادة تعيين أو حذف جميع المنتجات المرتبطة بهذا المورد أولاً."
+                    I18nManager.getString("error.supplier.delete_has_products").replace("%d", count)
                 } else {
-                    "لا يمكن حذف المورد لأنه مرتبط بمنتجات في النظام. يرجى إعادة تعيين أو حذف جميع المنتجات المرتبطة بهذا المورد أولاً."
+                    I18nManager.getString("error.supplier.delete_has_products")
                 }
             }
-            
+
             // Category deletion errors
             errorCode == "CATEGORY_HAS_PRODUCTS" -> {
                 val count = extractNumberFromMessage(errorMessage)
                 if (count != null) {
-                    "لا يمكن حذف الفئة لأنها مرتبطة بـ $count من المنتجات. يرجى إعادة تصنيف أو حذف جميع المنتجات في هذه الفئة أولاً."
+                    I18nManager.getString("error.category.delete_has_products").replace("%d", count)
                 } else {
-                    "لا يمكن حذف الفئة لأنها مرتبطة بمنتجات في النظام. يرجى إعادة تصنيف أو حذف جميع المنتجات في هذه الفئة أولاً."
+                    I18nManager.getString("error.category.delete_has_products")
                 }
             }
 
@@ -107,67 +161,142 @@ object ErrorMessageTranslator {
                 "خطأ في توجيه نقطة النهاية للعروض الترويجية. الخادم يفسر 'expired' أو 'scheduled' كمعرف رقمي بدلاً من مسار نقطة النهاية. سيتم استخدام طريقة بديلة لتحميل البيانات."
             }
 
-            // Authentication errors
+            // Form validation errors
+            errorMessage.contains("Name is required", ignoreCase = true) ||
+            errorMessage.contains("Name cannot be empty", ignoreCase = true) -> {
+                "الاسم مطلوب"
+            }
+
+            errorMessage.contains("Price is required", ignoreCase = true) ||
+            errorMessage.contains("Invalid price", ignoreCase = true) -> {
+                "سعر صحيح مطلوب"
+            }
+
+            errorMessage.contains("Quantity is required", ignoreCase = true) ||
+            errorMessage.contains("Invalid quantity", ignoreCase = true) -> {
+                "كمية صحيحة مطلوبة"
+            }
+
+            errorMessage.contains("Phone number is required", ignoreCase = true) ||
+            errorMessage.contains("Invalid phone number", ignoreCase = true) -> {
+                "رقم هاتف صحيح مطلوب"
+            }
+
+            errorMessage.contains("Address is required", ignoreCase = true) -> {
+                "العنوان مطلوب"
+            }
+
+            errorMessage.contains("Category is required", ignoreCase = true) -> {
+                "الفئة مطلوبة"
+            }
+
+            errorMessage.contains("Supplier is required", ignoreCase = true) -> {
+                "المورد مطلوب"
+            }
+
+            // Success messages
+            errorMessage.contains("Added successfully", ignoreCase = true) ||
+            errorMessage.contains("Created successfully", ignoreCase = true) -> {
+                "تم الإضافة بنجاح"
+            }
+
+            errorMessage.contains("Updated successfully", ignoreCase = true) ||
+            errorMessage.contains("Modified successfully", ignoreCase = true) -> {
+                "تم التحديث بنجاح"
+            }
+
+            errorMessage.contains("Deleted successfully", ignoreCase = true) ||
+            errorMessage.contains("Removed successfully", ignoreCase = true) -> {
+                "تم الحذف بنجاح"
+            }
+
+            errorMessage.contains("Saved successfully", ignoreCase = true) -> {
+                "تم الحفظ بنجاح"
+            }
+
+            errorMessage.contains("Exported successfully", ignoreCase = true) -> {
+                "تم التصدير بنجاح"
+            }
+
+            errorMessage.contains("Imported successfully", ignoreCase = true) -> {
+                "تم الاستيراد بنجاح"
+            }
+
+            // Loading and status messages
+            errorMessage.contains("Loading", ignoreCase = true) -> {
+                "جاري التحميل..."
+            }
+
+            errorMessage.contains("Processing", ignoreCase = true) -> {
+                "جاري المعالجة..."
+            }
+
+            errorMessage.contains("No data available", ignoreCase = true) ||
+            errorMessage.contains("No items found", ignoreCase = true) -> {
+                "لا توجد بيانات متاحة"
+            }
+
+            // Authentication errors (existing)
             errorMessage.contains("Authentication failed", ignoreCase = true) ||
             errorMessage.contains("Token invalid", ignoreCase = true) ||
             errorMessage.contains("Token expired", ignoreCase = true) -> {
-                "انتهت صلاحية جلسة العمل. يرجى تسجيل الدخول مرة أخرى."
+                I18nManager.getString("auth.error.session_expired")
             }
-            
+
             errorMessage.contains("Access forbidden", ignoreCase = true) ||
             errorMessage.contains("Insufficient permissions", ignoreCase = true) -> {
-                "ليس لديك صلاحية للوصول إلى هذه الميزة."
+                I18nManager.getString("auth.error.access_forbidden")
             }
-            
+
             // Network errors
             errorMessage.contains("Network error", ignoreCase = true) ||
             errorMessage.contains("Cannot connect to server", ignoreCase = true) -> {
-                "خطأ في الاتصال بالخادم. تأكد من اتصالك بالإنترنت وأن الخادم يعمل."
+                I18nManager.getString("auth.error.network")
             }
-            
+
             errorMessage.contains("Request timeout", ignoreCase = true) -> {
-                "انتهت مهلة الطلب. يرجى المحاولة مرة أخرى."
+                I18nManager.getString("auth.error.timeout")
             }
-            
+
             // Validation errors
             errorMessage.contains("Validation failed", ignoreCase = true) -> {
-                "البيانات المدخلة غير صحيحة. يرجى مراجعة المعلومات والمحاولة مرة أخرى."
+                I18nManager.getString("error.validation")
             }
-            
+
             // Server errors
             errorMessage.contains("Server error", ignoreCase = true) -> {
-                "حدث خطأ في الخادم. يرجى المحاولة مرة أخرى لاحقاً."
+                I18nManager.getString("error.server")
             }
-            
+
             // Not found errors
             errorMessage.contains("not found", ignoreCase = true) -> {
-                "العنصر المطلوب غير موجود."
+                I18nManager.getString("error.not_found")
             }
-            
+
             // Generic conflict errors
             errorMessage.contains("Conflict", ignoreCase = true) ||
             errorMessage.contains("Data Integrity Violation", ignoreCase = true) -> {
-                "تعارض في البيانات. لا يمكن تنفيذ العملية بسبب ارتباط البيانات بعناصر أخرى في النظام."
+                I18nManager.getString("error.conflict")
             }
             
             // Default fallback
             else -> {
                 // Try to extract meaningful information from the original message
                 when {
-                    errorMessage.contains("customer", ignoreCase = true) && 
+                    errorMessage.contains("customer", ignoreCase = true) &&
                     errorMessage.contains("delete", ignoreCase = true) -> {
-                        "لا يمكن حذف العميل. يرجى التأكد من عدم وجود بيانات مرتبطة به."
+                        I18nManager.getString("error.customer.delete_has_sales")
                     }
-                    errorMessage.contains("product", ignoreCase = true) && 
+                    errorMessage.contains("product", ignoreCase = true) &&
                     errorMessage.contains("delete", ignoreCase = true) -> {
-                        "لا يمكن حذف المنتج. يرجى التأكد من عدم وجود بيانات مرتبطة به."
+                        I18nManager.getString("error.product.delete_has_sales")
                     }
-                    errorMessage.contains("supplier", ignoreCase = true) && 
+                    errorMessage.contains("supplier", ignoreCase = true) &&
                     errorMessage.contains("delete", ignoreCase = true) -> {
-                        "لا يمكن حذف المورد. يرجى التأكد من عدم وجود بيانات مرتبطة به."
+                        I18nManager.getString("error.supplier.delete_has_products")
                     }
                     else -> {
-                        "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى أو الاتصال بالدعم الفني."
+                        I18nManager.getString("error.unknown")
                     }
                 }
             }
@@ -199,7 +328,7 @@ object ErrorMessageTranslator {
      */
     fun translateSuggestions(suggestions: String?): String? {
         if (suggestions.isNullOrBlank()) return null
-        
+
         return when {
             suggestions.contains("complete, cancel, or reassign", ignoreCase = true) -> {
                 "يرجى إكمال أو إلغاء أو إعادة تعيين جميع العمليات المرتبطة قبل الحذف."
@@ -208,7 +337,7 @@ object ErrorMessageTranslator {
                 "يرجى إعادة تعيين أو حذف العناصر المرتبطة أولاً."
             }
             suggestions.contains("login again", ignoreCase = true) -> {
-                "يرجى تسجيل الدخول مرة أخرى."
+                I18nManager.getString("auth.error.session_expired")
             }
             else -> suggestions // Return original if no translation available
         }

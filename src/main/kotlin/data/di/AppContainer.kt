@@ -85,6 +85,10 @@ class AppContainer {
         PurchaseOrderApiService(httpClient)
     }
 
+    val updateApiService: UpdateApiService by lazy {
+        UpdateApiService(httpClient)
+    }
+
     // Repositories
     val customerRepository: CustomerRepository by lazy { 
         CustomerRepository(customerApiService) 
@@ -99,7 +103,7 @@ class AppContainer {
     }
     
     val reportsRepository: ReportsRepository by lazy {
-        ReportsRepository(reportsApiService)
+        ReportsRepository(reportsApiService, productApiService)
     }
 
     val supplierRepository: SupplierRepository by lazy {
@@ -134,6 +138,15 @@ class AppContainer {
         PurchaseOrderRepository(purchaseOrderApiService)
     }
 
+    val updateRepository: UpdateRepository by lazy {
+        UpdateRepository(updateApiService, tokenManager)
+    }
+
+    // Services
+    val updateService: services.UpdateService by lazy {
+        services.UpdateService(updateRepository, notificationService)
+    }
+
     // ViewModels
     val dashboardViewModel: DashboardViewModel by lazy {
         DashboardViewModel(dashboardRepository)
@@ -160,7 +173,7 @@ class AppContainer {
     }
 
     val inventoryViewModel: InventoryViewModel by lazy {
-        InventoryViewModel(inventoryRepository, stockMovementRepository, productRepository, categoryRepository)
+        InventoryViewModel(inventoryRepository, stockMovementRepository, productRepository, categoryRepository, reportsRepository)
     }
 
     val promotionViewModel: ui.viewmodels.PromotionViewModel by lazy {

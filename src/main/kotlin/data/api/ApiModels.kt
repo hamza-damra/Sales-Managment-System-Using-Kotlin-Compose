@@ -155,6 +155,52 @@ data class ProductDTO(
     val updatedAt: String? = null // ISO datetime
 )
 
+@Serializable
+data class RecentProductDTO(
+    val id: Long? = null,
+    val name: String,
+    val description: String? = null,
+    val price: Double,
+    val costPrice: Double? = null,
+    val stockQuantity: Int? = null,
+    val category: String? = null,
+    val categoryId: Long? = null,
+    val categoryName: String? = null,
+    val sku: String? = null,
+    val brand: String? = null,
+    val imageUrl: String? = null,
+    val productStatus: String? = null,
+    val totalSold: Int? = null,
+    val totalRevenue: Double? = null,
+    val lastSoldDate: String? = null, // ISO datetime
+    val lastRestockedDate: String? = null, // ISO datetime
+    val createdAt: String? = null, // ISO datetime
+    val updatedAt: String? = null, // ISO datetime
+    // Recent-specific fields
+    val recentSalesCount: Int? = null,
+    val recentRevenue: Double? = null,
+    val averageOrderValue: Double? = null,
+    val salesTrend: String? = null, // UP, DOWN, STABLE
+    val inventoryTurnover: Double? = null,
+    val daysInPeriod: Int? = null
+)
+
+// New data model for the updated /api/v1/products/recent response
+@Serializable
+data class RecentProductsResponseDTO(
+    val products: PageResponse<RecentProductDTO>,
+    val inventorySummary: RecentProductsInventorySummaryDTO
+)
+
+// Inventory summary data from the recent products API
+@Serializable
+data class RecentProductsInventorySummaryDTO(
+    val totalProducts: Int? = null,
+    val lowStockAlerts: Int? = null,
+    val outOfStockProducts: Int? = null,
+    val totalStockValue: Double? = null
+)
+
 // Sale DTOs
 @Serializable
 data class SaleDTO(
@@ -536,7 +582,6 @@ data class PromotionDTO(
     val type: String, // PERCENTAGE, FIXED_AMOUNT, BUY_X_GET_Y
     val discountValue: Double,
     val minimumOrderAmount: Double? = null,
-    val maximumDiscountAmount: Double? = null,
     val startDate: String, // ISO datetime
     val endDate: String, // ISO datetime
     val isActive: Boolean,
@@ -547,7 +592,6 @@ data class PromotionDTO(
     val customerEligibility: String? = null, // ALL, VIP_ONLY, NEW_CUSTOMERS
     val couponCode: String,
     val autoApply: Boolean? = null,
-    val stackable: Boolean? = null,
     val statusDisplay: String? = null,
     val typeDisplay: String? = null,
     val eligibilityDisplay: String? = null,

@@ -59,6 +59,7 @@ import ui.viewmodels.ViewModelFactory
 import java.text.NumberFormat
 import java.util.*
 import utils.CurrencyUtils
+import utils.I18nManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -125,19 +126,11 @@ fun CustomersScreen() {
                 )
             }
 
-            // Loading indicator with progress details
+            // Professional shimmer loading effects or actual content
             if (isLoading) {
-                EnhancedLoadingIndicator(
-                    message = when {
-                        isCreatingCustomer -> "جاري إضافة العميل..."
-                        isUpdatingCustomer -> "جاري تحديث العميل..."
-                        isDeletingCustomer -> "جاري حذف العميل..."
-                        else -> "جاري تحميل العملاء..."
-                    }
-                )
-            }
-
-            RTLRow(
+                CustomersScreenShimmerLayout()
+            } else {
+                RTLRow(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(16.dp),
@@ -449,6 +442,7 @@ fun CustomersScreen() {
                     }
                 }
             }
+            }
         }
 
         // Dialogs
@@ -522,8 +516,8 @@ fun CustomersScreen() {
                             showDeleteConfirmation = false
                             customerToDelete = null
                             AppDependencies.container.notificationService.showSuccess(
-                                message = "تم حذف العميل بنجاح (حذف مؤقت)",
-                                title = "تم الحذف"
+                                message = I18nManager.getString("success.customer.deleted"),
+                                title = I18nManager.getString("success.deleted")
                             )
                         } else if (result.isError) {
                             val exception = (result as NetworkResult.Error).exception
@@ -543,8 +537,8 @@ fun CustomersScreen() {
                             } else {
                                 println("❌ Showing error message in Arabic")
                                 AppDependencies.container.notificationService.showError(
-                                    message = exception.message ?: "حدث خطأ أثناء حذف العميل",
-                                    title = "خطأ في الحذف"
+                                    message = exception.message ?: I18nManager.getString("error.delete_failed"),
+                                    title = I18nManager.getString("error.delete_failed")
                                 )
                             }
                         }
@@ -607,13 +601,13 @@ fun CustomersScreen() {
                             foreignKeyError = null
                             AppDependencies.container.notificationService.showSuccess(
                                 message = specificMessage,
-                                title = "تم الحذف الكامل"
+                                title = I18nManager.getString("success.deleted")
                             )
                         } else if (result.isError) {
                             val exception = (result as NetworkResult.Error).exception
                             AppDependencies.container.notificationService.showError(
-                                message = exception.message ?: "حدث خطأ أثناء حذف العميل",
-                                title = "خطأ في الحذف"
+                                message = exception.message ?: I18nManager.getString("error.delete_failed"),
+                                title = I18nManager.getString("error.delete_failed")
                             )
                         }
                     }
@@ -1287,7 +1281,7 @@ private fun EnhancedCustomerDialog(
                         OutlinedTextField(
                             value = name,
                             onValueChange = { name = it },
-                            label = { Text("اسم العميل *") },
+                            label = { Text(I18nManager.getString("customer.name") + " *") },
                             leadingIcon = {
                                 Icon(
                                     Icons.Default.Person,
@@ -1316,7 +1310,7 @@ private fun EnhancedCustomerDialog(
                             OutlinedTextField(
                                 value = firstName,
                                 onValueChange = { firstName = it },
-                                label = { Text("الاسم الأول") },
+                                label = { Text(I18nManager.getString("auth.firstName")) },
                                 modifier = Modifier
                                     .weight(1f)
                                     .focusRequester(firstNameFocusRequester),
@@ -1335,7 +1329,7 @@ private fun EnhancedCustomerDialog(
                             OutlinedTextField(
                                 value = lastName,
                                 onValueChange = { lastName = it },
-                                label = { Text("اسم العائلة") },
+                                label = { Text(I18nManager.getString("auth.lastName")) },
                                 modifier = Modifier
                                     .weight(1f)
                                     .focusRequester(lastNameFocusRequester),
@@ -1356,7 +1350,7 @@ private fun EnhancedCustomerDialog(
                         OutlinedTextField(
                             value = phone,
                             onValueChange = { phone = it },
-                            label = { Text("رقم الهاتف") },
+                            label = { Text(I18nManager.getString("customer.phone")) },
                             leadingIcon = {
                                 Icon(
                                     Icons.Default.Phone,
@@ -1386,7 +1380,7 @@ private fun EnhancedCustomerDialog(
                         OutlinedTextField(
                             value = email,
                             onValueChange = { email = it },
-                            label = { Text("البريد الإلكتروني") },
+                            label = { Text(I18nManager.getString("customer.email")) },
                             leadingIcon = {
                                 Icon(
                                     Icons.Default.Email,
@@ -1437,7 +1431,7 @@ private fun EnhancedCustomerDialog(
                         OutlinedTextField(
                             value = address,
                             onValueChange = { address = it },
-                            label = { Text("العنوان") },
+                            label = { Text(I18nManager.getString("customer.address")) },
                             leadingIcon = {
                                 Icon(
                                     Icons.Default.LocationOn,

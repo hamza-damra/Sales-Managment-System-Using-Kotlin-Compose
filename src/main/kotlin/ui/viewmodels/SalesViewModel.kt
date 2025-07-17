@@ -475,10 +475,7 @@ class SalesViewModel(
                 val discount = when (promotion.type) {
                     "PERCENTAGE" -> {
                         val discountAmount = currentSubtotal * (promotion.discountValue / 100)
-                        val finalDiscount = promotion.maximumDiscountAmount?.let { maxDiscount ->
-                            minOf(discountAmount, maxDiscount)
-                        } ?: discountAmount
-                        roundToCurrency(finalDiscount)
+                        roundToCurrency(discountAmount)
                     }
                     "FIXED_AMOUNT" -> {
                         // Ensure discount doesn't exceed subtotal

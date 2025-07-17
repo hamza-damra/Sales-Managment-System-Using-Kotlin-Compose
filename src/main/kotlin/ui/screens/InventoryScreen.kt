@@ -103,6 +103,7 @@ fun InventoryScreen(
         LaunchedEffect(Unit) {
             inventoryViewModel.loadInventories()
             inventoryViewModel.loadCategories()
+            inventoryViewModel.loadRecentProductsBasic(30) // Load recent products for overview and inventory summary
         }
 
         // Dialog states
@@ -186,7 +187,13 @@ fun InventoryScreen(
         }
 
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-            RTLRow(
+            // Professional shimmer loading effects or actual content
+            if (isLoading) {
+                InventoryScreenShimmerLayout(
+                    showDetailsPanel = showItemDetails && selectedItem != null
+                )
+            } else {
+                RTLRow(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(16.dp),
@@ -622,6 +629,7 @@ fun InventoryScreen(
                     }
                 }
             }
+            }
 
             // Export status message
             exportMessage?.let { message ->
@@ -925,84 +933,249 @@ private fun EnhancedInventoryOverviewContent(
     ) {
         // Statistics Cards
         item {
+            val uiState by inventoryViewModel.uiState.collectAsState()
+            val inventorySummary = uiState.inventorySummary
+            val isLoadingRecentProducts = uiState.isLoadingRecentProducts
+            val recentProductsError = uiState.recentProductsError
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                EnhancedStatCard(
-                    title = "إجمالي المستودعات",
-                    value = inventoryViewModel.totalInventories.value.toString(),
-                    subtitle = "مستودع مسجل",
-                    icon = Icons.Default.Inventory,
-                    iconColor = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.weight(1f)
-                )
+                if (isLoadingRecentProducts) {
+                    // Show shimmer loading for first row
+                    repeat(2) {
+                        ShimmerStatCard(modifier = Modifier.weight(1f))
+                    }
+                } else if (recentProductsError != null) {
+                    // Show error state for first row
+                    ErrorStatCard(
+                        title = "خطأ في تحميل البيانات",
+                        subtitle = "اضغط للمحاولة مرة أخرى",
+                        icon = Icons.Default.Error,
+                        iconColor = AppTheme.colors.error,
+                        onClick = {
+                            inventoryViewModel.clearRecentProductsError()
+                            inventoryViewModel.loadRecentProductsBasic(30)
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
 
-                EnhancedStatCard(
-                    title = "قريب من السعة القصوى",
-                    value = inventoryViewModel.nearCapacityInventories.value.toString(),
-                    subtitle = "مستودع يحتاج انتباه",
-                    icon = Icons.Default.Warning,
-                    iconColor = AppTheme.colors.warning,
-                    modifier = Modifier.weight(1f)
-                )
+                    // Empty placeholder for second card
+                    Box(modifier = Modifier.weight(1f))
+                } else {
+                    EnhancedStatCard(
+                        title = "إجمالي المنتجات",
+                        value = (inventorySummary?.totalProducts ?: 0).toString(),
+                        subtitle = "منتج في المخزون",
+                        icon = Icons.Default.Inventory,
+                        iconColor = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    EnhancedStatCard(
+                        title = "تنبيهات المخزون المنخفض",
+                        value = (inventorySummary?.lowStockAlerts ?: 0).toString(),
+                        subtitle = "منتج يحتاج تجديد",
+                        icon = Icons.Default.Warning,
+                        iconColor = AppTheme.colors.warning,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
 
         item {
+            val uiState by inventoryViewModel.uiState.collectAsState()
+            val inventorySummary = uiState.inventorySummary
+            val isLoadingRecentProducts = uiState.isLoadingRecentProducts
+            val recentProductsError = uiState.recentProductsError
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                EnhancedStatCard(
-                    title = "المستودعات النشطة",
-                    value = inventoryViewModel.activeInventories.value.toString(),
-                    subtitle = "مستودع نشط",
-                    icon = Icons.Default.Schedule,
-                    iconColor = AppTheme.colors.success,
-                    modifier = Modifier.weight(1f)
-                )
+                if (isLoadingRecentProducts) {
+                    // Show shimmer loading for second row
+                    repeat(2) {
+                        ShimmerStatCard(modifier = Modifier.weight(1f))
+                    }
+                } else if (recentProductsError != null) {
+                    // Show empty placeholders for second row when error
+                    repeat(2) {
+                        Box(modifier = Modifier.weight(1f))
+                    }
+                } else {
+                    EnhancedStatCard(
+                        title = "منتجات نفدت من المخزون",
+                        value = (inventorySummary?.outOfStockProducts ?: 0).toString(),
+                        subtitle = "منتج غير متوفر",
+                        icon = Icons.Default.RemoveShoppingCart,
+                        iconColor = AppTheme.colors.error,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                EnhancedStatCard(
-                    title = "المستودعات الرئيسية",
-                    value = inventoryViewModel.mainWarehouses.value.toString(),
-                    subtitle = "مستودع رئيسي",
-                    icon = Icons.Default.Warehouse,
-                    iconColor = AppTheme.colors.info,
-                    modifier = Modifier.weight(1f)
-                )
+                    EnhancedStatCard(
+                        title = "قيمة المخزون الإجمالية",
+                        value = formatCurrency(inventorySummary?.totalStockValue ?: 0.0),
+                        subtitle = "القيمة الإجمالية",
+                        icon = Icons.Default.AttachMoney,
+                        iconColor = AppTheme.colors.success,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
 
         // Recent Inventory Items
         item {
-            Text(
-                text = "العناصر الحديثة",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "المنتجات الحديثة",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                // Refresh button for recent products
+                IconButton(
+                    onClick = {
+                        inventoryViewModel.loadRecentProductsBasic(30)
+                    }
+                ) {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = "تحديث المنتجات الحديثة",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
         }
 
-        // Sample inventory items
-        items(10) { index ->
-            EnhancedInventoryItemCard(
-                item = InventoryItem(
-                    productId = index,
-                    warehouseId = 1,
-                    currentStock = if (index % 5 == 0) 5 else 50 + index,
-                    reservedStock = index % 3,
-                    minimumStock = 10,
-                    maximumStock = 100,
-                    reorderPoint = 15,
-                    lastUpdated = LocalDateTime(2024, 1, 1, 10, 0),
-                    expiryDate = if (index % 7 == 0) LocalDate(2024, 12, 15) else null
-                ),
-                productName = "منتج $index",
-                categoryName = if (index % 3 == 0) "إلكترونيات" else "ملابس",
-                warehouseName = "المستودع الرئيسي",
-                onClick = onItemClick
-            )
+        // Get recent products from UI state
+        item {
+            val uiState by inventoryViewModel.uiState.collectAsState()
+            val recentProducts = uiState.recentProducts
+            val isLoadingRecentProducts = uiState.isLoadingRecentProducts
+            val recentProductsError = uiState.recentProductsError
+
+            // Loading state for recent products
+            if (isLoadingRecentProducts) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    repeat(5) { // Show 5 shimmer items while loading
+                        ShimmerInventoryItemCard()
+                    }
+                }
+            } else if (recentProductsError != null) {
+                // Error state
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f)
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            Icons.Default.Error,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "خطأ في تحميل المنتجات الحديثة",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = recentProductsError,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = {
+                                inventoryViewModel.clearRecentProductsError()
+                                inventoryViewModel.loadRecentProductsBasic(30)
+                            }
+                        ) {
+                            Text("إعادة المحاولة")
+                        }
+                    }
+                }
+            } else if (recentProducts.isEmpty()) {
+                // Empty state
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            Icons.Default.Inventory,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "لا توجد منتجات حديثة",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "لم يتم بيع أي منتجات في الفترة الأخيرة",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            } else {
+                // Display real recent products data
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    recentProducts.take(10).forEach { recentProduct ->
+                        EnhancedRecentProductCard(
+                            recentProduct = recentProduct,
+                            onClick = {
+                                // Convert RecentProductDTO to InventoryItem for compatibility
+                                val inventoryItem = InventoryItem(
+                                    productId = recentProduct.id?.toInt() ?: 0,
+                                    warehouseId = 1, // Default warehouse
+                                    currentStock = recentProduct.stockQuantity ?: 0,
+                                    reservedStock = 0,
+                                    minimumStock = 10,
+                                    maximumStock = 100,
+                                    reorderPoint = 15,
+                                    lastUpdated = LocalDateTime(2024, 1, 1, 10, 0),
+                                    expiryDate = null
+                                )
+                                onItemClick(inventoryItem)
+                            }
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -1372,37 +1545,7 @@ private fun EnhancedWarehousesContent(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Add Warehouse Button
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onAddWarehouse() },
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "إضافة مستودع",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "إضافة مستودع جديد",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            }
-        }
+
 
         // Filter inventories based on search query
         val filteredInventories = inventories.filter { inventory ->
@@ -3790,5 +3933,359 @@ private fun WarehouseDialog(
         shape = RoundedCornerShape(20.dp),
         containerColor = MaterialTheme.colorScheme.surface
     )
+}
+
+// Enhanced Recent Product Card Component
+@Composable
+private fun EnhancedRecentProductCard(
+    recentProduct: RecentProductDTO,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { onClick() },
+        colors = CardDefaults.cardColors(
+            containerColor = if (isHovered)
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+            else
+                MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isHovered) 4.dp else 2.dp
+        ),
+        border = BorderStroke(
+            width = if (isHovered) 1.dp else 0.5.dp,
+            color = if (isHovered)
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+            else
+                MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+        )
+    ) {
+        RTLRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Product Info
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = recentProduct.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                recentProduct.categoryName?.let { category ->
+                    Text(
+                        text = category,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                recentProduct.description?.let { description ->
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            // Stock and Sales Info
+            Column(
+                horizontalAlignment = Alignment.End
+            ) {
+                // Stock quantity
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "${recentProduct.stockQuantity ?: 0}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = when {
+                            (recentProduct.stockQuantity ?: 0) <= 10 -> AppTheme.colors.error
+                            (recentProduct.stockQuantity ?: 0) <= 20 -> AppTheme.colors.warning
+                            else -> AppTheme.colors.success
+                        }
+                    )
+                    Icon(
+                        Icons.Default.Inventory,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+
+                // Recent sales count
+                recentProduct.recentSalesCount?.let { salesCount ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "$salesCount مبيعات",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        Icon(
+                            Icons.Default.TrendingUp,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                // Price
+                Text(
+                    text = "${String.format("%.2f", recentProduct.price)} ₪",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            // Status indicator
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .background(
+                        color = when {
+                            (recentProduct.stockQuantity ?: 0) <= 10 -> AppTheme.colors.error
+                            (recentProduct.stockQuantity ?: 0) <= 20 -> AppTheme.colors.warning
+                            else -> AppTheme.colors.success
+                        },
+                        shape = CircleShape
+                    )
+            )
+        }
+    }
+}
+
+// Shimmer Loading Card Component
+@Composable
+private fun ShimmerInventoryItemCard() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(
+            width = 0.5.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+        )
+    ) {
+        RTLRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Product Info Shimmer
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ShimmerBox(
+                    modifier = Modifier
+                        .fillMaxWidth(0.7f)
+                        .height(20.dp)
+                )
+                ShimmerBox(
+                    modifier = Modifier
+                        .fillMaxWidth(0.5f)
+                        .height(16.dp)
+                )
+                ShimmerBox(
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .height(14.dp)
+                )
+            }
+
+            // Stats Shimmer
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                ShimmerBox(
+                    modifier = Modifier
+                        .width(60.dp)
+                        .height(18.dp)
+                )
+                ShimmerBox(
+                    modifier = Modifier
+                        .width(80.dp)
+                        .height(14.dp)
+                )
+                ShimmerBox(
+                    modifier = Modifier
+                        .width(70.dp)
+                        .height(16.dp)
+                )
+            }
+
+            // Status indicator shimmer
+            ShimmerBox(
+                modifier = Modifier.size(12.dp),
+                shape = CircleShape
+            )
+        }
+    }
+}
+
+// Shimmer Stat Card Component
+@Composable
+private fun ShimmerStatCard(
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.height(120.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(
+            width = 0.5.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    ShimmerBox(
+                        modifier = Modifier
+                            .fillMaxWidth(0.7f)
+                            .height(16.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ShimmerBox(
+                        modifier = Modifier
+                            .fillMaxWidth(0.5f)
+                            .height(24.dp)
+                    )
+                }
+
+                ShimmerBox(
+                    modifier = Modifier.size(40.dp),
+                    shape = RoundedCornerShape(12.dp)
+                )
+            }
+
+            ShimmerBox(
+                modifier = Modifier
+                    .fillMaxWidth(0.6f)
+                    .height(14.dp)
+            )
+        }
+    }
+}
+
+// Error Stat Card Component
+@Composable
+private fun ErrorStatCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    iconColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Card(
+        modifier = modifier
+            .height(120.dp)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { onClick() },
+        colors = CardDefaults.cardColors(
+            containerColor = if (isHovered)
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f)
+            else
+                MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isHovered) 4.dp else 2.dp
+        ),
+        border = BorderStroke(
+            width = if (isHovered) 1.dp else 0.5.dp,
+            color = if (isHovered)
+                iconColor.copy(alpha = 0.3f)
+            else
+                MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.size(32.dp),
+                tint = iconColor
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = iconColor,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+// Currency formatting function
+private fun formatCurrency(amount: Double): String {
+    return String.format("%.2f ₪", amount)
 }
 

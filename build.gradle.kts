@@ -7,8 +7,8 @@ plugins {
     kotlin("plugin.serialization") version "1.9.21"
 }
 
-group = "com.example"
-version = "1.0-SNAPSHOT"
+group = "com.hamzadamra.salesmanagement"
+version = "2.1.0"
 
 repositories {
     mavenCentral()
@@ -67,6 +67,10 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.1")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     testImplementation("io.ktor:ktor-client-mock:2.3.7")
+    testImplementation("org.mockito:mockito-core:5.8.0")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
+    testImplementation("io.mockk:mockk:1.13.8")
+    testImplementation("org.jetbrains.kotlin:kotlin-test:1.9.21")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
@@ -79,10 +83,10 @@ compose.desktop {
         mainClass = "MainKt"
 
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
+            targetFormats(TargetFormat.Msi, TargetFormat.Dmg, TargetFormat.Deb)
             packageName = "SalesManagementSystem"
-            packageVersion = "1.0.0"
-            description = "Professional Sales Management System"
+            packageVersion = "2.1.0"
+            description = "Professional Sales Management System with Enhanced Update Functionality"
             copyright = "© 2024 Hamza Damra. All rights reserved."
             vendor = "Hamza Damra"
             licenseFile.set(project.file("installer/LICENSE.txt"))
@@ -92,30 +96,33 @@ compose.desktop {
 
             // Windows MSI specific configuration
             windows {
-                iconFile.set(project.file("installer/icons/app-icon.ico"))
+                // iconFile.set(project.file("installer/icons/app-icon.ico")) // TODO: Add icon file
                 menuGroup = "Sales Management System"
                 // Upgrade UUID for proper MSI upgrade handling
                 upgradeUuid = "B8C9D0E1-F2A3-4B5C-6D7E-8F9A0B1C2D3E"
 
                 // MSI installer properties
-                msiPackageVersion = packageVersion
+                msiPackageVersion = "2.1.0"
                 dirChooser = true
                 perUserInstall = false
                 shortcut = true
+
+                // Additional MSI properties
+                console = false
             }
 
             // macOS DMG configuration
             macOS {
-                iconFile.set(project.file("installer/icons/app-icon.icns"))
+                // iconFile.set(project.file("installer/icons/app-icon.icns")) // TODO: Add icon file
                 bundleID = "com.hamzadamra.salesmanagement"
                 appCategory = "public.app-category.business"
-                entitlementsFile.set(project.file("installer/macOS/entitlements.plist"))
-                runtimeEntitlementsFile.set(project.file("installer/macOS/runtime-entitlements.plist"))
+                // entitlementsFile.set(project.file("installer/macOS/entitlements.plist"))
+                // runtimeEntitlementsFile.set(project.file("installer/macOS/runtime-entitlements.plist"))
             }
 
             // Linux DEB configuration
             linux {
-                iconFile.set(project.file("installer/icons/app-icon.png"))
+                // iconFile.set(project.file("installer/icons/app-icon.png")) // TODO: Add icon file
                 packageName = "sales-management-system"
                 debMaintainer = "hamza.damra@example.com"
                 menuGroup = "Office"

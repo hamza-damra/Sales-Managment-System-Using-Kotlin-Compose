@@ -60,7 +60,9 @@ enum class SettingsTab(val title: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(
+    onNavigateToUpdates: () -> Unit = {}
+) {
     val themeState = LocalThemeState.current
 
     // Enhanced state management
@@ -202,7 +204,8 @@ fun SettingsScreen() {
                         SettingsTab.SYSTEM -> EnhancedSystemSettingsContent(
                             searchQuery = searchQuery,
                             onBackupClick = { showBackupDialog = true },
-                            onExportClick = { showExportDialog = true }
+                            onExportClick = { showExportDialog = true },
+                            onUpdatesClick = onNavigateToUpdates
                         )
                         SettingsTab.ABOUT -> EnhancedAboutContent(
                             onAboutClick = { showAboutDialog = true }
@@ -603,7 +606,8 @@ private fun EnhancedAccountSettingsContent(
 private fun EnhancedSystemSettingsContent(
     searchQuery: String,
     onBackupClick: () -> Unit,
-    onExportClick: () -> Unit
+    onExportClick: () -> Unit,
+    onUpdatesClick: () -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -654,7 +658,7 @@ private fun EnhancedSystemSettingsContent(
                 description = "فحص وتثبيت التحديثات",
                 icon = Icons.Default.SystemUpdate,
                 iconColor = AppTheme.colors.purple,
-                onClick = { /* Handle updates */ }
+                onClick = onUpdatesClick
             )
         }
 

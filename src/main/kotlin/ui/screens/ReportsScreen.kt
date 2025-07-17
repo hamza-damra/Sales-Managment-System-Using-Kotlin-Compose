@@ -3,6 +3,7 @@
 package ui.screens
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -17,6 +18,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -66,7 +68,8 @@ fun ReportsScreen(
     val financialReport by reportsViewModel.financialReport.collectAsState()
     val promotionReport by reportsViewModel.promotionReport.collectAsState()
     val realTimeKPIs: JsonElement? by reportsViewModel.realTimeKPIs.collectAsState()
-    
+    val recentProducts by reportsViewModel.recentProducts.collectAsState()
+
     // UI state
     var showDatePicker by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
@@ -87,8 +90,8 @@ fun ReportsScreen(
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(28.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
+                contentPadding = PaddingValues(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Enhanced Header Section
                 item {
@@ -148,6 +151,11 @@ fun ReportsScreen(
                     // You can integrate with your notification service here
                 }
             }
+
+            // Load recent products for overview section
+            LaunchedEffect(Unit) {
+                reportsViewModel.loadRecentProductsBasic(30) // Load last 30 days
+            }
         }
         
         // Date Picker Dialog
@@ -206,9 +214,17 @@ private fun EnhancedReportsHeader(
     isRefreshing: Boolean
 ) {
     Card(
-        colors = CardStyles.elevatedCardColors(),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardStyles.elevatedCardElevation(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(24.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 0.dp
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+        ),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -442,13 +458,22 @@ private fun EnhancedReportTypeSelector(
     onTypeSelected: (String) -> Unit
 ) {
     Card(
-        colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardStyles.defaultCardElevation()
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(24.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 0.dp
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+        ),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier.padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             Text(
                 text = "نوع التقرير",
@@ -549,7 +574,7 @@ private fun ReportTypeCard(
             containerColor = if (isSelected) color.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surface
         ),
         border = if (isSelected) BorderStroke(2.dp, color) else null,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
         elevation = CardDefaults.cardElevation(
             defaultElevation = if (isHovered) 8.dp else 4.dp
         )
@@ -627,9 +652,17 @@ private fun RealTimeKPIsDashboard(
     isLoading: Boolean
 ) {
     Card(
-        colors = CardStyles.elevatedCardColors(),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardStyles.elevatedCardElevation(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(24.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 0.dp
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+        ),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -760,10 +793,16 @@ private fun EnhancedKPICard(
                 interactionSource = interactionSource,
                 indication = null
             ) { /* Handle click if needed */ },
-        colors = CardStyles.elevatedCardColors(),
-        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(
-            defaultElevation = if (isHovered) 8.dp else 4.dp
+            defaultElevation = if (isHovered) 2.dp else 1.dp
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
         )
     ) {
         Box(
@@ -866,9 +905,17 @@ private fun EnhancedKPICardSkeleton(
     Card(
         modifier = modifier
             .height(140.dp),
-        colors = CardStyles.elevatedCardColors(),
-        shape = RoundedCornerShape(18.dp),
-        elevation = CardStyles.elevatedCardElevation()
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 1.dp
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+        )
     ) {
         Column(
             modifier = Modifier
@@ -969,9 +1016,18 @@ private fun ReportContentSection(
     onRetry: () -> Unit
 ) {
     Card(
-        colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardStyles.defaultCardElevation()
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(24.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 0.dp
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+        ),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(24.dp),
@@ -1037,9 +1093,17 @@ private fun ReportLoadingSkeleton() {
                     modifier = Modifier
                         .width(220.dp)
                         .height(120.dp),
-                    colors = CardStyles.elevatedCardColors(),
-                    shape = RoundedCornerShape(18.dp),
-                    elevation = CardStyles.elevatedCardElevation()
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = 1.dp
+                    ),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                    )
                 ) {
                     Column(
                         modifier = Modifier
@@ -1105,9 +1169,18 @@ private fun ReportLoadingSkeleton() {
 
         // Enhanced chart skeleton with better styling
         Card(
-            colors = CardStyles.defaultCardColors(),
-            shape = RoundedCornerShape(20.dp),
-            elevation = CardStyles.defaultCardElevation()
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            shape = RoundedCornerShape(24.dp),
+            elevation = CardDefaults.cardElevation(
+                defaultElevation = 0.dp
+            ),
+            border = BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+            ),
+            modifier = Modifier.fillMaxWidth()
         ) {
             Box(
                 modifier = Modifier
@@ -1166,11 +1239,15 @@ private fun ReportErrorState(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f)
         ),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(24.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 0.dp
+        ),
         border = BorderStroke(
             width = 1.dp,
             color = MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
-        )
+        ),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier
@@ -1346,9 +1423,17 @@ private fun SalesReportContent(
             // Enhanced top customers card
             Card(
                 modifier = Modifier.weight(1f),
-                colors = CardStyles.elevatedCardColors(),
-                shape = RoundedCornerShape(18.dp),
-                elevation = CardStyles.elevatedCardElevation()
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(
+                    defaultElevation = 1.dp
+                ),
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                )
             ) {
                 Column(
                     modifier = Modifier.padding(20.dp),
@@ -1448,9 +1533,17 @@ private fun SalesReportContent(
             // Enhanced top products card
             Card(
                 modifier = Modifier.weight(1f),
-                colors = CardStyles.elevatedCardColors(),
-                shape = RoundedCornerShape(18.dp),
-                elevation = CardStyles.elevatedCardElevation()
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(
+                    defaultElevation = 1.dp
+                ),
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                )
             ) {
                 Column(
                     modifier = Modifier.padding(20.dp),
@@ -1481,68 +1574,89 @@ private fun SalesReportContent(
                         }
                     }
 
-                    salesReport.topProducts.take(5).forEachIndexed { index, product ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                    if (salesReport.topProducts.isNotEmpty()) {
+                        salesReport.topProducts.take(5).forEachIndexed { index, product ->
                             Row(
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // Ranking badge
-                                Box(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            when (index) {
-                                                0 -> Color(0xFFFFD700) // Gold
-                                                1 -> Color(0xFFC0C0C0) // Silver
-                                                2 -> Color(0xFFCD7F32) // Bronze
-                                                else -> MaterialTheme.colorScheme.surfaceVariant
-                                            }
-                                        ),
-                                    contentAlignment = Alignment.Center
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = "${index + 1}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (index < 3) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    // Ranking badge
+                                    Box(
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                when (index) {
+                                                    0 -> Color(0xFFFFD700) // Gold
+                                                    1 -> Color(0xFFC0C0C0) // Silver
+                                                    2 -> Color(0xFFCD7F32) // Bronze
+                                                    else -> MaterialTheme.colorScheme.surfaceVariant
+                                                }
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "${index + 1}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (index < 3) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+
+                                    Column {
+                                        Text(
+                                            text = product.productName,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "${product.quantitySold} قطعة",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
 
-                                Column {
-                                    Text(
-                                        text = product.productName,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = "${product.quantitySold} قطعة",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                                Text(
+                                    text = currencyFormatter.format(product.revenue),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = AppTheme.colors.success
+                                )
                             }
 
-                            Text(
-                                text = currencyFormatter.format(product.revenue),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = AppTheme.colors.success
-                            )
+                            if (index < salesReport.topProducts.take(5).size - 1) {
+                                HorizontalDivider(
+                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                                    modifier = Modifier.padding(vertical = 8.dp)
+                                )
+                            }
                         }
-
-                        if (index < salesReport.topProducts.take(5).size - 1) {
-                            HorizontalDivider(
-                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                                modifier = Modifier.padding(vertical = 8.dp)
+                    } else {
+                        // Show empty state
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Inventory,
+                                contentDescription = null,
+                                modifier = Modifier.size(32.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "لا توجد منتجات",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -1599,9 +1713,18 @@ private fun CustomerSegmentationSection(
     currencyFormatter: NumberFormat
 ) {
     Card(
-        colors = CardStyles.defaultCardColors(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
         shape = RoundedCornerShape(16.dp),
-        elevation = CardStyles.defaultCardElevation()
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 1.dp
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+        ),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
@@ -1721,11 +1844,12 @@ private fun CustomerAcquisitionSection(
 ) {
     Card(
         colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardStyles.defaultCardElevation()
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardStyles.defaultCardElevation(),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
@@ -1846,11 +1970,12 @@ private fun CustomerLifetimeValueSection(
 ) {
     Card(
         colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardStyles.defaultCardElevation()
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardStyles.defaultCardElevation(),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
@@ -1906,7 +2031,7 @@ private fun CustomerLifetimeValueSection(
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                                 ),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(16.dp)
                             ) {
                                 Column(
                                     modifier = Modifier.padding(16.dp),
@@ -1977,11 +2102,12 @@ private fun CustomerChurnSection(
 ) {
     Card(
         colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardStyles.defaultCardElevation()
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardStyles.defaultCardElevation(),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
@@ -2062,11 +2188,12 @@ private fun CustomerBehaviorSection(
 ) {
     Card(
         colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardStyles.defaultCardElevation()
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardStyles.defaultCardElevation(),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
@@ -2265,11 +2392,12 @@ private fun ProductReportSummarySection(
 ) {
     Card(
         colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardStyles.defaultCardElevation()
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardStyles.defaultCardElevation(),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
@@ -2325,7 +2453,8 @@ private fun ProductReportSummarySection(
                         modifier = Modifier.weight(1f),
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                        )
+                        ),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
@@ -2367,7 +2496,8 @@ private fun ProductReportSummarySection(
                         modifier = Modifier.weight(1f),
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                        )
+                        ),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
@@ -2409,7 +2539,8 @@ private fun ProductReportSummarySection(
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
-                    )
+                    ),
+                    shape = RoundedCornerShape(16.dp)
                 ) {
                     Row(
                         modifier = Modifier
@@ -2444,11 +2575,12 @@ private fun ProductRankingsSection(
 ) {
     Card(
         colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardStyles.defaultCardElevation()
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardStyles.defaultCardElevation(),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
@@ -2595,7 +2727,7 @@ private fun ProductRankingCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(16.dp)
     ) {
         Row(
             modifier = Modifier
@@ -2704,9 +2836,10 @@ private fun ProfitabilityAnalysisSection(
     currencyFormatter: NumberFormat
 ) {
     Card(
-        colors = CardStyles.elevatedCardColors(),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardStyles.elevatedCardElevation()
+        colors = CardStyles.defaultCardColors(),
+        shape = RoundedCornerShape(24.dp),
+        elevation = CardStyles.defaultCardElevation(),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(24.dp),
@@ -2908,7 +3041,7 @@ private fun CategoryProfitabilityCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(16.dp)
     ) {
         Row(
             modifier = Modifier
@@ -2954,11 +3087,12 @@ private fun ProductTrendsSection(
 ) {
     Card(
         colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardStyles.defaultCardElevation()
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardStyles.defaultCardElevation(),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
@@ -3077,7 +3211,7 @@ private fun TrendingProductCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(16.dp)
     ) {
         Row(
             modifier = Modifier
@@ -3146,11 +3280,12 @@ private fun CategoryPerformanceSection(
 ) {
     Card(
         colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardStyles.defaultCardElevation()
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardStyles.defaultCardElevation(),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
@@ -3221,9 +3356,10 @@ private fun CrossSellAnalysisSection(
     currencyFormatter: NumberFormat
 ) {
     Card(
-        colors = CardStyles.elevatedCardColors(),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardStyles.elevatedCardElevation()
+        colors = CardStyles.defaultCardColors(),
+        shape = RoundedCornerShape(24.dp),
+        elevation = CardStyles.defaultCardElevation(),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(24.dp),
@@ -3283,7 +3419,7 @@ private fun CrossSellAnalysisSection(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                     ),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(20.dp)
                 ) {
                     Column(
                         modifier = Modifier.padding(20.dp),
@@ -3339,7 +3475,7 @@ private fun CrossSellAnalysisSection(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
                         ),
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(20.dp)
                     ) {
                         Column(
                             modifier = Modifier.padding(20.dp),
@@ -3377,8 +3513,8 @@ private fun CrossSellAnalysisSection(
 
                             pairs.take(5).forEachIndexed { index, pair ->
                                 Card(
-                                    colors = CardStyles.elevatedCardColors(),
-                                    shape = RoundedCornerShape(14.dp),
+                                    colors = CardStyles.defaultCardColors(),
+                                    shape = RoundedCornerShape(16.dp),
                                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                                 ) {
                                     Column(
@@ -3515,7 +3651,7 @@ private fun CategoryComparisonCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(16.dp)
     ) {
         Row(
             modifier = Modifier
@@ -3563,7 +3699,7 @@ private fun CrossSellOpportunityCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(16.dp)
     ) {
         Column(
             modifier = Modifier
@@ -3765,7 +3901,8 @@ private fun ExportReportDialog(
                             .clickable { onExport(format) },
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        )
+                        ),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
                         Row(
                             modifier = Modifier
@@ -3891,7 +4028,7 @@ private fun MetricCard(
         modifier = modifier
             .height(100.dp),
         colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
         elevation = CardStyles.defaultCardElevation()
     ) {
         Column(
@@ -3971,11 +4108,12 @@ private fun ProductDataValidationSection(
 ) {
     Card(
         colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardStyles.defaultCardElevation()
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardStyles.defaultCardElevation(),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
@@ -4118,11 +4256,12 @@ private fun ProductReportMetadataSection(
 ) {
     Card(
         colors = CardStyles.defaultCardColors(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardStyles.defaultCardElevation()
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardStyles.defaultCardElevation(),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
@@ -4185,4 +4324,23 @@ private fun MetadataRow(
             color = MaterialTheme.colorScheme.onSurface
         )
     }
+}
+
+// Shimmer effect for loading states
+@Composable
+fun Modifier.shimmerEffect(): Modifier = composed {
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val alpha by transition.animateFloat(
+        initialValue = 0.2f,
+        targetValue = 0.9f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1000),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "alpha"
+    )
+    background(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = alpha),
+        shape = RoundedCornerShape(4.dp)
+    )
 }

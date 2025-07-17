@@ -39,6 +39,7 @@ import kotlinx.coroutines.launch
 import ui.components.RTLProvider
 import ui.theme.AppTheme
 import ui.theme.CardStyles
+import utils.I18nManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,11 +56,74 @@ fun LoginScreen(
         var password by remember { mutableStateOf("") }
         var passwordVisible by remember { mutableStateOf(false) }
         var showSignup by remember { mutableStateOf(false) }
-        
+
         // Additional fields for signup
         var email by remember { mutableStateOf("") }
         var firstName by remember { mutableStateOf("") }
         var lastName by remember { mutableStateOf("") }
+
+        // Validation states
+        var usernameError by remember { mutableStateOf<String?>(null) }
+        var passwordError by remember { mutableStateOf<String?>(null) }
+        var emailError by remember { mutableStateOf<String?>(null) }
+        var firstNameError by remember { mutableStateOf<String?>(null) }
+        var lastNameError by remember { mutableStateOf<String?>(null) }
+
+        // Validation functions
+        fun validateUsername(): Boolean {
+            usernameError = when {
+                username.isBlank() -> I18nManager.getString("auth.error.username_required")
+                else -> null
+            }
+            return usernameError == null
+        }
+
+        fun validatePassword(): Boolean {
+            passwordError = when {
+                password.isBlank() -> I18nManager.getString("auth.error.password_required")
+                else -> null
+            }
+            return passwordError == null
+        }
+
+        fun validateEmail(): Boolean {
+            emailError = when {
+                email.isBlank() -> I18nManager.getString("auth.error.email_required")
+                !email.contains("@") -> I18nManager.getString("auth.error.email_invalid")
+                else -> null
+            }
+            return emailError == null
+        }
+
+        fun validateFirstName(): Boolean {
+            firstNameError = when {
+                firstName.isBlank() -> I18nManager.getString("auth.error.firstName_required")
+                else -> null
+            }
+            return firstNameError == null
+        }
+
+        fun validateLastName(): Boolean {
+            lastNameError = when {
+                lastName.isBlank() -> I18nManager.getString("auth.error.lastName_required")
+                else -> null
+            }
+            return lastNameError == null
+        }
+
+        fun validateForm(): Boolean {
+            val isUsernameValid = validateUsername()
+            val isPasswordValid = validatePassword()
+
+            if (showSignup) {
+                val isEmailValid = validateEmail()
+                val isFirstNameValid = validateFirstName()
+                val isLastNameValid = validateLastName()
+                return isUsernameValid && isPasswordValid && isEmailValid && isFirstNameValid && isLastNameValid
+            }
+
+            return isUsernameValid && isPasswordValid
+        }
         
         // Handle successful authentication
         LaunchedEffect(authState.isAuthenticated) {
@@ -140,14 +204,14 @@ fun LoginScreen(
                             }
 
                             Text(
-                                text = if (showSignup) "إنشاء حساب جديد" else "تسجيل الدخول",
+                                text = if (showSignup) I18nManager.getString("auth.signup.title") else I18nManager.getString("auth.login.title"),
                                 style = MaterialTheme.typography.headlineLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
 
                             Text(
-                                text = if (showSignup) "أنشئ حسابك للبدء في استخدام النظام" else "نظام إدارة المبيعات المتطور",
+                                text = if (showSignup) I18nManager.getString("auth.signup.subtitle") else I18nManager.getString("auth.login.subtitle"),
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center,
@@ -164,10 +228,13 @@ fun LoginScreen(
                             ) {
                                 OutlinedTextField(
                                     value = firstName,
-                                    onValueChange = { firstName = it },
+                                    onValueChange = {
+                                        firstName = it
+                                        if (firstNameError != null) validateFirstName()
+                                    },
                                     label = {
                                         Text(
-                                            "الاسم الأول",
+                                            I18nManager.getString("auth.firstName"),
                                             style = MaterialTheme.typography.bodyMedium
                                         )
                                     },
@@ -180,6 +247,7 @@ fun LoginScreen(
                                     },
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
+                                    isError = firstNameError != null,
                                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                                     keyboardActions = KeyboardActions(
                                         onNext = { focusManager.moveFocus(FocusDirection.Down) }
@@ -188,15 +256,21 @@ fun LoginScreen(
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = MaterialTheme.colorScheme.primary,
                                         unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                                    )
+                                    ),
+                                    supportingText = firstNameError?.let { error ->
+                                        { Text(error, color = MaterialTheme.colorScheme.error) }
+                                    }
                                 )
 
                                 OutlinedTextField(
                                     value = lastName,
-                                    onValueChange = { lastName = it },
+                                    onValueChange = {
+                                        lastName = it
+                                        if (lastNameError != null) validateLastName()
+                                    },
                                     label = {
                                         Text(
-                                            "اسم العائلة",
+                                            I18nManager.getString("auth.lastName"),
                                             style = MaterialTheme.typography.bodyMedium
                                         )
                                     },
@@ -209,6 +283,7 @@ fun LoginScreen(
                                     },
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
+                                    isError = lastNameError != null,
                                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                                     keyboardActions = KeyboardActions(
                                         onNext = { focusManager.moveFocus(FocusDirection.Down) }
@@ -217,15 +292,21 @@ fun LoginScreen(
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = MaterialTheme.colorScheme.primary,
                                         unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                                    )
+                                    ),
+                                    supportingText = lastNameError?.let { error ->
+                                        { Text(error, color = MaterialTheme.colorScheme.error) }
+                                    }
                                 )
 
                                 OutlinedTextField(
                                     value = email,
-                                    onValueChange = { email = it },
+                                    onValueChange = {
+                                        email = it
+                                        if (emailError != null) validateEmail()
+                                    },
                                     label = {
                                         Text(
-                                            "البريد الإلكتروني",
+                                            I18nManager.getString("auth.email"),
                                             style = MaterialTheme.typography.bodyMedium
                                         )
                                     },
@@ -238,6 +319,7 @@ fun LoginScreen(
                                     },
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
+                                    isError = emailError != null,
                                     keyboardOptions = KeyboardOptions(
                                         keyboardType = KeyboardType.Email,
                                         imeAction = ImeAction.Next
@@ -249,7 +331,10 @@ fun LoginScreen(
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = MaterialTheme.colorScheme.primary,
                                         unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                                    )
+                                    ),
+                                    supportingText = emailError?.let { error ->
+                                        { Text(error, color = MaterialTheme.colorScheme.error) }
+                                    }
                                 )
                             }
                         }
@@ -257,10 +342,13 @@ fun LoginScreen(
                         // Enhanced Username field
                         OutlinedTextField(
                             value = username,
-                            onValueChange = { username = it },
+                            onValueChange = {
+                                username = it
+                                if (usernameError != null) validateUsername()
+                            },
                             label = {
                                 Text(
-                                    "اسم المستخدم",
+                                    I18nManager.getString("auth.username"),
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                             },
@@ -273,6 +361,7 @@ fun LoginScreen(
                             },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
+                            isError = usernameError != null,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                             keyboardActions = KeyboardActions(
                                 onNext = { focusManager.moveFocus(FocusDirection.Down) }
@@ -281,16 +370,22 @@ fun LoginScreen(
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = MaterialTheme.colorScheme.primary,
                                 unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                            )
+                            ),
+                            supportingText = usernameError?.let { error ->
+                                { Text(error, color = MaterialTheme.colorScheme.error) }
+                            }
                         )
 
                         // Enhanced Password field
                         OutlinedTextField(
                             value = password,
-                            onValueChange = { password = it },
+                            onValueChange = {
+                                password = it
+                                if (passwordError != null) validatePassword()
+                            },
                             label = {
                                 Text(
-                                    "كلمة المرور",
+                                    I18nManager.getString("auth.password"),
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                             },
@@ -305,7 +400,7 @@ fun LoginScreen(
                                 IconButton(onClick = { passwordVisible = !passwordVisible }) {
                                     Icon(
                                         imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                        contentDescription = if (passwordVisible) "إخفاء كلمة المرور" else "إظهار كلمة المرور",
+                                        contentDescription = if (passwordVisible) I18nManager.getString("auth.password.hide") else I18nManager.getString("auth.password.show"),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
@@ -313,6 +408,7 @@ fun LoginScreen(
                             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
+                            isError = passwordError != null,
                             keyboardOptions = KeyboardOptions(
                                 keyboardType = KeyboardType.Password,
                                 imeAction = ImeAction.Done
@@ -320,11 +416,13 @@ fun LoginScreen(
                             keyboardActions = KeyboardActions(
                                 onDone = {
                                     focusManager.clearFocus()
-                                    coroutineScope.launch {
-                                        if (showSignup) {
-                                            authService.signup(username, email, password, firstName, lastName)
-                                        } else {
-                                            authService.login(username, password)
+                                    if (validateForm()) {
+                                        coroutineScope.launch {
+                                            if (showSignup) {
+                                                authService.signup(username, email, password, firstName, lastName)
+                                            } else {
+                                                authService.login(username, password)
+                                            }
                                         }
                                     }
                                 }
@@ -333,7 +431,10 @@ fun LoginScreen(
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = MaterialTheme.colorScheme.primary,
                                 unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                            )
+                            ),
+                            supportingText = passwordError?.let { error ->
+                                { Text(error, color = MaterialTheme.colorScheme.error) }
+                            }
                         )
                     
                         // Enhanced Error message
@@ -374,16 +475,17 @@ fun LoginScreen(
                     
                         // Enhanced Login/Signup button with hover effects
                         EnhancedAuthButton(
-                            text = if (showSignup) "إنشاء حساب" else "تسجيل الدخول",
+                            text = if (showSignup) I18nManager.getString("auth.signup.button") else I18nManager.getString("auth.login.button"),
                             isLoading = authState.isLoading,
-                            enabled = !authState.isLoading && username.isNotBlank() && password.isNotBlank() &&
-                                    (!showSignup || (email.isNotBlank() && firstName.isNotBlank() && lastName.isNotBlank())),
+                            enabled = !authState.isLoading,
                             onClick = {
-                                coroutineScope.launch {
-                                    if (showSignup) {
-                                        authService.signup(username, email, password, firstName, lastName)
-                                    } else {
-                                        authService.login(username, password)
+                                if (validateForm()) {
+                                    coroutineScope.launch {
+                                        if (showSignup) {
+                                            authService.signup(username, email, password, firstName, lastName)
+                                        } else {
+                                            authService.login(username, password)
+                                        }
                                     }
                                 }
                             }
@@ -391,7 +493,7 @@ fun LoginScreen(
                     
                         // Enhanced Toggle between login and signup with hover effects
                         EnhancedToggleButton(
-                            text = if (showSignup) "لديك حساب بالفعل؟ تسجيل الدخول" else "ليس لديك حساب؟ إنشاء حساب جديد",
+                            text = if (showSignup) I18nManager.getString("auth.toggle.login") else I18nManager.getString("auth.toggle.signup"),
                             onClick = {
                                 showSignup = !showSignup
                                 // Clear form when switching
@@ -400,6 +502,12 @@ fun LoginScreen(
                                 email = ""
                                 firstName = ""
                                 lastName = ""
+                                // Clear validation errors
+                                usernameError = null
+                                passwordError = null
+                                emailError = null
+                                firstNameError = null
+                                lastNameError = null
                             }
                         )
 

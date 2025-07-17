@@ -7,11 +7,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.items as lazyColumnItems
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
-import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
-import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,6 +34,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -201,15 +199,12 @@ fun SalesScreen(
                 )
             }
             
-            // Loading indicator with progress details
+            // Professional shimmer loading state
             if (isLoading) {
-                EnhancedLoadingIndicator(
-                    message = when (currentTab) {
-                        SalesTab.NEW_SALE -> "جاري تحميل البيانات..."
-                        SalesTab.SALES_HISTORY -> "جاري تحميل المبيعات..."
-                    }
+                SalesScreenShimmerLayout(
+                    currentTab = currentTab.name
                 )
-            }
+            } else {
             
             // Content based on selected tab
             when (currentTab) {
@@ -347,6 +342,7 @@ fun SalesScreen(
                     )
                 }
             }
+            } // Close the else block for loading state
         }
         
         // Enhanced Dialogs with better UX
@@ -964,12 +960,13 @@ private fun EnhancedNewSaleContent(
                 productCount = availableProducts.size
             )
 
-            // Shopping cart
+            // Shopping cart - expanded to fill remaining space
             ShoppingCartSection(
                 selectedProducts = selectedProducts,
                 currencyFormatter = currencyFormatter,
                 onQuantityChange = onQuantityChange,
-                onRemoveFromCart = onRemoveFromCart
+                onRemoveFromCart = onRemoveFromCart,
+                modifier = Modifier.weight(1f) // Fill remaining vertical space
             )
         }
 
@@ -1080,10 +1077,11 @@ private fun ShoppingCartSection(
     selectedProducts: List<SaleItemDTO>,
     currencyFormatter: NumberFormat,
     onQuantityChange: (Long, Int) -> Unit,
-    onRemoveFromCart: (Long) -> Unit
+    onRemoveFromCart: (Long) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
@@ -1091,7 +1089,9 @@ private fun ShoppingCartSection(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Row(
@@ -1119,13 +1119,22 @@ private fun ShoppingCartSection(
             }
 
             if (selectedProducts.isEmpty()) {
-                EmptyCartMessage()
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    EmptyCartMessage()
+                }
             } else {
                 LazyColumn(
-                    modifier = Modifier.heightIn(max = 400.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(selectedProducts) { item ->
+                    lazyColumnItems(selectedProducts) { item ->
                         CartItemCard(
                             item = item,
                             currencyFormatter = currencyFormatter,
@@ -1146,9 +1155,6 @@ private fun ShoppingCartSection(
 @Composable
 private fun EmptyCartMessage() {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -1501,7 +1507,7 @@ private fun PaymentMethodSection(
                 state = lazyRowState,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(paymentMethods) { method ->
+                lazyColumnItems(paymentMethods) { method ->
                     PaymentMethodCard(
                         method = method,
                         isSelected = selectedPaymentMethod == method,
@@ -1979,7 +1985,7 @@ private fun EnhancedSalesHistoryContent(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(4.dp)
         ) {
-            items(sales) { sale ->
+            lazyColumnItems(sales) { sale ->
                 SaleHistoryCard(
                     sale = sale,
                     currencyFormatter = currencyFormatter,
@@ -2241,14 +2247,48 @@ private fun EnhancedProductSelectionDialog(
 
     AlertDialog(
         onDismissRequest = {}, // Disabled click-outside-to-dismiss
-        modifier = Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.8f),
+        modifier = Modifier
+            .fillMaxWidth(0.9f)
+            .fillMaxHeight(0.8f)
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.key == androidx.compose.ui.input.key.Key.Escape &&
+                    keyEvent.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
+                    onDismiss()
+                    true
+                } else {
+                    false
+                }
+            },
         title = {
             Column {
-                Text(
-                    text = "اختيار المنتجات",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
+                // Title row with X close button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // X close button positioned on the left for RTL
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "إغلاق",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    Text(
+                        text = "اختيار المنتجات",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Search field
@@ -2299,7 +2339,7 @@ private fun EnhancedProductSelectionDialog(
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(filteredProducts) { product ->
+                    lazyColumnItems(filteredProducts) { product ->
                         ProductSelectionItem(
                             product = product,
                             taxSettings = taxSettings,
@@ -2311,14 +2351,7 @@ private fun EnhancedProductSelectionDialog(
                 }
             }
         },
-        confirmButton = {
-            TextButton(
-                onClick = onDismiss,
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("إلغاء", fontWeight = FontWeight.Medium)
-            }
-        },
+        confirmButton = {},
         shape = RoundedCornerShape(24.dp)
     )
 }
@@ -2573,7 +2606,7 @@ private fun EnhancedCustomerSelectionDialog(
                             }
                         }
                     } else {
-                        items(filteredCustomers) { customer ->
+                        lazyColumnItems(filteredCustomers) { customer ->
                             CustomerListItem(
                                 customer = customer,
                                 onClick = { onCustomerSelected(customer) }
@@ -3343,7 +3376,7 @@ private fun EnhancedSaleDetailsDialog(
                     )
                 }
 
-                items(sale.items) { item ->
+                lazyColumnItems(sale.items) { item ->
                     Card(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surface

@@ -66,6 +66,7 @@ import ui.utils.ColorUtils
 import java.text.NumberFormat
 import java.util.*
 import utils.CurrencyUtils
+import utils.I18nManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.collectAsState
@@ -119,7 +120,7 @@ fun ProductsScreen(productViewModel: ui.viewmodels.ProductViewModel) {
         LaunchedEffect(uiState.deletionSuccess) {
             if (uiState.deletionSuccess) {
                 snackbarHostState.showSnackbar(
-                    message = "تم حذف المنتج بنجاح",
+                    message = I18nManager.getString("success.product.deleted"),
                     duration = SnackbarDuration.Short
                 )
                 // Clear the deletion success state after showing the message
@@ -307,7 +308,7 @@ fun ProductsScreen(productViewModel: ui.viewmodels.ProductViewModel) {
                                         )
                                     } else {
                                         Icon(
-                                            Icons.Default.FileDownload,
+                                            Icons.Default.FileUpload,
                                             contentDescription = null,
                                             modifier = Modifier.size(18.dp),
                                             tint = if (isExportHovered)
@@ -372,7 +373,7 @@ fun ProductsScreen(productViewModel: ui.viewmodels.ProductViewModel) {
                                         )
                                     } else {
                                         Icon(
-                                            Icons.Default.FileUpload,
+                                            Icons.Default.FileDownload,
                                             contentDescription = null,
                                             modifier = Modifier.size(18.dp),
                                             tint = if (isImportHovered)
@@ -435,25 +436,18 @@ fun ProductsScreen(productViewModel: ui.viewmodels.ProductViewModel) {
                         // Products Content with State Management
                         when {
                             uiState.isLoading -> {
-                                // Enhanced Loading state
-                                Box(
+                                // Professional shimmer loading state
+                                Column(
                                     modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
+                                    verticalArrangement = Arrangement.spacedBy(20.dp)
                                 ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                                    ) {
-                                        CircularProgressIndicator(
-                                            color = MaterialTheme.colorScheme.primary,
-                                            strokeWidth = 3.dp
-                                        )
-                                        Text(
-                                            text = "جاري تحميل المنتجات...",
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
+                                    // Header shimmer
+                                    ProductsHeaderShimmer()
+
+                                    // Products list shimmer
+                                    ProductsListShimmer(
+                                        modifier = Modifier.weight(1f)
+                                    )
                                 }
                             }
                             uiState.error != null -> {
@@ -473,13 +467,13 @@ fun ProductsScreen(productViewModel: ui.viewmodels.ProductViewModel) {
                                             modifier = Modifier.size(48.dp)
                                         )
                                         Text(
-                                            text = "حدث خطأ في تحميل المنتجات",
+                                            text = I18nManager.getString("error.load_products"),
                                             style = MaterialTheme.typography.titleMedium,
                                             color = MaterialTheme.colorScheme.error,
                                             textAlign = TextAlign.Center
                                         )
                                         Text(
-                                            text = uiState.error ?: "حدث خطأ غير متوقع",
+                                            text = uiState.error ?: I18nManager.getString("error.unknown"),
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             textAlign = TextAlign.Center
@@ -1354,7 +1348,7 @@ private fun ComprehensiveProductDialog(
                                     unfocusedBorderColor = MaterialTheme.colorScheme.outline
                                 ),
                                 supportingText = if (name.isBlank()) {
-                                    { Text("اسم المنتج مطلوب", color = MaterialTheme.colorScheme.error) }
+                                    { Text(I18nManager.getString("validation.name_required"), color = MaterialTheme.colorScheme.error) }
                                 } else null
                             )
 
@@ -1392,7 +1386,7 @@ private fun ComprehensiveProductDialog(
                                         unfocusedBorderColor = MaterialTheme.colorScheme.outline
                                     ),
                                     supportingText = if (price.toDoubleOrNull() == null) {
-                                        { Text("سعر صحيح مطلوب", color = MaterialTheme.colorScheme.error) }
+                                        { Text(I18nManager.getString("validation.price_required"), color = MaterialTheme.colorScheme.error) }
                                     } else null
                                 )
 
@@ -1466,7 +1460,7 @@ private fun ComprehensiveProductDialog(
                                     ),
                                     isError = stockQuantity.toIntOrNull() == null,
                                     supportingText = if (stockQuantity.toIntOrNull() == null) {
-                                        { Text("كمية صحيحة مطلوبة", color = MaterialTheme.colorScheme.error) }
+                                        { Text(I18nManager.getString("validation.quantity_required"), color = MaterialTheme.colorScheme.error) }
                                     } else null
                                 )
                             }

@@ -1,109 +1,110 @@
 package data.api
 
+import utils.Constants
+
 /**
  * API Configuration constants and settings
  */
 object ApiConfig {
-    // Base URL for the backend API
-    const val BASE_URL = "http://localhost:8081"
+    // Base URL for the backend API - using centralized configuration
+    const val BASE_URL = Constants.BASE_URL
     
     // API Endpoints
     object Endpoints {
         // Authentication
-        const val AUTH_LOGIN = "/api/auth/login"
-        const val AUTH_SIGNUP = "/api/auth/signup"
-        const val AUTH_REFRESH = "/api/auth/refresh"
-        
+        const val AUTH_LOGIN = "/api/v1/auth/login"
+        const val AUTH_SIGNUP = "/api/v1/auth/signup"
+        const val AUTH_REFRESH = "/api/v1/auth/refresh"
+
         // Customers
-        const val CUSTOMERS = "/api/customers"
-        const val CUSTOMERS_SEARCH = "/api/customers/search"
-        fun customerById(id: Long) = "/api/customers/$id"
+        const val CUSTOMERS = "/api/v1/customers"
+        const val CUSTOMERS_SEARCH = "/api/v1/customers/search"
+        fun customerById(id: Long) = "/api/v1/customers/$id"
 
         // Categories
-        const val CATEGORIES = "/api/categories"
-        const val CATEGORIES_ACTIVE = "/api/categories/active"
-        const val CATEGORIES_SEARCH = "/api/categories/search"
-        const val CATEGORIES_EMPTY = "/api/categories/empty"
-        fun categoryById(id: Long) = "/api/categories/$id"
-        fun categoryByName(name: String) = "/api/categories/name/$name"
-        fun categoryByStatus(status: String) = "/api/categories/status/$status"
-        fun categoryStatus(id: Long) = "/api/categories/$id/status"
+        const val CATEGORIES = "/api/v1/categories"
+        const val CATEGORIES_ACTIVE = "/api/v1/categories/active"
+        const val CATEGORIES_SEARCH = "/api/v1/categories/search"
+        const val CATEGORIES_EMPTY = "/api/v1/categories/empty"
+        fun categoryById(id: Long) = "/api/v1/categories/$id"
+        fun categoryByName(name: String) = "/api/v1/categories/name/$name"
+        fun categoryByStatus(status: String) = "/api/v1/categories/status/$status"
+        fun categoryStatus(id: Long) = "/api/v1/categories/$id/status"
 
         // Products
-        const val PRODUCTS = "/api/products"
-        const val PRODUCTS_SEARCH = "/api/products/search"
-        fun productById(id: Long) = "/api/products/$id"
-        fun productStock(id: Long) = "/api/products/$id/stock"
-        fun productStockIncrease(id: Long) = "/api/products/$id/stock/increase"
-        fun productStockDecrease(id: Long) = "/api/products/$id/stock/decrease"
+        const val PRODUCTS = "/api/v1/products"
+        const val PRODUCTS_SEARCH = "/api/v1/products/search"
+        const val PRODUCTS_RECENT = "/api/v1/products/recent"
+        fun productById(id: Long) = "/api/v1/products/$id"
+        fun productStock(id: Long) = "/api/v1/products/$id/stock"
+        fun productStockIncrease(id: Long) = "/api/v1/products/$id/stock/increase"
+        fun productStockDecrease(id: Long) = "/api/v1/products/$id/stock/decrease"
 
         // Sales
-        const val SALES = "/api/sales"
-        fun saleById(id: Long) = "/api/sales/$id"
-        fun salesByCustomer(customerId: Long) = "/api/sales/customer/$customerId"
-        fun completeSale(id: Long) = "/api/sales/$id/complete"
-        fun cancelSale(id: Long) = "/api/sales/$id/cancel"
+        const val SALES = "/api/v1/sales"
+        fun saleById(id: Long) = "/api/v1/sales/$id"
+        fun salesByCustomer(customerId: Long) = "/api/v1/sales/customer/$customerId"
+        fun completeSale(id: Long) = "/api/v1/sales/$id/complete"
+        fun cancelSale(id: Long) = "/api/v1/sales/$id/cancel"
 
         // Suppliers
-        const val SUPPLIERS = "/api/suppliers"
-        const val SUPPLIERS_SEARCH = "/api/suppliers/search"
-        const val SUPPLIERS_TOP_RATED = "/api/suppliers/top-rated"
-        const val SUPPLIERS_HIGH_VALUE = "/api/suppliers/high-value"
-        const val SUPPLIERS_ANALYTICS = "/api/suppliers/analytics"
-        fun supplierById(id: Long) = "/api/suppliers/$id"
-        fun supplierWithOrders(id: Long) = "/api/suppliers/$id/orders"
-        fun supplierRating(id: Long) = "/api/suppliers/$id/rating"
-        fun supplierAnalytics(id: Long) = "/api/suppliers/$id/analytics"
+        const val SUPPLIERS = "/api/v1/suppliers"
+        const val SUPPLIERS_SEARCH = "/api/v1/suppliers/search"
+        const val SUPPLIERS_TOP_RATED = "/api/v1/suppliers/top-rated"
+        const val SUPPLIERS_HIGH_VALUE = "/api/v1/suppliers/high-value"
+        const val SUPPLIERS_ANALYTICS = "/api/v1/suppliers/analytics"
+        fun supplierById(id: Long) = "/api/v1/suppliers/$id"
+        fun supplierWithOrders(id: Long) = "/api/v1/suppliers/$id/orders"
+        fun supplierRating(id: Long) = "/api/v1/suppliers/$id/rating"
+        fun supplierAnalytics(id: Long) = "/api/v1/suppliers/$id/analytics"
 
         // Purchase Orders
-        const val PURCHASE_ORDERS = "/api/purchase-orders"
-        const val PURCHASE_ORDERS_SEARCH = "/api/purchase-orders/search"
-        const val PURCHASE_ORDERS_ANALYTICS = "/api/purchase-orders/analytics"
-        fun purchaseOrderById(id: Long) = "/api/purchase-orders/$id"
-        fun purchaseOrderStatus(id: Long) = "/api/purchase-orders/$id/status"
-        fun purchaseOrderApprove(id: Long) = "/api/purchase-orders/$id/approve"
-        fun purchaseOrderReceive(id: Long) = "/api/purchase-orders/$id/receive"
-        fun purchaseOrdersBySupplier(supplierId: Long) = "/api/purchase-orders/supplier/$supplierId"
-        fun purchaseOrderPdf(id: Long) = "/api/purchase-orders/$id/pdf"
-        fun purchaseOrderSend(id: Long) = "/api/purchase-orders/$id/send"
+        const val PURCHASE_ORDERS = "/api/v1/purchase-orders"
+        const val PURCHASE_ORDERS_SEARCH = "/api/v1/purchase-orders/search"
+        const val PURCHASE_ORDERS_ANALYTICS = "/api/v1/purchase-orders/analytics"
+        fun purchaseOrderById(id: Long) = "/api/v1/purchase-orders/$id"
+        fun purchaseOrderStatus(id: Long) = "/api/v1/purchase-orders/$id/status"
+        fun purchaseOrderApprove(id: Long) = "/api/v1/purchase-orders/$id/approve"
+        fun purchaseOrderReceive(id: Long) = "/api/v1/purchase-orders/$id/receive"
+        fun purchaseOrdersBySupplier(supplierId: Long) = "/api/v1/purchase-orders/supplier/$supplierId"
+        fun purchaseOrderPdf(id: Long) = "/api/v1/purchase-orders/$id/pdf"
+        fun purchaseOrderSend(id: Long) = "/api/v1/purchase-orders/$id/send"
 
         // Returns
-        const val RETURNS = "/api/returns"
-        fun returnById(id: Long) = "/api/returns/$id"
-        fun approveReturn(id: Long) = "/api/returns/$id/approve"
-        fun rejectReturn(id: Long) = "/api/returns/$id/reject"
-        fun processRefund(id: Long) = "/api/returns/$id/refund"
+        const val RETURNS = "/api/v1/returns"
+        fun returnById(id: Long) = "/api/v1/returns/$id"
+        fun approveReturn(id: Long) = "/api/v1/returns/$id/approve"
+        fun rejectReturn(id: Long) = "/api/v1/returns/$id/reject"
+        fun processRefund(id: Long) = "/api/v1/returns/$id/refund"
 
         // Promotions
-        const val PROMOTIONS = "/api/promotions"
-        const val PROMOTIONS_ACTIVE = "/api/promotions/active"
-        const val PROMOTIONS_AVAILABLE = "/api/promotions/available"
-        const val PROMOTIONS_EXPIRED = "/api/promotions/expired"
-        const val PROMOTIONS_SCHEDULED = "/api/promotions/scheduled"
-        const val PROMOTIONS_SEARCH = "/api/promotions/search"
-        fun promotionById(id: Long) = "/api/promotions/$id"
-        fun activatePromotion(id: Long) = "/api/promotions/$id/activate"
-        fun deactivatePromotion(id: Long) = "/api/promotions/$id/deactivate"
-        fun promotionAnalytics(id: Long) = "/api/promotions/$id/analytics"
-        fun promotionsByType(type: String) = "/api/promotions/type/$type"
-        fun promotionsByEligibility(eligibility: String) = "/api/promotions/eligibility/$eligibility"
-        fun promotionsForProduct(productId: Long) = "/api/promotions/product/$productId"
-        fun promotionsForCategory(category: String) = "/api/promotions/category/$category"
-        fun validateCoupon(couponCode: String) = "/api/promotions/coupon/$couponCode"
-        fun applyPromotion(id: Long) = "/api/promotions/$id/apply"
+        const val PROMOTIONS = "/api/v1/promotions"
+        const val PROMOTIONS_ACTIVE = "/api/v1/promotions/active"
+        const val PROMOTIONS_AVAILABLE = "/api/v1/promotions/available"
+        const val PROMOTIONS_SEARCH = "/api/v1/promotions/search"
+        fun promotionById(id: Long) = "/api/v1/promotions/$id"
+        fun activatePromotion(id: Long) = "/api/v1/promotions/$id/activate"
+        fun deactivatePromotion(id: Long) = "/api/v1/promotions/$id/deactivate"
+        fun promotionAnalytics(id: Long) = "/api/v1/promotions/$id/analytics"
+        fun promotionsByType(type: String) = "/api/v1/promotions/type/$type"
+        fun promotionsByEligibility(eligibility: String) = "/api/v1/promotions/eligibility/$eligibility"
+        fun promotionsForProduct(productId: Long) = "/api/v1/promotions/product/$productId"
+        fun promotionsForCategory(category: String) = "/api/v1/promotions/category/$category"
+        fun validateCoupon(couponCode: String) = "/api/v1/promotions/coupon/$couponCode"
+        fun applyPromotion(id: Long) = "/api/v1/promotions/$id/apply"
 
         // Inventories
-        const val INVENTORIES = "/api/inventories"
-        const val INVENTORIES_SEARCH = "/api/inventories/search"
-        const val INVENTORIES_ACTIVE = "/api/inventories/active"
-        const val INVENTORIES_MAIN_WAREHOUSES = "/api/inventories/main-warehouses"
-        const val INVENTORIES_EMPTY = "/api/inventories/empty"
-        const val INVENTORIES_NEAR_CAPACITY = "/api/inventories/near-capacity"
-        fun inventoryById(id: Long) = "/api/inventories/$id"
-        fun inventoryByName(name: String) = "/api/inventories/name/$name"
-        fun inventoryByWarehouseCode(code: String) = "/api/inventories/warehouse-code/$code"
-        fun inventoryByStatus(status: String) = "/api/inventories/status/$status"
-        fun inventoryStatus(id: Long) = "/api/inventories/$id/status"
+        const val INVENTORIES = "/api/v1/inventories"
+        const val INVENTORIES_SEARCH = "/api/v1/inventories/search"
+        const val INVENTORIES_ACTIVE = "/api/v1/inventories/active"
+        const val INVENTORIES_MAIN_WAREHOUSES = "/api/v1/inventories/main-warehouses"
+        const val INVENTORIES_EMPTY = "/api/v1/inventories/empty"
+        const val INVENTORIES_NEAR_CAPACITY = "/api/v1/inventories/near-capacity"
+        fun inventoryById(id: Long) = "/api/v1/inventories/$id"
+        fun inventoryByName(name: String) = "/api/v1/inventories/name/$name"
+        fun inventoryByWarehouseCode(code: String) = "/api/v1/inventories/warehouse-code/$code"
+        fun inventoryByStatus(status: String) = "/api/v1/inventories/status/$status"
+        fun inventoryStatus(id: Long) = "/api/v1/inventories/$id/status"
 
         // Reports - Enterprise Reporting API v1
         const val REPORTS_BASE = "/api/v1/reports"
@@ -144,19 +145,31 @@ object ApiConfig {
         const val REPORTS_EXPORT_ASYNC = "$REPORTS_BASE/export/async"
 
         // Legacy Reports (for backward compatibility)
-        const val REPORTS_SALES = "/api/reports/sales"
-        const val REPORTS_REVENUE = "/api/reports/revenue"
-        const val REPORTS_TOP_PRODUCTS = "/api/reports/top-products"
-        const val REPORTS_CUSTOMER_ANALYTICS = "/api/reports/customer-analytics"
-        const val REPORTS_INVENTORY = "/api/reports/inventory"
-        const val REPORTS_DASHBOARD = "/api/reports/dashboard"
+        const val REPORTS_SALES = "/api/v1/reports/sales"
+        const val REPORTS_REVENUE = "/api/v1/reports/revenue"
+        const val REPORTS_TOP_PRODUCTS = "/api/v1/reports/top-products"
+        const val REPORTS_CUSTOMER_ANALYTICS = "/api/v1/reports/customer-analytics"
+        const val REPORTS_INVENTORY = "/api/v1/reports/inventory"
+        const val REPORTS_DASHBOARD = "/api/v1/reports/dashboard"
 
         // Tax Configuration (for future backend integration)
-        const val TAX_SETTINGS = "/api/settings/tax"
-        const val TAX_RATES = "/api/settings/tax/rates"
-        const val TAX_REGIONS = "/api/settings/tax/regions"
-        fun taxRateByRegion(region: String) = "/api/settings/tax/rates/$region"
-        fun taxSettingsValidate() = "/api/settings/tax/validate"
+        const val TAX_SETTINGS = "/api/v1/settings/tax"
+        const val TAX_RATES = "/api/v1/settings/tax/rates"
+        const val TAX_REGIONS = "/api/v1/settings/tax/regions"
+        fun taxRateByRegion(region: String) = "/api/v1/settings/tax/rates/$region"
+        fun taxSettingsValidate() = "/api/v1/settings/tax/validate"
+
+        // Update System Endpoints
+        const val UPDATES_BASE = "/api/v1/updates"
+        const val UPDATES_CHECK = "$UPDATES_BASE/check"
+        const val UPDATES_LATEST = "$UPDATES_BASE/latest"
+        const val UPDATES_COMPATIBILITY = "$UPDATES_BASE/compatibility"
+        const val UPDATES_DELTA = "$UPDATES_BASE/delta"
+        fun updateDownload(version: String) = "$UPDATES_BASE/download/$version"
+        fun updateVersion(version: String) = "$UPDATES_BASE/version/$version"
+        fun updateCompatibility(version: String) = "$UPDATES_BASE/compatibility/$version"
+        fun updateDelta(fromVersion: String, toVersion: String) = "$UPDATES_BASE/delta/$fromVersion/$toVersion"
+        fun updateDeltaDownload(fromVersion: String, toVersion: String) = "$UPDATES_BASE/delta/download/$fromVersion/$toVersion"
     }
     
     // HTTP Configuration

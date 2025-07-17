@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<WixLocalization Culture="ar-SA" Language="1025" xmlns="http://schemas.microsoft.com/wix/2006/localization">
+  
+  <!-- Application Information -->
+  <String Id="ApplicationName">نظام إدارة المبيعات</String>
+  <String Id="ApplicationDescription">نظام إدارة المبيعات المحترف مع وظائف التحديث المطورة</String>
+  <String Id="Manufacturer">حمزة دمرة</String>
+  
+  <!-- Installation Dialog Strings -->
+  <String Id="WelcomeTitle">مرحباً بك في معالج تثبيت نظام إدارة المبيعات</String>
+  <String Id="WelcomeDescription">سيقوم هذا المعالج بإرشادك خلال تثبيت نظام إدارة المبيعات على جهاز الكمبيوتر الخاص بك.</String>
+  
+  <String Id="LicenseTitle">اتفاقية الترخيص</String>
+  <String Id="LicenseDescription">يرجى قراءة اتفاقية الترخيص التالية بعناية. يجب عليك قبول شروط هذه الاتفاقية قبل المتابعة مع التثبيت.</String>
+  <String Id="LicenseAccept">أوافق على شروط اتفاقية الترخيص</String>
+  <String Id="LicenseDecline">لا أوافق على شروط اتفاقية الترخيص</String>
+  
+  <String Id="InstallDirTitle">اختيار مجلد التثبيت</String>
+  <String Id="InstallDirDescription">اختر المجلد الذي تريد تثبيت نظام إدارة المبيعات فيه.</String>
+  <String Id="BrowseButton">استعراض...</String>
+  <String Id="DiskSpaceRequirements">المساحة المطلوبة على القرص الصلب:</String>
+  
+  <String Id="ReadyToInstallTitle">جاهز للتثبيت</String>
+  <String Id="ReadyToInstallDescription">المعالج جاهز لبدء التثبيت.</String>
+  <String Id="InstallButton">تثبيت</String>
+  
+  <String Id="InstallingTitle">جاري التثبيت</String>
+  <String Id="InstallingDescription">يرجى الانتظار بينما يقوم المعالج بتثبيت نظام إدارة المبيعات.</String>
+  
+  <String Id="CompletedTitle">اكتمل التثبيت</String>
+  <String Id="CompletedDescription">تم تثبيت نظام إدارة المبيعات بنجاح على جهاز الكمبيوتر الخاص بك.</String>
+  <String Id="LaunchApplication">تشغيل نظام إدارة المبيعات الآن</String>
+  
+  <!-- Button Labels -->
+  <String Id="BackButton">السابق</String>
+  <String Id="NextButton">التالي</String>
+  <String Id="CancelButton">إلغاء</String>
+  <String Id="FinishButton">إنهاء</String>
+  <String Id="YesButton">نعم</String>
+  <String Id="NoButton">لا</String>
+  
+  <!-- Error Messages -->
+  <String Id="ErrorTitle">خطأ في التثبيت</String>
+  <String Id="ErrorInsufficientSpace">مساحة القرص الصلب غير كافية للتثبيت.</String>
+  <String Id="ErrorPermissions">ليس لديك الصلاحيات الكافية لتثبيت هذا التطبيق.</String>
+  <String Id="ErrorNewerVersion">إصدار أحدث من نظام إدارة المبيعات مثبت بالفعل.</String>
+  
+  <!-- Feature Descriptions -->
+  <String Id="MainFeatureTitle">نظام إدارة المبيعات الأساسي</String>
+  <String Id="MainFeatureDescription">الملفات الأساسية المطلوبة لتشغيل نظام إدارة المبيعات.</String>
+  
+  <!-- Shortcut Names -->
+  <String Id="DesktopShortcut">نظام إدارة المبيعات</String>
+  <String Id="StartMenuShortcut">نظام إدارة المبيعات</String>
+  <String Id="UninstallShortcut">إلغاء تثبيت نظام إدارة المبيعات</String>
+  
+  <!-- Progress Messages -->
+  <String Id="ProgressCopying">جاري نسخ الملفات...</String>
+  <String Id="ProgressCreatingShortcuts">جاري إنشاء الاختصارات...</String>
+  <String Id="ProgressRegisteringApplication">جاري تسجيل التطبيق...</String>
+  <String Id="ProgressConfiguringSystem">جاري تكوين النظام...</String>
+  
+  <!-- Uninstall Messages -->
+  <String Id="UninstallTitle">إلغاء تثبيت نظام إدارة المبيعات</String>
+  <String Id="UninstallConfirm">هل أنت متأكد من أنك تريد إلغاء تثبيت نظام إدارة المبيعات؟</String>
+  <String Id="UninstallProgress">جاري إلغاء تثبيت نظام إدارة المبيعات...</String>
+  <String Id="UninstallComplete">تم إلغاء تثبيت نظام إدارة المبيعات بنجاح.</String>
+  
+  <!-- System Requirements -->
+  <String Id="SystemRequirementsTitle">متطلبات النظام</String>
+  <String Id="SystemRequirementsDescription">يتطلب هذا التطبيق Windows 10 أو أحدث مع .NET Framework 4.8 أو أحدث.</String>
+  
+  <!-- Additional Features -->
+  <String Id="CreateDesktopShortcut">إنشاء اختصار على سطح المكتب</String>
+  <String Id="CreateStartMenuShortcut">إنشاء اختصار في قائمة ابدأ</String>
+  <String Id="RegisterFileAssociations">ربط ملفات نظام إدارة المبيعات</String>
+  
+  <!-- Maintenance Mode -->
+  <String Id="MaintenanceTitle">صيانة نظام إدارة المبيعات</String>
+  <String Id="MaintenanceDescription">اختر العملية التي تريد تنفيذها:</String>
+  <String Id="ModifyInstallation">تعديل التثبيت</String>
+  <String Id="RepairInstallation">إصلاح التثبيت</String>
+  <String Id="RemoveInstallation">إزالة التثبيت</String>
+  
+  <!-- Custom Actions -->
+  <String Id="ConfiguringBackend">جاري تكوين الاتصال بالخادم...</String>
+  <String Id="SettingFullscreenMode">جاري تكوين وضع ملء الشاشة...</String>
+  <String Id="CreatingUserPreferences">جاري إنشاء تفضيلات المستخدم...</String>
+  
+</WixLocalization>

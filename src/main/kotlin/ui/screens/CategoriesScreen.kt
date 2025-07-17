@@ -43,9 +43,7 @@ import data.Category
 import data.CategoryStatus
 import data.api.CategoryDTO
 import data.api.InventoryDTO
-import ui.components.ColorPickerField
-import ui.components.RTLProvider
-import ui.components.RTLRow
+import ui.components.*
 import ui.theme.AppTheme
 import ui.viewmodels.CategoryViewModel
 import ui.viewmodels.InventoryViewModel
@@ -292,12 +290,17 @@ fun CategoriesScreen(
                         )
 
                         if (uiState.isLoading) {
-                            Box(
+                            // Professional shimmer loading state
+                            Column(
                                 modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
+                                verticalArrangement = Arrangement.spacedBy(20.dp)
                             ) {
-                                CircularProgressIndicator(
-                                    color = MaterialTheme.colorScheme.primary
+                                // Header shimmer
+                                CategoriesHeaderShimmer()
+
+                                // Categories list shimmer
+                                CategoriesListShimmer(
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
                         } else if (uiState.hasError) {
@@ -409,38 +412,42 @@ fun CategoriesScreen(
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(20.dp)
                     ) {
-                        // Statistics Header
-                        Text(
-                            text = "إحصائيات الفئات",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        if (uiState.isLoading) {
+                            // Statistics panel shimmer during loading
+                            CategoriesStatsPanelShimmer()
+                        } else {
+                            // Statistics Header
+                            Text(
+                                text = "إحصائيات الفئات",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
 
-                        // Summary Cards
-                        ModernCategorySummaryCard(
-                            title = "إجمالي الفئات",
-                            value = uiState.totalCategories.toString(),
-                            subtitle = "فئة مسجلة",
-                            icon = Icons.Default.Category,
-                            iconColor = MaterialTheme.colorScheme.primary
-                        )
+                            // Summary Cards
+                            ModernCategorySummaryCard(
+                                title = "إجمالي الفئات",
+                                value = uiState.totalCategories.toString(),
+                                subtitle = "فئة مسجلة",
+                                icon = Icons.Default.Category,
+                                iconColor = MaterialTheme.colorScheme.primary
+                            )
 
-                        ModernCategorySummaryCard(
-                            title = "الفئات النشطة",
-                            value = uiState.activeCategories.size.toString(),
-                            subtitle = "فئة نشطة",
-                            icon = Icons.Default.CheckCircle,
-                            iconColor = AppTheme.colors.success
-                        )
+                            ModernCategorySummaryCard(
+                                title = "الفئات النشطة",
+                                value = uiState.activeCategories.size.toString(),
+                                subtitle = "فئة نشطة",
+                                icon = Icons.Default.CheckCircle,
+                                iconColor = AppTheme.colors.success
+                            )
 
-                        ModernCategorySummaryCard(
-                            title = "الفئات الفارغة",
-                            value = uiState.categories.count { it.productCount == 0 }.toString(),
-                            subtitle = "فئة بدون منتجات",
-                            icon = Icons.Default.Warning,
-                            iconColor = AppTheme.colors.warning
-                        )
+                            ModernCategorySummaryCard(
+                                title = "الفئات الفارغة",
+                                value = uiState.categories.count { it.productCount == 0 }.toString(),
+                                subtitle = "فئة بدون منتجات",
+                                icon = Icons.Default.Warning,
+                                iconColor = AppTheme.colors.warning
+                            )
 
                         // Quick Actions
                         Text(
@@ -462,6 +469,7 @@ fun CategoriesScreen(
                             icon = Icons.Default.Refresh,
                             onClick = { categoryViewModel.refreshCategories() }
                         )
+                        } // Close the else block for statistics loading state
                     }
                 }
             }

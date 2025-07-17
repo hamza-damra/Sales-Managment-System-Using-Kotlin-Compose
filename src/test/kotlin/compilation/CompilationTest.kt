@@ -112,7 +112,6 @@ class CompilationTest {
             type = "PERCENTAGE",
             discountValue = 25.0,
             minimumOrderAmount = 100.0,
-            maximumDiscountAmount = 50.0,
             startDate = "2024-11-24T00:00:00",
             endDate = "2024-11-30T23:59:59",
             isActive = true,
@@ -122,8 +121,7 @@ class CompilationTest {
             usageCount = 150,
             customerEligibility = "ALL",
             couponCode = "BLACKFRIDAY25",
-            autoApply = false,
-            stackable = true
+            autoApply = false
         )
         
         // Verify the object was created successfully
@@ -132,11 +130,9 @@ class CompilationTest {
         assertEquals("PERCENTAGE", promotionDTO.type)
         assertEquals(25.0, promotionDTO.discountValue)
         assertEquals(100.0, promotionDTO.minimumOrderAmount)
-        assertEquals(50.0, promotionDTO.maximumDiscountAmount)
         assertEquals("BLACKFRIDAY25", promotionDTO.couponCode)
         assertEquals(true, promotionDTO.isActive)
         assertEquals(false, promotionDTO.autoApply)
-        assertEquals(true, promotionDTO.stackable)
         assertNotNull(promotionDTO.applicableProducts)
         assertEquals(3, promotionDTO.applicableProducts?.size)
         assertNotNull(promotionDTO.applicableCategories)

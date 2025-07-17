@@ -162,22 +162,12 @@ class PromotionRepository(
         when (result) {
             is NetworkResult.Success -> {
                 _expiredPromotions.value = result.data
+                println("✅ PromotionRepository - Loaded ${result.data.size} expired promotions")
                 _isLoading.value = false
                 return result
             }
             is NetworkResult.Error -> {
                 println("❌ PromotionRepository - Error loading expired promotions: ${result.exception.message}")
-
-                // Check if this is the specific routing error
-                if (result.exception.message?.contains("promotion endpoint routing", ignoreCase = true) == true ||
-                    result.exception.message?.contains("Invalid Parameter Type", ignoreCase = true) == true) {
-
-                    println("🔄 PromotionRepository - Attempting fallback for expired promotions")
-                    val fallbackResult = loadExpiredPromotionsFallback()
-                    _isLoading.value = false
-                    return fallbackResult
-                }
-
                 _error.value = result.exception.message
                 _isLoading.value = false
                 return result
@@ -201,22 +191,12 @@ class PromotionRepository(
         when (result) {
             is NetworkResult.Success -> {
                 _scheduledPromotions.value = result.data
+                println("✅ PromotionRepository - Loaded ${result.data.size} scheduled promotions")
                 _isLoading.value = false
                 return result
             }
             is NetworkResult.Error -> {
                 println("❌ PromotionRepository - Error loading scheduled promotions: ${result.exception.message}")
-
-                // Check if this is the specific routing error
-                if (result.exception.message?.contains("promotion endpoint routing", ignoreCase = true) == true ||
-                    result.exception.message?.contains("Invalid Parameter Type", ignoreCase = true) == true) {
-
-                    println("🔄 PromotionRepository - Attempting fallback for scheduled promotions")
-                    val fallbackResult = loadScheduledPromotionsFallback()
-                    _isLoading.value = false
-                    return fallbackResult
-                }
-
                 _error.value = result.exception.message
                 _isLoading.value = false
                 return result
@@ -326,10 +306,7 @@ class PromotionRepository(
         val discount = when (promotion.type) {
             "PERCENTAGE" -> {
                 val percentageDiscount = orderAmount * (promotion.discountValue / 100.0)
-                // Apply maximum discount limit if specified
-                promotion.maximumDiscountAmount?.let { maxDiscount ->
-                    minOf(percentageDiscount, maxDiscount)
-                } ?: percentageDiscount
+                percentageDiscount
             }
             "FIXED_AMOUNT" -> {
                 // Don't exceed the order amount
@@ -357,85 +334,7 @@ class PromotionRepository(
         }
     }
 
-    /**
-     * Fallback method to load expired promotions by filtering all promotions
-     * Used when the dedicated expired endpoint fails due to backend routing issues
-     */
-    private suspend fun loadExpiredPromotionsFallback(): NetworkResult<List<PromotionDTO>> {
-        println("🔄 PromotionRepository - Using fallback method for expired promotions")
 
-        return try {
-            // Get all promotions and filter for expired ones
-            val allPromotionsResult = promotionApiService.getAllPromotions(page = 0, size = 1000)
-
-            if (allPromotionsResult is NetworkResult.Success) {
-                val currentTime = System.currentTimeMillis()
-                val expiredPromotions = allPromotionsResult.data.content.filter { promotion ->
-                    try {
-                        // Parse end date and check if it's in the past
-                        val endDate = java.time.Instant.parse(promotion.endDate)
-                        endDate.toEpochMilli() < currentTime
-                    } catch (e: Exception) {
-                        println("⚠️ Error parsing date for promotion ${promotion.id}: ${e.message}")
-                        false
-                    }
-                }
-
-                _expiredPromotions.value = expiredPromotions
-                println("✅ PromotionRepository - Fallback loaded ${expiredPromotions.size} expired promotions")
-                NetworkResult.Success(expiredPromotions)
-            } else if (allPromotionsResult is NetworkResult.Error) {
-                println("❌ PromotionRepository - Fallback also failed: ${allPromotionsResult.exception.message}")
-                allPromotionsResult
-            } else {
-                // Loading state - return empty list as fallback
-                NetworkResult.Success(emptyList())
-            }
-        } catch (e: Exception) {
-            println("❌ PromotionRepository - Exception in fallback: ${e.message}")
-            NetworkResult.Error(e.toApiException())
-        }
-    }
-
-    /**
-     * Fallback method to load scheduled promotions by filtering all promotions
-     * Used when the dedicated scheduled endpoint fails due to backend routing issues
-     */
-    private suspend fun loadScheduledPromotionsFallback(): NetworkResult<List<PromotionDTO>> {
-        println("🔄 PromotionRepository - Using fallback method for scheduled promotions")
-
-        return try {
-            // Get all promotions and filter for scheduled ones
-            val allPromotionsResult = promotionApiService.getAllPromotions(page = 0, size = 1000)
-
-            if (allPromotionsResult is NetworkResult.Success) {
-                val currentTime = System.currentTimeMillis()
-                val scheduledPromotions = allPromotionsResult.data.content.filter { promotion ->
-                    try {
-                        // Parse start date and check if it's in the future
-                        val startDate = java.time.Instant.parse(promotion.startDate)
-                        startDate.toEpochMilli() > currentTime
-                    } catch (e: Exception) {
-                        println("⚠️ Error parsing date for promotion ${promotion.id}: ${e.message}")
-                        false
-                    }
-                }
-
-                _scheduledPromotions.value = scheduledPromotions
-                println("✅ PromotionRepository - Fallback loaded ${scheduledPromotions.size} scheduled promotions")
-                NetworkResult.Success(scheduledPromotions)
-            } else if (allPromotionsResult is NetworkResult.Error) {
-                println("❌ PromotionRepository - Fallback also failed: ${allPromotionsResult.exception.message}")
-                allPromotionsResult
-            } else {
-                // Loading state - return empty list as fallback
-                NetworkResult.Success(emptyList())
-            }
-        } catch (e: Exception) {
-            println("❌ PromotionRepository - Exception in fallback: ${e.message}")
-            NetworkResult.Error(e.toApiException())
-        }
-    }
 
     /**
      * Check if coupon code is unique

@@ -94,10 +94,16 @@ class PromotionApiService(private val httpClient: HttpClient) {
 
     suspend fun getExpiredPromotions(): NetworkResult<List<PromotionDTO>> {
         return safeApiCall {
-            val url = "${ApiConfig.BASE_URL}${ApiConfig.Endpoints.PROMOTIONS_EXPIRED}"
-            println("🔍 PromotionApiService - Calling getExpiredPromotions URL: $url")
+            val url = "${ApiConfig.BASE_URL}${ApiConfig.Endpoints.PROMOTIONS}"
+            println("🔍 PromotionApiService - Calling getExpiredPromotions URL: $url with status=expired")
 
-            val response = httpClient.get(url)
+            val response = httpClient.get(url) {
+                parameter("status", "expired")
+                parameter("page", 0)
+                parameter("size", 1000)
+                parameter("sortBy", "id")
+                parameter("sortDir", "desc")
+            }
 
             println("🔍 PromotionApiService - getExpiredPromotions response status: ${response.status}")
             if (response.status.value >= 400) {
@@ -105,16 +111,31 @@ class PromotionApiService(private val httpClient: HttpClient) {
                 println("🔍 PromotionApiService - getExpiredPromotions error response: $errorBody")
             }
 
-            response.body<List<PromotionDTO>>()
+            // Handle both direct list response and paginated response
+            val responseText = response.bodyAsText()
+            if (responseText.contains("\"content\"")) {
+                // Paginated response
+                val pageResponse = response.body<PageResponse<PromotionDTO>>()
+                pageResponse.content
+            } else {
+                // Direct list response
+                response.body<List<PromotionDTO>>()
+            }
         }
     }
 
     suspend fun getScheduledPromotions(): NetworkResult<List<PromotionDTO>> {
         return safeApiCall {
-            val url = "${ApiConfig.BASE_URL}${ApiConfig.Endpoints.PROMOTIONS_SCHEDULED}"
-            println("🔍 PromotionApiService - Calling getScheduledPromotions URL: $url")
+            val url = "${ApiConfig.BASE_URL}${ApiConfig.Endpoints.PROMOTIONS}"
+            println("🔍 PromotionApiService - Calling getScheduledPromotions URL: $url with status=scheduled")
 
-            val response = httpClient.get(url)
+            val response = httpClient.get(url) {
+                parameter("status", "scheduled")
+                parameter("page", 0)
+                parameter("size", 1000)
+                parameter("sortBy", "id")
+                parameter("sortDir", "desc")
+            }
 
             println("🔍 PromotionApiService - getScheduledPromotions response status: ${response.status}")
             if (response.status.value >= 400) {
@@ -122,7 +143,16 @@ class PromotionApiService(private val httpClient: HttpClient) {
                 println("🔍 PromotionApiService - getScheduledPromotions error response: $errorBody")
             }
 
-            response.body<List<PromotionDTO>>()
+            // Handle both direct list response and paginated response
+            val responseText = response.bodyAsText()
+            if (responseText.contains("\"content\"")) {
+                // Paginated response
+                val pageResponse = response.body<PageResponse<PromotionDTO>>()
+                pageResponse.content
+            } else {
+                // Direct list response
+                response.body<List<PromotionDTO>>()
+            }
         }
     }
 

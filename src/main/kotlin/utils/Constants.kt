@@ -1,5 +1,7 @@
 package utils
 
+import java.io.File
+
 /**
  * Application-wide constants for centralized configuration
  * Following the established pattern for consistent configuration management
@@ -7,7 +9,7 @@ package utils
 object Constants {
     
     // API Configuration
-    const val BASE_URL = "http://localhost:8080"
+    const val BASE_URL = "https://sales-managment-system-backend-springboot-production.up.railway.app"
     
     // Currency Configuration
     object Currency {
@@ -93,16 +95,38 @@ object Constants {
     // Application Configuration
     object App {
         const val NAME = "نظام إدارة المبيعات"
-        const val VERSION = "2.0.0"
+        const val VERSION = "2.1.0"
         const val COMPANY = "شركة التجارة المتقدمة"
+        const val BUILD_DATE = "2025-01-15"
+        const val DESCRIPTION = "نظام إدارة المبيعات المحسن مع وظائف التحديث المطورة"
+    }
+
+    // Update System Configuration
+    object Updates {
+        const val POLLING_INTERVAL_MINUTES = 30L
+        const val RETRY_DELAY_SECONDS = 30L
+        const val MAX_RETRY_ATTEMPTS = 3
+        const val DOWNLOAD_CHUNK_SIZE = 8192
+        const val CHECKSUM_ALGORITHM = "SHA-256"
+        const val UPDATE_NOTIFICATION_DURATION = 10000L // 10 seconds
+        const val MANDATORY_UPDATE_CHECK_INTERVAL = 5L // 5 minutes for mandatory updates
     }
     
     // File and Export Configuration
     object Files {
-        const val RECEIPTS_DIRECTORY = "receipts"
-        const val EXPORTS_DIRECTORY = "exports"
-        const val BACKUPS_DIRECTORY = "backups"
-        const val TEMP_DIRECTORY = "temp"
+        private val APP_DATA_DIR = File(System.getProperty("user.home"), ".sales-management-system")
+
+        val RECEIPTS_DIRECTORY = File(APP_DATA_DIR, "receipts").absolutePath
+        val EXPORTS_DIRECTORY = File(APP_DATA_DIR, "exports").absolutePath
+        val BACKUPS_DIRECTORY = File(APP_DATA_DIR, "backups").absolutePath
+        val TEMP_DIRECTORY = File(APP_DATA_DIR, "temp").absolutePath
+
+        // Ensure directories exist
+        init {
+            listOf(RECEIPTS_DIRECTORY, EXPORTS_DIRECTORY, BACKUPS_DIRECTORY, TEMP_DIRECTORY).forEach { path ->
+                File(path).mkdirs()
+            }
+        }
     }
     
     // UI Configuration

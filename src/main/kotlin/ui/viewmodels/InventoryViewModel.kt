@@ -8,6 +8,7 @@ import data.repository.InventoryRepository
 import data.repository.StockMovementRepository
 import data.repository.ProductRepository
 import data.repository.CategoryRepository
+import data.repository.ReportsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -21,6 +22,7 @@ class InventoryViewModel(
     private val stockMovementRepository: StockMovementRepository,
     private val productRepository: ProductRepository,
     private val categoryRepository: CategoryRepository,
+    private val reportsRepository: ReportsRepository,
     private val viewModelScope: CoroutineScope = CoroutineScope(Dispatchers.Main)
 ) {
 
@@ -29,15 +31,22 @@ class InventoryViewModel(
         val inventories: List<InventoryDTO> = emptyList(),
         val stockMovements: List<StockMovementDTO> = emptyList(),
         val products: List<ProductDTO> = emptyList(),
+        val recentProducts: List<RecentProductDTO> = emptyList(),
         val categories: List<CategoryDTO> = emptyList(),
+        val dashboardInventory: DashboardInventoryDTO? = null,
+        val inventorySummary: RecentProductsInventorySummaryDTO? = null, // New field for inventory summary from recent products API
         val isLoading: Boolean = false,
         val isLoadingMovements: Boolean = false,
         val isLoadingProducts: Boolean = false,
+        val isLoadingRecentProducts: Boolean = false,
         val isLoadingCategories: Boolean = false,
+        val isLoadingDashboard: Boolean = false,
         val error: String? = null,
         val movementsError: String? = null,
         val productsError: String? = null,
+        val recentProductsError: String? = null,
         val categoriesError: String? = null,
+        val dashboardError: String? = null,
         val searchQuery: String = "",
         val selectedStatus: String = "الكل",
         val sortBy: String = "name",
@@ -89,6 +98,44 @@ class InventoryViewModel(
         viewModelScope.launch {
             stockMovementRepository.error.collect { error ->
                 _uiState.value = _uiState.value.copy(movementsError = error)
+            }
+        }
+
+        // Collect recent products repository state
+        viewModelScope.launch {
+            productRepository.recentProducts.collect { recentProducts ->
+                _uiState.value = _uiState.value.copy(recentProducts = recentProducts)
+            }
+        }
+
+        viewModelScope.launch {
+            productRepository.isLoadingRecent.collect { isLoading ->
+                _uiState.value = _uiState.value.copy(isLoadingRecentProducts = isLoading)
+            }
+        }
+
+        viewModelScope.launch {
+            productRepository.recentError.collect { error ->
+                _uiState.value = _uiState.value.copy(recentProductsError = error)
+            }
+        }
+
+        // Collect dashboard summary repository state
+        viewModelScope.launch {
+            reportsRepository.dashboardSummary.collect { dashboardSummary ->
+                _uiState.value = _uiState.value.copy(dashboardInventory = dashboardSummary?.inventory)
+            }
+        }
+
+        viewModelScope.launch {
+            reportsRepository.isLoading.collect { isLoading ->
+                _uiState.value = _uiState.value.copy(isLoadingDashboard = isLoading)
+            }
+        }
+
+        viewModelScope.launch {
+            reportsRepository.error.collect { error ->
+                _uiState.value = _uiState.value.copy(dashboardError = error)
             }
         }
     }
@@ -351,6 +398,96 @@ class InventoryViewModel(
      */
     fun clearProductsError() {
         _uiState.value = _uiState.value.copy(productsError = null)
+    }
+
+    /**
+     * Load recent products for overview section
+     */
+    fun loadRecentProducts(
+        days: Int = 30,
+        category: String? = null,
+        categoryId: Long? = null,
+        includeInventory: Boolean = true,
+        page: Int = 0,
+        size: Int = 20,
+        sortBy: String = "lastSoldDate",
+        sortDir: String = "desc",
+        refresh: Boolean = false
+    ) {
+        if (refresh) {
+            _uiState.value = _uiState.value.copy(currentPage = 0)
+        }
+
+        viewModelScope.launch {
+            val result = productRepository.loadRecentProducts(
+                days = days,
+                category = if (category != "الكل") category else null,
+                categoryId = categoryId,
+                includeInventory = includeInventory,
+                page = page,
+                size = size,
+                sortBy = sortBy,
+                sortDir = sortDir
+            )
+
+            result.onSuccess { pageResponse ->
+                _uiState.value = _uiState.value.copy(
+                    hasMorePages = !pageResponse.last,
+                    currentPage = if (page == 0) 0 else page
+                )
+            }
+        }
+    }
+
+    /**
+     * Load recent products basic (for simple overview)
+     */
+    fun loadRecentProductsBasic(days: Int = 30) {
+        viewModelScope.launch {
+            val result = productRepository.loadRecentProductsBasic(days)
+
+            result.onSuccess { recentProductsResponse ->
+                // Update UI state with inventory summary from the API response
+                _uiState.value = _uiState.value.copy(
+                    inventorySummary = recentProductsResponse.inventorySummary
+                )
+            }.onError { exception ->
+                // Error handling is already done in the repository
+                // Just clear the inventory summary on error
+                _uiState.value = _uiState.value.copy(
+                    inventorySummary = null
+                )
+            }
+        }
+    }
+
+    /**
+     * Clear recent products error
+     */
+    fun clearRecentProductsError() {
+        _uiState.value = _uiState.value.copy(recentProductsError = null)
+        productRepository.clearRecentError()
+    }
+
+    /**
+     * Load dashboard inventory statistics
+     */
+    fun loadDashboardInventoryStats() {
+        viewModelScope.launch {
+            val result = reportsRepository.loadDashboardSummary()
+
+            result.onError { exception ->
+                _uiState.value = _uiState.value.copy(dashboardError = exception.message)
+            }
+        }
+    }
+
+    /**
+     * Clear dashboard error
+     */
+    fun clearDashboardError() {
+        _uiState.value = _uiState.value.copy(dashboardError = null)
+        reportsRepository.clearError()
     }
 
     /**

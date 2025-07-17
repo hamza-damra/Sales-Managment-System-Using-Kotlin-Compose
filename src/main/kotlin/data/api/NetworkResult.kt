@@ -344,7 +344,7 @@ fun Throwable.toApiException(): ApiException {
         }
         is java.net.ConnectException -> {
             println("🔌 Connection refused")
-            val arabicMessage = ErrorMessageTranslator.translateToArabic("Cannot connect to server. Make sure backend is running on localhost:8081")
+            val arabicMessage = ErrorMessageTranslator.translateToArabic("Cannot connect to server. Please check your internet connection and try again.")
             ApiException.NetworkError(arabicMessage, this)
         }
         is java.net.UnknownHostException -> {

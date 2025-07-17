@@ -48,7 +48,8 @@ class ReportsViewModel(
     val financialReport = reportsRepository.financialReport
     val promotionReport = reportsRepository.promotionReport
     val realTimeKPIs = reportsRepository.realTimeKPIs
-    
+    val recentProducts = reportsRepository.recentProducts
+
     // Computed properties
     val currentDateRange: StateFlow<Pair<String, String>> = combine(
         _selectedDateRange,
@@ -254,6 +255,37 @@ class ReportsViewModel(
     
     fun cleanup() {
         viewModelScope.cancel()
+    }
+
+    // Recent Products methods
+    fun loadRecentProducts(
+        days: Int = 30,
+        category: String? = null,
+        categoryId: Long? = null,
+        includeInventory: Boolean = false,
+        page: Int = 0,
+        size: Int = 50,
+        sortBy: String = "lastSoldDate",
+        sortDir: String = "desc"
+    ) {
+        viewModelScope.launch {
+            reportsRepository.loadRecentProducts(
+                days = days,
+                category = category,
+                categoryId = categoryId,
+                includeInventory = includeInventory,
+                page = page,
+                size = size,
+                sortBy = sortBy,
+                sortDir = sortDir
+            )
+        }
+    }
+
+    fun loadRecentProductsBasic(days: Int = 30) {
+        viewModelScope.launch {
+            reportsRepository.loadRecentProductsBasic(days)
+        }
     }
 }
 

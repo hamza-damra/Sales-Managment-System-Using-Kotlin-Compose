@@ -154,7 +154,6 @@ class PromotionDataModelsTest {
             type = "PERCENTAGE",
             discountValue = 20.0,
             minimumOrderAmount = 50.0,
-            maximumDiscountAmount = 100.0,
             startDate = "2024-06-01T00:00:00",
             endDate = "2024-08-31T23:59:59",
             isActive = true,
@@ -165,7 +164,6 @@ class PromotionDataModelsTest {
             customerEligibility = "ALL",
             couponCode = "SUMMER20",
             autoApply = false,
-            stackable = true,
             statusDisplay = "Active",
             typeDisplay = "Percentage Discount",
             eligibilityDisplay = "All Customers",
@@ -184,11 +182,9 @@ class PromotionDataModelsTest {
         assertEquals("PERCENTAGE", promotionDTO.type)
         assertEquals(20.0, promotionDTO.discountValue)
         assertEquals(50.0, promotionDTO.minimumOrderAmount)
-        assertEquals(100.0, promotionDTO.maximumDiscountAmount)
         assertEquals("SUMMER20", promotionDTO.couponCode)
         assertEquals(true, promotionDTO.isActive)
         assertEquals(false, promotionDTO.autoApply)
-        assertEquals(true, promotionDTO.stackable)
         assertEquals(true, promotionDTO.isCurrentlyActive)
         assertEquals(false, promotionDTO.isExpired)
         assertEquals(1000, promotionDTO.usageLimit)
