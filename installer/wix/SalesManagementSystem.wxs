@@ -1,47 +1,106 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
 
   <!-- Product Definition -->
   <Product Id="*"
-           Name="Sales Management System"
-           Language="1033"
-           Version="2.1.0"
-           Manufacturer="Hamza Damra"
-           UpgradeCode="B8C9D0E1-F2A3-4B5C-6D7E-8F9A0B1C2D3E">
+           Name="!(loc.ApplicationName)"
+           Language="1025"
+           Version="$(var.Version)"
+           Manufacturer="!(loc.Manufacturer)"
+           UpgradeCode="$(var.UpgradeCode)">
 
     <!-- Package Information -->
-    <Package InstallerVersion="200"
+    <Package InstallerVersion="500"
              Compressed="yes"
              InstallScope="perMachine"
-             Description="Professional Sales Management System with Enhanced Update Functionality"
-             Comments="Professional Sales Management System with Enhanced Update Functionality"
-             Manufacturer="Hamza Damra" />
+             Description="!(loc.ApplicationDescription)"
+             Comments="!(loc.ApplicationDescription)"
+             Manufacturer="!(loc.Manufacturer)"
+             Languages="1025"
+             SummaryCodepage="1256" />
 
     <!-- Media Definition -->
-    <MediaTemplate EmbedCab="yes" />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
 
     <!-- Upgrade Logic -->
-    <MajorUpgrade DowngradeErrorMessage="A newer version of Sales Management System is already installed." />
+    <MajorUpgrade DowngradeErrorMessage="!(loc.ErrorNewerVersion)"
+                  Schedule="afterInstallInitialize" />
+
+    <!-- Properties -->
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.exe" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/hamzadamra/sales-management-system" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/hamzadamra/sales-management-system" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+
+    <!-- Custom Properties -->
+    <Property Id="FULLSCREEN_MODE" Value="1" />
+    <Property Id="BACKEND_URL" Value="https://sales-managment-system-backend-springboot.onrender.com" />
+    <Property Id="CREATE_DESKTOP_SHORTCUT" Value="1" />
+    <Property Id="CREATE_STARTMENU_SHORTCUT" Value="1" />
 
     <!-- Features -->
-    <Feature Id="ProductFeature" Title="Sales Management System" Level="1">
+    <Feature Id="ProductFeature"
+             Title="!(loc.MainFeatureTitle)"
+             Description="!(loc.MainFeatureDescription)"
+             Level="1"
+             ConfigurableDirectory="INSTALLFOLDER">
       <ComponentGroupRef Id="ProductComponents" />
-      <ComponentRef Id="ApplicationShortcut" />
       <ComponentRef Id="RegistryEntries" />
     </Feature>
 
-    <!-- UI Configuration -->
+    <Feature Id="ShortcutsFeature"
+             Title="!(loc.CreateDesktopShortcut)"
+             Description="!(loc.CreateDesktopShortcut)"
+             Level="1">
+      <ComponentRef Id="DesktopShortcut" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+
+    <!-- Custom Actions -->
+    <CustomAction Id="ConfigureApplication"
+                  BinaryKey="PowerShellScript"
+                  ExeCommand="powershell.exe -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]scripts\configure-application.ps1&quot; -InstallPath &quot;[INSTALLFOLDER]&quot; -BackendURL &quot;[BACKEND_URL]&quot; -FullscreenMode $([FULLSCREEN_MODE])"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="check" />
+
+    <CustomAction Id="SetConfigureApplicationProperties"
+                  Property="ConfigureApplication"
+                  Value="InstallPath=[INSTALLFOLDER];BackendURL=[BACKEND_URL];FullscreenMode=[FULLSCREEN_MODE]"
+                  Execute="immediate" />
+
+    <!-- Installation Sequence -->
+    <InstallExecuteSequence>
+      <Custom Action="SetConfigureApplicationProperties" After="InstallFiles">NOT Installed</Custom>
+      <Custom Action="ConfigureApplication" After="SetConfigureApplicationProperties">NOT Installed</Custom>
+    </InstallExecuteSequence>
+
+    <!-- UI Configuration with Arabic RTL Support -->
     <UI>
-      <UIRef Id="WixUI_InstallDir" />
-      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg" Order="2">1</Publish>
-      <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="2">1</Publish>
+      <UIRef Id="WixUI_FeatureTree" />
+
+      <!-- Custom dialogs for Arabic RTL -->
+      <TextStyle Id="WixUI_Font_Normal_Arabic" FaceName="Tahoma" Size="8" />
+      <TextStyle Id="WixUI_Font_Bigger_Arabic" FaceName="Tahoma" Size="12" />
+      <TextStyle Id="WixUI_Font_Title_Arabic" FaceName="Tahoma" Size="9" Bold="yes" />
+
+      <!-- Progress messages -->
+      <ProgressText Action="ConfigureApplication">!(loc.ConfiguringBackend)</ProgressText>
+
+      <!-- Custom welcome dialog -->
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="LicenseAgreementDlg" Order="2">1</Publish>
+      <Publish Dialog="LicenseAgreementDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="2">1</Publish>
     </UI>
 
     <!-- License Agreement -->
-    <WixVariable Id="WixUILicenseRtf" Value="installer\LICENSE.rtf" />
+    <WixVariable Id="WixUILicenseRtf" Value="LICENSE.rtf" />
 
-    <!-- Installation Directory -->
-    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <!-- Banner and Dialog Images -->
+    <WixVariable Id="WixUIBannerBmp" Value="icons\banner.bmp" />
+    <WixVariable Id="WixUIDialogBmp" Value="icons\dialog.bmp" />
 
   </Product>
 
@@ -49,82 +108,137 @@
   <Fragment>
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFilesFolder">
-        <Directory Id="INSTALLFOLDER" Name="Sales Management System" />
+        <Directory Id="INSTALLFOLDER" Name="!(loc.ApplicationName)">
+          <Directory Id="ScriptsFolder" Name="scripts" />
+          <Directory Id="RuntimeFolder" Name="runtime" />
+          <Directory Id="LibFolder" Name="lib" />
+        </Directory>
       </Directory>
       <Directory Id="ProgramMenuFolder">
-        <Directory Id="ApplicationProgramsFolder" Name="Sales Management System" />
+        <Directory Id="ApplicationProgramsFolder" Name="!(loc.ApplicationName)" />
       </Directory>
       <Directory Id="DesktopFolder" Name="Desktop" />
+      <Directory Id="CommonAppDataFolder">
+        <Directory Id="AppDataFolder" Name="SalesManagementSystem" />
+      </Directory>
     </Directory>
   </Fragment>
 
   <!-- Components -->
   <Fragment>
     <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
-      <!-- Main Application Files -->
+      <!-- Main Application Executable -->
       <Component Id="MainExecutable" Guid="*">
-        <File Id="SalesManagementSystemExe" 
-              Source="$(var.SourceDir)\SalesManagementSystem.exe" 
+        <File Id="SalesManagementSystemExe"
+              Source="$(var.SourceDir)\SalesManagementSystem.exe"
+              KeyPath="yes"
+              Checksum="yes" />
+      </Component>
+
+      <!-- Application JAR File -->
+      <Component Id="ApplicationJar" Guid="*">
+        <File Id="SalesManagementSystemJar"
+              Source="$(var.SourceDir)\app\SalesManagementSystem.jar"
+              KeyPath="yes"
+              Checksum="yes" />
+      </Component>
+
+      <!-- Runtime Dependencies -->
+      <Component Id="RuntimeFiles" Guid="*" Directory="RuntimeFolder">
+        <File Id="RuntimeDll"
+              Source="$(var.SourceDir)\runtime\*"
               KeyPath="yes" />
       </Component>
-      
-      <!-- Runtime Dependencies -->
-      <Component Id="RuntimeFiles" Guid="*">
-        <File Id="RuntimeDll" 
-              Source="$(var.SourceDir)\runtime\*" 
+
+      <!-- Library Dependencies -->
+      <Component Id="LibraryFiles" Guid="*" Directory="LibFolder">
+        <File Id="LibraryJars"
+              Source="$(var.SourceDir)\lib\*"
+              KeyPath="yes" />
+      </Component>
+
+      <!-- Configuration Scripts -->
+      <Component Id="ConfigurationScripts" Guid="*" Directory="ScriptsFolder">
+        <File Id="ConfigureApplicationScript"
+              Source="scripts\configure-application.ps1"
               KeyPath="yes" />
       </Component>
     </ComponentGroup>
 
-    <!-- Desktop Shortcut -->
-    <Component Id="ApplicationShortcut" Directory="DesktopFolder" Guid="*">
+    <!-- Desktop Shortcut Component -->
+    <Component Id="DesktopShortcut" Directory="DesktopFolder" Guid="*">
+      <Condition>CREATE_DESKTOP_SHORTCUT</Condition>
       <Shortcut Id="ApplicationDesktopShortcut"
-                Name="Sales Management System"
-                Description="Professional Sales Management System"
+                Name="!(loc.DesktopShortcut)"
+                Description="!(loc.ApplicationDescription)"
                 Target="[#SalesManagementSystemExe]"
+                Arguments="--fullscreen"
                 WorkingDirectory="INSTALLFOLDER"
                 Icon="AppIcon.exe" />
-      <RemoveFolder Id="DesktopFolder" On="uninstall" />
+      <RemoveFolder Id="RemoveDesktopFolder" On="uninstall" />
       <RegistryValue Root="HKCU"
-                     Key="Software\HamzaDamra\SalesManagementSystem"
-                     Name="installed"
+                     Key="Software\HamzaDamra\SalesManagementSystem\Shortcuts"
+                     Name="Desktop"
                      Type="integer"
                      Value="1"
                      KeyPath="yes" />
     </Component>
 
-    <!-- Registry Entries -->
+    <!-- Start Menu Shortcut Component -->
+    <Component Id="StartMenuShortcut" Directory="ApplicationProgramsFolder" Guid="*">
+      <Condition>CREATE_STARTMENU_SHORTCUT</Condition>
+      <Shortcut Id="ApplicationStartMenuShortcut"
+                Name="!(loc.StartMenuShortcut)"
+                Description="!(loc.ApplicationDescription)"
+                Target="[#SalesManagementSystemExe]"
+                Arguments="--fullscreen"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="AppIcon.exe" />
+      <Shortcut Id="UninstallShortcut"
+                Name="!(loc.UninstallShortcut)"
+                Description="!(loc.UninstallTitle)"
+                Target="[SystemFolder]msiexec.exe"
+                Arguments="/x [ProductCode]" />
+      <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
+      <RegistryValue Root="HKCU"
+                     Key="Software\HamzaDamra\SalesManagementSystem\Shortcuts"
+                     Name="StartMenu"
+                     Type="integer"
+                     Value="1"
+                     KeyPath="yes" />
+    </Component>
+
+    <!-- Registry Entries Component -->
     <Component Id="RegistryEntries" Directory="INSTALLFOLDER" Guid="*">
       <!-- Application Registration -->
       <RegistryKey Root="HKLM" Key="SOFTWARE\HamzaDamra\SalesManagementSystem">
         <RegistryValue Name="InstallPath" Type="string" Value="[INSTALLFOLDER]" />
-        <RegistryValue Name="Version" Type="string" Value="2.1.0" />
-        <RegistryValue Name="DisplayName" Type="string" Value="Sales Management System" />
-        <RegistryValue Name="Publisher" Type="string" Value="Hamza Damra" />
+        <RegistryValue Name="Version" Type="string" Value="$(var.Version)" />
+        <RegistryValue Name="DisplayName" Type="string" Value="!(loc.ApplicationName)" />
+        <RegistryValue Name="Publisher" Type="string" Value="!(loc.Manufacturer)" />
         <RegistryValue Name="InstallDate" Type="string" Value="[Date]" />
-        <RegistryValue Name="BackendURL" Type="string" Value="https://sales-managment-system-backend-springboot.onrender.com" />
-        <RegistryValue Name="FullscreenMode" Type="integer" Value="1" />
+        <RegistryValue Name="BackendURL" Type="string" Value="[BACKEND_URL]" />
+        <RegistryValue Name="FullscreenMode" Type="integer" Value="[FULLSCREEN_MODE]" />
+        <RegistryValue Name="Language" Type="string" Value="ar-SA" />
+        <RegistryValue Name="RTLSupport" Type="integer" Value="1" />
+        <RegistryValue Name="AutoUpdate" Type="integer" Value="1" />
+        <RegistryValue Name="ConfigPath" Type="string" Value="[CommonAppDataFolder]SalesManagementSystem" />
       </RegistryKey>
 
-      <!-- Uninstall Information -->
-      <RegistryKey Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{B8C9D0E1-F2A3-4B5C-6D7E-8F9A0B1C2D3E}">
-        <RegistryValue Name="DisplayName" Type="string" Value="Sales Management System" />
-        <RegistryValue Name="DisplayVersion" Type="string" Value="2.1.0" />
-        <RegistryValue Name="Publisher" Type="string" Value="Hamza Damra" />
-        <RegistryValue Name="InstallLocation" Type="string" Value="[INSTALLFOLDER]" />
-        <RegistryValue Name="UninstallString" Type="string" Value="msiexec /x {B8C9D0E1-F2A3-4B5C-6D7E-8F9A0B1C2D3E}" />
-        <RegistryValue Name="NoModify" Type="integer" Value="1" />
-        <RegistryValue Name="NoRepair" Type="integer" Value="1" />
-        <RegistryValue Name="EstimatedSize" Type="integer" Value="150000" />
-      </RegistryKey>
+      <!-- Windows Firewall Exception -->
+      <util:FirewallException Id="SalesManagementSystemFirewall"
+                              Name="!(loc.ApplicationName)"
+                              Program="[#SalesManagementSystemExe]"
+                              Scope="localSubnet"
+                              IgnoreFailure="yes" />
 
-      <!-- File Association (optional) -->
+      <!-- File Association for .sms files -->
       <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\.sms">
         <RegistryValue Type="string" Value="SalesManagementSystem.Document" />
       </RegistryKey>
-      
+
       <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\SalesManagementSystem.Document">
-        <RegistryValue Type="string" Value="Sales Management System Document" />
+        <RegistryValue Type="string" Value="!(loc.ApplicationName) Document" />
         <RegistryKey Key="DefaultIcon">
           <RegistryValue Type="string" Value="[#SalesManagementSystemExe],0" />
         </RegistryKey>
@@ -133,17 +247,45 @@
         </RegistryKey>
       </RegistryKey>
 
-      <RemoveFolder Id="INSTALLFOLDER" On="uninstall" />
-      <RegistryValue Root="HKCU" 
-                     Key="Software\HamzaDamra\SalesManagementSystem" 
-                     Name="installed" 
-                     Type="integer" 
-                     Value="1" 
+      <!-- URL Protocol Registration for sms:// links -->
+      <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\sms">
+        <RegistryValue Type="string" Value="URL:Sales Management System Protocol" />
+        <RegistryValue Name="URL Protocol" Type="string" Value="" />
+        <RegistryKey Key="DefaultIcon">
+          <RegistryValue Type="string" Value="[#SalesManagementSystemExe],0" />
+        </RegistryKey>
+        <RegistryKey Key="shell\open\command">
+          <RegistryValue Type="string" Value="&quot;[#SalesManagementSystemExe]&quot; &quot;%1&quot;" />
+        </RegistryKey>
+      </RegistryKey>
+
+      <!-- Application Data Directory -->
+      <CreateFolder Directory="AppDataFolder" />
+      <util:PermissionEx User="Users" GenericAll="yes" Domain="[%USERDOMAIN]" />
+
+      <RemoveFolder Id="RemoveInstallFolder" On="uninstall" />
+      <RegistryValue Root="HKCU"
+                     Key="Software\HamzaDamra\SalesManagementSystem"
+                     Name="Installed"
+                     Type="integer"
+                     Value="1"
                      KeyPath="yes" />
     </Component>
   </Fragment>
 
+  <!-- Binary Resources -->
+  <Fragment>
+    <Binary Id="PowerShellScript" SourceFile="scripts\configure-application.ps1" />
+  </Fragment>
+
   <!-- Application Icon -->
-  <Icon Id="AppIcon.exe" SourceFile="installer\icons\app-icon.ico" />
+  <Icon Id="AppIcon.exe" SourceFile="icons\app-icon.ico" />
+
+  <!-- Variables for build-time substitution -->
+  <Fragment>
+    <WixVariable Id="ProductName" Value="!(loc.ApplicationName)" />
+    <WixVariable Id="ProductVersion" Value="$(var.Version)" />
+    <WixVariable Id="ProductManufacturer" Value="!(loc.Manufacturer)" />
+  </Fragment>
 
 </Wix>

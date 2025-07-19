@@ -1182,6 +1182,8 @@ private fun ComprehensiveProductDialog(
     onDismiss: () -> Unit,
     onSave: (data.api.ProductDTO) -> Unit
 ) {
+    // Loading state for immediate feedback
+    var isLoading by remember { mutableStateOf(false) }
     // Get categories from ViewModel
     val activeCategories by productViewModel.activeCategoriesForProducts.collectAsState()
 
@@ -1894,82 +1896,68 @@ private fun ComprehensiveProductDialog(
             }
         },
         confirmButton = {
-            // Full-width Save button with enhanced hover effects
-            val saveInteractionSource = remember { MutableInteractionSource() }
-            val isSaveHovered by saveInteractionSource.collectIsHoveredAsState()
-
-            Box(
+            Button(
+                onClick = {
+                    if (isFormValid && !isLoading) {
+                        isLoading = true // Set loading state immediately
+                        val productDTO = data.api.ProductDTO(
+                            id = product?.id?.toLong(),
+                            name = name,
+                            description = description.takeIf { it.isNotBlank() },
+                            price = price.toDouble(),
+                            costPrice = costPrice.toDoubleOrNull(),
+                            stockQuantity = stockQuantity.toInt(),
+                            category = selectedCategory?.name,
+                            categoryId = selectedCategory?.id,
+                            categoryName = selectedCategory?.name,
+                            sku = sku.takeIf { it.isNotBlank() },
+                            brand = brand.takeIf { it.isNotBlank() },
+                            modelNumber = modelNumber.takeIf { it.isNotBlank() },
+                            barcode = barcode.takeIf { it.isNotBlank() },
+                            weight = weight.toDoubleOrNull(),
+                            length = length.toDoubleOrNull(),
+                            width = width.toDoubleOrNull(),
+                            height = height.toDoubleOrNull(),
+                            minStockLevel = minStockLevel.toIntOrNull(),
+                            maxStockLevel = maxStockLevel.toIntOrNull(),
+                            reorderPoint = reorderPoint.toIntOrNull(),
+                            reorderQuantity = reorderQuantity.toIntOrNull(),
+                            supplierName = supplierName.takeIf { it.isNotBlank() },
+                            supplierCode = supplierCode.takeIf { it.isNotBlank() },
+                            warrantyPeriod = warrantyPeriod.toIntOrNull(),
+                            unitOfMeasure = unitOfMeasure,
+                            taxRate = taxRate.toDoubleOrNull(),
+                            discountPercentage = discountPercentage.toDoubleOrNull(),
+                            locationInWarehouse = locationInWarehouse.takeIf { it.isNotBlank() },
+                            notes = notes.takeIf { it.isNotBlank() }
+                        )
+                        onSave(productDTO)
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        color = if (isSaveHovered && isFormValid)
-                            MaterialTheme.colorScheme.primary.copy(alpha = 1f)
-                        else if (isFormValid)
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
-                        else
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    .border(
-                        width = if (isSaveHovered && isFormValid) 2.dp else 1.dp,
-                        color = if (isSaveHovered && isFormValid)
-                            MaterialTheme.colorScheme.primary
-                        else if (isFormValid)
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                        else
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    .clickable(
-                        interactionSource = saveInteractionSource,
-                        indication = null,
-                        enabled = isFormValid
-                    ) {
-                        if (isFormValid) {
-                            val productDTO = data.api.ProductDTO(
-                                id = product?.id?.toLong(),
-                                name = name,
-                                description = description.takeIf { it.isNotBlank() },
-                                price = price.toDouble(),
-                                costPrice = costPrice.toDoubleOrNull(),
-                                stockQuantity = stockQuantity.toInt(),
-                                category = selectedCategory?.name,
-                                categoryId = selectedCategory?.id,
-                                categoryName = selectedCategory?.name,
-                                sku = sku.takeIf { it.isNotBlank() },
-                                brand = brand.takeIf { it.isNotBlank() },
-                                modelNumber = modelNumber.takeIf { it.isNotBlank() },
-                                barcode = barcode.takeIf { it.isNotBlank() },
-                                weight = weight.toDoubleOrNull(),
-                                length = length.toDoubleOrNull(),
-                                width = width.toDoubleOrNull(),
-                                height = height.toDoubleOrNull(),
-                                minStockLevel = minStockLevel.toIntOrNull(),
-                                maxStockLevel = maxStockLevel.toIntOrNull(),
-                                reorderPoint = reorderPoint.toIntOrNull(),
-                                reorderQuantity = reorderQuantity.toIntOrNull(),
-                                supplierName = supplierName.takeIf { it.isNotBlank() },
-                                supplierCode = supplierCode.takeIf { it.isNotBlank() },
-                                warrantyPeriod = warrantyPeriod.toIntOrNull(),
-                                unitOfMeasure = unitOfMeasure,
-                                taxRate = taxRate.toDoubleOrNull(),
-                                discountPercentage = discountPercentage.toDoubleOrNull(),
-                                locationInWarehouse = locationInWarehouse.takeIf { it.isNotBlank() },
-                                notes = notes.takeIf { it.isNotBlank() }
-                            )
-                            onSave(productDTO)
-                        }
-                    },
-                contentAlignment = Alignment.Center
+                    .height(56.dp),
+                enabled = isFormValid && !isLoading,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Text(
-                    text = if (product != null) "تحديث" else "حفظ",
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    fontWeight = FontWeight.SemiBold,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text(
+                        text = if (product != null) "تحديث" else "حفظ",
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
         },
         dismissButton = { },

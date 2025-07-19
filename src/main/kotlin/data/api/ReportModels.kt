@@ -1301,14 +1301,21 @@ data class WarehouseAnalysis(
     val capacity: Double
 )
 
-// Financial Reports
+// Financial Reports - Updated to match new comprehensive API response
 @Serializable
 data class FinancialReportDTO(
-    val summary: FinancialSummary,
-    val revenueAnalysis: RevenueAnalysis,
-    val profitAnalysis: ProfitAnalysis,
-    val cashFlow: CashFlowAnalysis,
-    val trends: List<FinancialTrend>
+    val taxAnalysis: TaxAnalysisData? = null,
+    val profitMarginAnalysis: ProfitMarginAnalysisData? = null,
+    val revenueAnalysis: FinancialRevenueAnalysisData? = null,
+    val executiveSummary: ExecutiveSummaryData? = null,
+    val advancedMetrics: AdvancedMetricsData? = null,
+    val paymentMethodAnalysis: PaymentMethodAnalysisData? = null,
+    val costAnalysis: CostAnalysisFinancialData? = null,
+    // Legacy fields for backward compatibility
+    val summary: FinancialSummary? = null,
+    val profitAnalysis: ProfitAnalysis? = null,
+    val cashFlow: CashFlowAnalysis? = null,
+    val trends: List<FinancialTrend>? = null
 )
 
 @Serializable
@@ -1378,6 +1385,425 @@ data class CashFlowTrend(
     val outflow: Double,
     val netFlow: Double
 )
+
+// New Comprehensive Financial Report Data Models
+
+// Tax Analysis Data
+@Serializable
+data class TaxAnalysisData(
+    val complianceMetrics: TaxComplianceMetrics? = null,
+    val taxByCategory: List<TaxByCategoryItem>? = null,
+    val taxSummary: TaxSummaryData? = null,
+    val taxRateBreakdown: List<TaxRateBreakdownItem>? = null,
+    val dailyTaxTrends: List<DailyTaxTrendItem>? = null
+)
+
+@Serializable
+data class TaxComplianceMetrics(
+    val totalTransactions: Long? = null,
+    val taxComplianceRate: Double? = null,
+    val taxableTransactions: Long? = null,
+    val averageTaxRate: Double? = null
+)
+
+@Serializable
+data class TaxByCategoryItem(
+    val effectiveTaxRate: Double? = null,
+    val taxCollected: Double? = null,
+    val totalRevenue: Double? = null,
+    val transactionCount: Long? = null,
+    val categoryName: String? = null
+)
+
+@Serializable
+data class TaxSummaryData(
+    val taxAsPercentageOfRevenue: Double? = null,
+    val effectiveTaxRate: Double? = null,
+    val totalTaxCollected: Double? = null,
+    val totalRevenue: Double? = null,
+    val totalTaxableRevenue: Double? = null
+)
+
+@Serializable
+data class TaxRateBreakdownItem(
+    val taxRate: Double? = null,
+    val taxCollected: Double? = null,
+    val taxPercentage: Double? = null,
+    val revenuePercentage: Double? = null,
+    val transactionCount: Long? = null,
+    val totalRevenue: Double? = null
+)
+
+@Serializable
+data class DailyTaxTrendItem(
+    val date: String? = null,
+    val revenue: Double? = null,
+    val avgTaxPerTransaction: Double? = null,
+    val taxCollected: Double? = null,
+    val transactionCount: Long? = null
+)
+
+// Profit Margin Analysis Data
+@Serializable
+data class ProfitMarginAnalysisData(
+    val overallMargins: OverallMarginsData? = null,
+    val marginVariance: MarginVarianceData? = null,
+    val bottomPerformingProducts: List<ProductMarginItem>? = null,
+    val topPerformingProducts: List<ProductMarginItem>? = null,
+    val productMargins: List<ProductMarginItem>? = null,
+    val categoryMargins: List<CategoryMarginItem>? = null
+)
+
+@Serializable
+data class OverallMarginsData(
+    val totalTax: Double? = null,
+    val totalDiscounts: Double? = null,
+    val netMarginPercentage: Double? = null,
+    val totalRevenue: Double? = null,
+    val totalShipping: Double? = null,
+    val totalCost: Double? = null,
+    val grossProfit: Double? = null,
+    val netProfit: Double? = null,
+    val grossMarginPercentage: Double? = null
+)
+
+@Serializable
+data class MarginVarianceData(
+    val maxMargin: Double? = null,
+    val marginRange: Double? = null,
+    val minMargin: Double? = null,
+    val averageMargin: Double? = null
+)
+
+@Serializable
+data class ProductMarginItem(
+    val totalQuantitySold: Long? = null,
+    val profitMarginPercentage: Double? = null,
+    val productSku: String? = null,
+    val salesCount: Long? = null,
+    val profitPerUnit: Double? = null,
+    val totalRevenue: Double? = null,
+    val categoryName: String? = null,
+    val productName: String? = null,
+    val totalCost: Double? = null,
+    val avgUnitPrice: Double? = null,
+    val grossProfit: Double? = null
+)
+
+@Serializable
+data class CategoryMarginItem(
+    val profitMarginPercentage: Double? = null,
+    val totalQuantitySold: Long? = null,
+    val salesCount: Long? = null,
+    val totalRevenue: Double? = null,
+    val categoryName: String? = null,
+    val totalCost: Double? = null,
+    val grossProfit: Double? = null
+)
+
+// Financial Revenue Analysis Data (renamed to avoid conflict with existing RevenueAnalysis)
+@Serializable
+data class FinancialRevenueAnalysisData(
+    val summary: FinancialRevenueSummary? = null,
+    val revenueByCategory: List<RevenueByCategoryItem>? = null,
+    val growthMetrics: RevenueGrowthMetrics? = null,
+    val dailyTrends: List<FinancialDailyTrendItem>? = null
+)
+
+@Serializable
+data class FinancialRevenueSummary(
+    val totalTransactions: Long? = null,
+    val netRevenue: Double? = null,
+    val totalDiscounts: Double? = null,
+    val averageOrderValue: Double? = null,
+    val revenuePerCustomer: Double? = null,
+    val grossRevenue: Double? = null,
+    val netProfit: Double? = null,
+    val totalTax: Double? = null,
+    val totalRevenue: Double? = null,
+    val totalShipping: Double? = null,
+    val grossProfit: Double? = null,
+    val totalCost: Double? = null,
+    val uniqueCustomers: Long? = null
+)
+
+@Serializable
+data class RevenueByCategoryItem(
+    val totalQuantitySold: Long? = null,
+    val salesCount: Long? = null,
+    val profitMargin: Double? = null,
+    val revenuePercentage: Double? = null,
+    val totalRevenue: Double? = null,
+    val categoryName: String? = null,
+    val totalCost: Double? = null,
+    val avgUnitPrice: Double? = null,
+    val grossProfit: Double? = null
+)
+
+@Serializable
+data class RevenueGrowthMetrics(
+    val revenueGrowthPercentage: Double? = null,
+    val currentPeriodRevenue: Double? = null,
+    val previousPeriodRevenue: Double? = null
+)
+
+@Serializable
+data class FinancialDailyTrendItem(
+    val date: String? = null,
+    val salesCount: Long? = null,
+    val revenue: Double? = null,
+    val cost: Double? = null,
+    val profit: Double? = null,
+    val avgOrderValue: Double? = null
+)
+
+// Executive Summary Data
+@Serializable
+data class ExecutiveSummaryData(
+    val periodInformation: PeriodInformationData? = null,
+    val insights: List<String>? = null,
+    val keyPerformanceIndicators: KeyPerformanceIndicatorsData? = null,
+    val recommendations: List<String>? = null
+)
+
+@Serializable
+data class PeriodInformationData(
+    val endDate: String? = null,
+    val avgDailyRevenue: Double? = null,
+    val periodDays: Int? = null,
+    val startDate: String? = null
+)
+
+@Serializable
+data class KeyPerformanceIndicatorsData(
+    val totalTransactions: Long? = null,
+    val totalRevenue: Double? = null,
+    val grossMargin: Double? = null,
+    val revenuePerCustomer: Double? = null,
+    val grossProfit: Double? = null,
+    val avgOrderValue: Double? = null,
+    val uniqueCustomers: Long? = null
+)
+
+// Advanced Metrics Data
+@Serializable
+data class AdvancedMetricsData(
+    val customerSegmentation: FinancialCustomerSegmentation? = null,
+    val topCustomersByRevenue: List<TopCustomerByRevenueItem>? = null,
+    val conversionMetrics: ConversionMetricsData? = null,
+    val seasonalAnalysis: SeasonalAnalysisData? = null
+)
+
+@Serializable
+data class FinancialCustomerSegmentation(
+    val avgRevenuePerCustomer: Double? = null,
+    val totalCustomers: Long? = null,
+    val top20PercentCustomers: Long? = null,
+    val totalRevenue: Double? = null,
+    val paretoRatio: Double? = null,
+    val top20PercentRevenue: Double? = null
+)
+
+@Serializable
+data class TopCustomerByRevenueItem(
+    val lastPurchaseDate: String? = null,
+    val customerType: String? = null,
+    val customerId: Long? = null,
+    val totalOrders: Long? = null,
+    val totalRevenue: Double? = null,
+    val revenuePerOrder: Double? = null,
+    val customerName: String? = null,
+    val avgOrderValue: Double? = null
+)
+
+@Serializable
+data class ConversionMetricsData(
+    val repeatCustomerRate: Double? = null,
+    val repeatCustomers: Long? = null,
+    val totalSales: Long? = null,
+    val uniqueCustomers: Long? = null,
+    val salesPerCustomer: Double? = null
+)
+
+@Serializable
+data class SeasonalAnalysisData(
+    val dayOfWeekPatterns: List<DayOfWeekPatternItem>? = null,
+    val monthlyPatterns: List<MonthlyPatternItem>? = null
+)
+
+@Serializable
+data class DayOfWeekPatternItem(
+    val salesCount: Long? = null,
+    val revenue: Double? = null,
+    val dayOfWeek: String? = null,
+    val avgOrderValue: Double? = null
+)
+
+@Serializable
+data class MonthlyPatternItem(
+    val salesCount: Long? = null,
+    val revenue: Double? = null,
+    val month: String? = null,
+    val avgOrderValue: Double? = null
+)
+
+// Payment Method Analysis Data
+@Serializable
+data class PaymentMethodAnalysisData(
+    val summary: PaymentMethodSummaryData? = null,
+    val preferences: PaymentMethodPreferencesData? = null,
+    val paymentMethodBreakdown: List<PaymentMethodBreakdownItem>? = null,
+    val trends: PaymentMethodTrendsData? = null
+)
+
+@Serializable
+data class PaymentMethodSummaryData(
+    val totalTransactions: Long? = null,
+    val overallAvgTransactionValue: Double? = null,
+    val uniquePaymentMethods: Long? = null,
+    val totalRevenue: Double? = null
+)
+
+@Serializable
+data class PaymentMethodPreferencesData(
+    val mostPopularByTransactions: PaymentMethodPreferenceItem? = null,
+    val highestAvgTransactionValue: PaymentMethodPreferenceItem? = null,
+    val highestRevenueMethod: PaymentMethodPreferenceItem? = null
+)
+
+@Serializable
+data class PaymentMethodPreferenceItem(
+    val paymentMethod: String? = null,
+    val revenuePercentage: Double? = null,
+    val transactionCount: Long? = null,
+    val totalRevenue: Double? = null,
+    val avgTransactionValue: Double? = null,
+    val transactionPercentage: Double? = null
+)
+
+@Serializable
+data class PaymentMethodBreakdownItem(
+    val paymentMethod: String? = null,
+    val revenuePercentage: Double? = null,
+    val transactionCount: Long? = null,
+    val totalRevenue: Double? = null,
+    val avgTransactionValue: Double? = null,
+    val transactionPercentage: Double? = null
+)
+
+@Serializable
+data class PaymentMethodTrendsData(
+    val paymentMethodGrowth: List<PaymentMethodGrowthItem>? = null
+)
+
+@Serializable
+data class PaymentMethodGrowthItem(
+    val previousRevenue: Double? = null,
+    val paymentMethod: String? = null,
+    val currentRevenue: Double? = null,
+    val growthPercentage: Double? = null
+)
+
+// Cost Analysis Financial Data (renamed to avoid conflict with existing CostAnalysisData)
+@Serializable
+data class CostAnalysisFinancialData(
+    val efficiencyMetrics: CostEfficiencyMetrics? = null,
+    val costByCategory: List<CostByCategoryItem>? = null,
+    val costSummary: CostSummaryData? = null,
+    val leastCostEfficientProducts: List<CostEfficientProductItem>? = null,
+    val costPerSale: CostPerSaleData? = null,
+    val mostCostEfficientProducts: List<CostEfficientProductItem>? = null
+)
+
+@Serializable
+data class CostEfficiencyMetrics(
+    val averageProfitMargin: Double? = null,
+    val dailyCostEfficiency: List<DailyCostEfficiencyItem>? = null,
+    val averageCostRatio: Double? = null
+)
+
+@Serializable
+data class DailyCostEfficiencyItem(
+    val date: String? = null,
+    val revenue: Double? = null,
+    val cost: Double? = null,
+    val costRatio: Double? = null,
+    val profitMargin: Double? = null,
+    val profit: Double? = null
+)
+
+@Serializable
+data class CostByCategoryItem(
+    val totalQuantitySold: Long? = null,
+    val salesCount: Long? = null,
+    val costRatio: Double? = null,
+    val profitMargin: Double? = null,
+    val totalRevenue: Double? = null,
+    val categoryName: String? = null,
+    val totalCost: Double? = null,
+    val grossProfit: Double? = null
+)
+
+@Serializable
+data class CostSummaryData(
+    val totalShippingCosts: Double? = null,
+    val operationalCostPercentage: Double? = null,
+    val totalCOGS: Double? = null,
+    val totalCosts: Double? = null,
+    val totalDiscounts: Double? = null,
+    val cogsPercentage: Double? = null,
+    val totalRevenue: Double? = null,
+    val totalOperationalCosts: Double? = null,
+    val grossProfit: Double? = null
+)
+
+@Serializable
+data class CostEfficientProductItem(
+    val productSku: String? = null,
+    val costRatio: Double? = null,
+    val profitMargin: Double? = null,
+    val totalRevenue: Double? = null,
+    val productName: String? = null,
+    val totalCost: Double? = null
+)
+
+@Serializable
+data class CostPerSaleData(
+    val avgRevenuePerSale: Double? = null,
+    val avgCOGSPerSale: Double? = null,
+    val avgShippingPerSale: Double? = null,
+    val totalSales: Long? = null,
+    val avgTotalCostPerSale: Double? = null,
+    val avgProfitPerSale: Double? = null
+)
+
+// Backward compatibility computed properties for FinancialReportDTO
+val FinancialReportDTO.computedSummary: FinancialSummary
+    get() = summary ?: FinancialSummary(
+        totalRevenue = revenueAnalysis?.summary?.totalRevenue ?: 0.0,
+        totalCosts = costAnalysis?.costSummary?.totalCosts ?: 0.0,
+        grossProfit = revenueAnalysis?.summary?.grossProfit ?: 0.0,
+        netProfit = revenueAnalysis?.summary?.netProfit ?: 0.0,
+        profitMargin = profitMarginAnalysis?.overallMargins?.grossMarginPercentage ?: 0.0,
+        roi = 0.0 // Not available in new structure
+    )
+
+val FinancialReportDTO.computedRevenueAnalysis: RevenueAnalysis
+    get() = RevenueAnalysis(
+        totalRevenue = revenueAnalysis?.summary?.totalRevenue ?: 0.0,
+        revenueByChannel = paymentMethodAnalysis?.paymentMethodBreakdown?.associate { method ->
+            (method.paymentMethod ?: "Unknown") to (method.totalRevenue ?: 0.0)
+        } ?: emptyMap(),
+        revenueByProduct = emptyMap(), // Not available in new structure
+        revenueGrowth = revenueAnalysis?.growthMetrics?.revenueGrowthPercentage ?: 0.0,
+        seasonalTrends = revenueAnalysis?.dailyTrends?.map { trend ->
+            SeasonalTrend(
+                period = trend.date ?: "",
+                revenue = trend.revenue ?: 0.0,
+                seasonalIndex = 1.0 // Default value
+            )
+        } ?: emptyList()
+    )
 
 // Promotion Reports
 @Serializable

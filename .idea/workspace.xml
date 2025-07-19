@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="ba88e03d-e469-4675-be05-07168fdbb232" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/MSI-BUILD-SUCCESS-REPORT.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/MSI-INSTALLER-GUIDE.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/build-msi-advanced.ps1" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/build-msi-simple.ps1" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/build-msi.bat" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/create-icons-simple.ps1" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/format.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/AugmentWebviewStateStore.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/AugmentWebviewStateStore.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/codeStyles/Project.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/codeStyles/codeStyleConfig.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/dictionaries/project.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/gradle.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/gradle.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ARABIC_LOCALIZATION_IMPLEMENTATION.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/UpdateServiceDemo.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/build-msi.ps1" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/build.gradle.kts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/build/libs/DesktopApp-2.1.0.jar" beforeDir="false" afterPath="$PROJECT_DIR$/build/libs/DesktopApp-2.1.0.jar" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/installer/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/installer/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/installer/icons/create-icons.ps1" beforeDir="false" afterPath="$PROJECT_DIR$/installer/icons/create-icons.ps1" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/installer/wix/SalesManagementSystem.wxs" beforeDir="false" afterPath="$PROJECT_DIR$/installer/wix/SalesManagementSystem.wxs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/jdk17-installer.msi" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/kotlin/data/api/ReportModels.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/kotlin/data/api/ReportModels.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/kotlin/data/auth/AuthService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/kotlin/data/auth/AuthService.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/kotlin/ui/screens/CategoriesScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/kotlin/ui/screens/CategoriesScreen.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/kotlin/ui/screens/LoginScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/kotlin/ui/screens/LoginScreen.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/kotlin/ui/screens/ProductsScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/kotlin/ui/screens/ProductsScreen.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/kotlin/ui/screens/ReportsScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/kotlin/ui/screens/ReportsScreen.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/kotlin/ui/screens/SalesScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/kotlin/ui/screens/SalesScreen.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/kotlin/ui/screens/SettingsScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/kotlin/ui/screens/SettingsScreen.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/kotlin/compilation/CompilationTest.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/kotlin/data/api/CustomerReportDeserializationTest.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/kotlin/data/api/PromotionApiUrlTest.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/kotlin/data/api/PromotionDataModelsTest.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/kotlin/integration/SalesPromotionIntegrationTest.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/kotlin/services/UpdateServiceTest.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/kotlin/ui/viewmodels/ReportsViewModelTest.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/verify_msi.ps1" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/verify_msi_simple.ps1" beforeDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ExternalProjectsData">
+    <projectState path="$PROJECT_DIR$">
+      <ProjectState />
+    </projectState>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="KubernetesApiPersistence">{}</component>
+  <component name="KubernetesApiProvider">{
+  &quot;isMigrated&quot;: true
+}</component>
+  <component name="ProjectColorInfo">{
+  &quot;customColor&quot;: &quot;&quot;,
+  &quot;associatedIndex&quot;: 3
+}</component>
+  <component name="ProjectId" id="303lTXGoeCNAu1PViBl5WgcE1KQ" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Gradle.Build Sales-Managment-System-Using-Kotlin-Compose.executor": "Run",
+    "Kotlin.MainKt.executor": "Run",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "main",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="RunManager" selected="Kotlin.MainKt">
+    <configuration default="true" type="AZURE_FUNCTION_SUPPORT" factoryName="Run Functions">
+      <option name="appName" />
+      <option name="appServicePlanName" />
+      <option name="appServicePlanResourceGroup" />
+      <option name="appSettingsKey" value="0dd95d24-d2a5-44fc-8a2f-fddbc02f5c2d" />
+      <option name="artifact" />
+      <option name="debugOptions" />
+      <option name="deployment" />
+      <option name="deploymentStagingDirectoryPath" />
+      <option name="funcPath" />
+      <option name="functionHostArguments" />
+      <option name="hostJsonPath" />
+      <option name="insightsName" />
+      <option name="instrumentationKey" />
+      <option name="javaVersion" />
+      <option name="localSettingsJsonPath" />
+      <option name="moduleName" />
+      <option name="os" />
+      <option name="pricingTier" />
+      <option name="providerMap">
+        <map />
+      </option>
+      <option name="region" />
+      <option name="resourceGroup" />
+      <option name="stagingFolder" />
+      <option name="subscription" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="MainKt" type="JetRunConfigurationType" temporary="true" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="MainKt" />
+      <module name="DesktopApp.main" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Kotlin.MainKt" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-jdk-9823dce3aa75-fbdcb00ec9e3-intellij.indexing.shared.core-IU-251.26927.53" />
+        <option value="bundled-js-predefined-d6986cc7102b-09060db00ec0-JavaScript-IU-251.26927.53" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="ba88e03d-e469-4675-be05-07168fdbb232" name="Changes" comment="" />
+      <created>1752864146485</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1752864146485</updated>
+      <workItem from="1752864148471" duration="9233000" />
+      <workItem from="1752874382734" duration="829000" />
+      <workItem from="1752875226062" duration="388000" />
+      <workItem from="1752875632648" duration="4910000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+</project>

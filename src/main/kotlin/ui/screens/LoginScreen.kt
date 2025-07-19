@@ -416,6 +416,8 @@ fun LoginScreen(
                             keyboardActions = KeyboardActions(
                                 onDone = {
                                     focusManager.clearFocus()
+                                    // Immediately set loading state for instant feedback
+                                    authService.setLoadingState(true)
                                     if (validateForm()) {
                                         coroutineScope.launch {
                                             if (showSignup) {
@@ -424,6 +426,9 @@ fun LoginScreen(
                                                 authService.login(username, password)
                                             }
                                         }
+                                    } else {
+                                        // Reset loading state if validation fails
+                                        authService.setLoadingState(false)
                                     }
                                 }
                             ),
@@ -479,6 +484,8 @@ fun LoginScreen(
                             isLoading = authState.isLoading,
                             enabled = !authState.isLoading,
                             onClick = {
+                                // Immediately set loading state for instant feedback
+                                authService.setLoadingState(true)
                                 if (validateForm()) {
                                     coroutineScope.launch {
                                         if (showSignup) {
@@ -487,6 +494,9 @@ fun LoginScreen(
                                             authService.login(username, password)
                                         }
                                     }
+                                } else {
+                                    // Reset loading state if validation fails
+                                    authService.setLoadingState(false)
                                 }
                             }
                         )
@@ -574,7 +584,7 @@ private fun EnhancedAuthButton(
     }
 }
 
-// Enhanced Toggle Button Component with hover effects
+// Enhanced Toggle Button Component with single hover effect
 @Composable
 private fun EnhancedToggleButton(
     text: String,
@@ -584,34 +594,31 @@ private fun EnhancedToggleButton(
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
 
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(
-                color = if (isHovered)
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
-                else
-                    Color.Transparent,
-                shape = RoundedCornerShape(8.dp)
-            )
+    // Use a single consistent rounded corner radius
+    val cornerRadius = 8.dp
+
+    TextButton(
+        onClick = onClick,
+        modifier = modifier,
+        colors = ButtonDefaults.textButtonColors(
+            contentColor = if (isHovered)
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+            else
+                MaterialTheme.colorScheme.primary,
+            containerColor = if (isHovered)
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+            else
+                Color.Transparent
+        ),
+        shape = RoundedCornerShape(cornerRadius),
+        interactionSource = interactionSource,
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        TextButton(
-            onClick = onClick,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            colors = ButtonDefaults.textButtonColors(
-                contentColor = if (isHovered)
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
-                else
-                    MaterialTheme.colorScheme.primary
-            ),
-            interactionSource = interactionSource
-        ) {
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center
-            )
-        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center
+        )
     }
 }

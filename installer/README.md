@@ -278,5 +278,66 @@ This installer and application are proprietary software. See `LICENSE.txt` for f
 
 ---
 
-**Sales Management System v2.1.0**  
+## 🔧 Advanced WiX Toolset Integration
+
+### Enhanced MSI Features with WiX
+
+The project now includes advanced WiX Toolset integration for professional MSI packages:
+
+#### New Gradle Tasks
+```bash
+# Validate WiX installation
+./gradlew validateWixInstallation
+
+# Build enhanced MSI with WiX
+./gradlew buildMsi
+
+# Individual WiX build steps
+./gradlew prepareMsiBuild
+./gradlew compileWixSources
+./gradlew createMsiPackage
+./gradlew signMsiPackage
+```
+
+#### Arabic RTL Support
+- ✅ Arabic installer UI with proper RTL text direction
+- ✅ Arabic localization strings in `wix/Arabic.wxl`
+- ✅ Arabic shortcut names and descriptions
+- ✅ Tahoma font for proper Arabic rendering
+
+#### Professional Features
+- ✅ Digital signing support (with certificate)
+- ✅ Silent installation scripts
+- ✅ Windows Firewall exceptions
+- ✅ File associations (.sms files)
+- ✅ URL protocol registration (sms://)
+- ✅ Enhanced registry integration
+- ✅ Proper upgrade handling
+
+#### Digital Signing
+Set these properties for code signing:
+```properties
+msi.certificate.path=path/to/certificate.p12
+msi.certificate.password=certificate_password
+msi.timestamp.url=http://timestamp.digicert.com
+```
+
+#### Silent Installation
+```cmd
+# Silent install with options
+msiexec /i SalesManagementSystem-2.1.0.msi /quiet /norestart ^
+  FULLSCREEN_MODE=1 ^
+  CREATE_DESKTOP_SHORTCUT=1 ^
+  BACKEND_URL="https://custom-backend.com"
+```
+
+### WiX Configuration Files
+
+- `wix/SalesManagementSystem.wxs` - Main WiX source with components
+- `wix/Arabic.wxl` - Arabic localization strings
+- `scripts/configure-application.ps1` - Post-installation configuration
+
+---
+
+**Sales Management System v2.1.0**
 © 2024 Hamza Damra. All rights reserved.

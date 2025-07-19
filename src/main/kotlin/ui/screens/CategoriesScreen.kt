@@ -955,6 +955,8 @@ fun CategoryDialog(
     onDismiss: () -> Unit,
     onSave: (CategoryDTO) -> Unit
 ) {
+    // Loading state for immediate feedback
+    var isLoading by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf(category?.name ?: "") }
     var description by remember { mutableStateOf(category?.description ?: "") }
     var displayOrder by remember { mutableStateOf(category?.displayOrder?.toString() ?: "0") }
@@ -1377,58 +1379,48 @@ fun CategoryDialog(
                 val isColorValid = colorCode.isBlank() || ColorUtils.isValidHexColor(colorCode)
                 val isValid = name.isNotBlank() && selectedInventoryId != null && isColorValid
 
-                Box(
+                Button(
+                    onClick = {
+                        if (isValid && !isLoading) {
+                            isLoading = true // Set loading state immediately
+                            val categoryDTO = CategoryDTO(
+                                id = category?.id,
+                                name = name.trim(),
+                                description = description.trim().takeIf { it.isNotEmpty() },
+                                displayOrder = displayOrder.toIntOrNull() ?: 0,
+                                status = category?.status?.name ?: "ACTIVE",
+                                imageUrl = imageUrl.trim().takeIf { it.isNotEmpty() },
+                                icon = icon.trim().takeIf { it.isNotEmpty() },
+                                colorCode = colorCode.trim().takeIf { it.isNotEmpty() },
+                                inventoryId = selectedInventoryId
+                            )
+                            onSave(categoryDTO)
+                        }
+                    },
                     modifier = Modifier
                         .weight(1f)
-                        .height(56.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            color = if (isSaveHovered && isValid)
-                                MaterialTheme.colorScheme.primary.copy(alpha = 1f)
-                            else if (isValid)
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
-                            else
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                        .border(
-                            width = if (isSaveHovered && isValid) 2.dp else 1.dp,
-                            color = if (isSaveHovered && isValid)
-                                MaterialTheme.colorScheme.primary
-                            else if (isValid)
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                            else
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                        .clickable(
-                            interactionSource = saveInteractionSource,
-                            indication = null,
-                            enabled = isValid
-                        ) {
-                            if (isValid) {
-                                val categoryDTO = CategoryDTO(
-                                    id = category?.id,
-                                    name = name.trim(),
-                                    description = description.trim().takeIf { it.isNotEmpty() },
-                                    displayOrder = displayOrder.toIntOrNull() ?: 0,
-                                    status = category?.status?.name ?: "ACTIVE",
-                                    imageUrl = imageUrl.trim().takeIf { it.isNotEmpty() },
-                                    icon = icon.trim().takeIf { it.isNotEmpty() },
-                                    colorCode = colorCode.trim().takeIf { it.isNotEmpty() },
-                                    inventoryId = selectedInventoryId
-                                )
-                                onSave(categoryDTO)
-                            }
-                        },
-                    contentAlignment = Alignment.Center
+                        .height(56.dp),
+                    enabled = isValid && !isLoading,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text(
-                        text = if (isEditing) "تحديث" else "إضافة",
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontWeight = FontWeight.SemiBold,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text(
+                            text = if (isEditing) "تحديث" else "إضافة",
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                 }
             }
         },

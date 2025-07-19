@@ -1,42 +1,129 @@
-# PowerShell script to create basic application icons for the Sales Management System
-# This creates simple placeholder icons that can be replaced with professional designs later
+# Enhanced Icon Creation Script for Sales Management System
+# This script creates placeholder icons and WiX installer graphics
 
-Write-Host "Creating application icons for Sales Management System..." -ForegroundColor Green
+param(
+    [switch]$CreateWixGraphics,
+    [switch]$Force,
+    [switch]$Help
+)
 
-# Create a simple ICO file for Windows (placeholder)
-# In a real scenario, you would use proper icon creation tools
-$iconContent = @"
-This is a placeholder for the Windows ICO icon file.
-To create a proper icon:
+if ($Help) {
+    Write-Host ""
+    Write-Host "Enhanced Icon Creation Script for Sales Management System" -ForegroundColor Cyan
+    Write-Host "=========================================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Usage:" -ForegroundColor Yellow
+    Write-Host "  .\create-icons.ps1                    # Create app icons only" -ForegroundColor White
+    Write-Host "  .\create-icons.ps1 -CreateWixGraphics # Create all graphics including WiX" -ForegroundColor White
+    Write-Host "  .\create-icons.ps1 -Force             # Overwrite existing files" -ForegroundColor White
+    Write-Host "  .\create-icons.ps1 -Help              # Show this help" -ForegroundColor White
+    Write-Host ""
+    Write-Host "Parameters:" -ForegroundColor Yellow
+    Write-Host "  -CreateWixGraphics  Create WiX installer banner and dialog graphics" -ForegroundColor White
+    Write-Host "  -Force              Overwrite existing icon files" -ForegroundColor White
+    Write-Host "  -Help               Show this help message" -ForegroundColor White
+    Write-Host ""
+    exit 0
+}
 
-1. Use an icon editor like IcoFX, GIMP, or online tools
-2. Create icons with multiple sizes: 16x16, 32x32, 48x48, 256x256
-3. Use business-appropriate colors (blues, grays, professional palette)
-4. Include sales/management related imagery (charts, graphs, calculator)
-5. Save as app-icon.ico in this directory
+Write-Host "Enhanced Icon Creation for Sales Management System" -ForegroundColor Cyan
+Write-Host "=================================================" -ForegroundColor Cyan
 
-For now, the build will work without icons, but they enhance the professional appearance.
+# Function to create a placeholder file with metadata
+function Create-PlaceholderFile {
+    param(
+        [string]$FilePath,
+        [int]$Width,
+        [int]$Height,
+        [string]$Description,
+        [string]$Format
+    )
+
+    $content = @"
+# Placeholder for $Description
+# Format: $Format
+# Dimensions: $Width x $Height
+# Created: $(Get-Date)
+#
+# This is a placeholder file for the Sales Management System installer.
+# Replace this file with a professional $Format graphic.
+#
+# Requirements:
+# - Size: $Width x $Height pixels
+# - Format: $Format
+# - Professional business appearance
+# - Consistent branding
+# - High quality and clear at all sizes
 "@
 
-# Create placeholder files with instructions
-$iconContent | Out-File -FilePath "installer/icons/app-icon-instructions.txt" -Encoding UTF8
+    [System.IO.File]::WriteAllText($FilePath, $content)
+}
 
-Write-Host "Icon placeholder files created." -ForegroundColor Yellow
-Write-Host "Please replace with actual icon files:" -ForegroundColor Yellow
-Write-Host "  - app-icon.ico (Windows)" -ForegroundColor White
-Write-Host "  - app-icon.icns (macOS)" -ForegroundColor White  
-Write-Host "  - app-icon.png (Linux)" -ForegroundColor White
+# Create application icons
+Write-Host ""
+Write-Host "Creating application icons..." -ForegroundColor Yellow
 
-# Create a simple batch file to generate basic icons using ImageMagick (if available)
-$imageMagickScript = @"
-@echo off
-echo Creating basic application icons...
+$icons = @(
+    @{ Name = "app-icon.ico"; Width = 256; Height = 256; Description = "Windows application icon"; Format = "ICO" },
+    @{ Name = "app-icon.png"; Width = 256; Height = 256; Description = "Linux application icon"; Format = "PNG" },
+    @{ Name = "app-icon.icns"; Width = 256; Height = 256; Description = "macOS application icon bundle"; Format = "ICNS" }
+)
 
-REM Check if ImageMagick is available
-where magick >nul 2>nul
-if %ERRORLEVEL% NEQ 0 (
-    echo ImageMagick not found. Please install ImageMagick or create icons manually.
-    echo Download from: https://imagemagick.org/script/download.php#windows
+foreach ($icon in $icons) {
+    $iconPath = $icon.Name
+    if (-not (Test-Path $iconPath) -or $Force) {
+        Write-Host "  Creating placeholder: $iconPath" -ForegroundColor Gray
+        Create-PlaceholderFile -FilePath $iconPath -Width $icon.Width -Height $icon.Height -Description $icon.Description -Format $icon.Format
+        Write-Host "  ⚠️  Created placeholder $($icon.Description)" -ForegroundColor Yellow
+    } else {
+        Write-Host "  ✅ Icon exists: $iconPath" -ForegroundColor Green
+    }
+}
+
+# Create WiX installer graphics if requested
+if ($CreateWixGraphics) {
+    Write-Host ""
+    Write-Host "Creating WiX installer graphics..." -ForegroundColor Yellow
+
+    $wixGraphics = @(
+        @{ Name = "banner.bmp"; Width = 493; Height = 58; Description = "WiX installer banner"; Format = "BMP" },
+        @{ Name = "dialog.bmp"; Width = 493; Height = 312; Description = "WiX installer dialog background"; Format = "BMP" }
+    )
+
+    foreach ($graphic in $wixGraphics) {
+        $graphicPath = $graphic.Name
+        if (-not (Test-Path $graphicPath) -or $Force) {
+            Write-Host "  Creating placeholder: $graphicPath" -ForegroundColor Gray
+            Create-PlaceholderFile -FilePath $graphicPath -Width $graphic.Width -Height $graphic.Height -Description $graphic.Description -Format $graphic.Format
+            Write-Host "  ⚠️  Created placeholder $($graphic.Description)" -ForegroundColor Yellow
+            Write-Host "     Size: $($graphic.Width) x $($graphic.Height)" -ForegroundColor Gray
+        } else {
+            Write-Host "  ✅ Graphic exists: $graphicPath" -ForegroundColor Green
+        }
+    }
+}
+
+Write-Host ""
+Write-Host "✅ Icon creation process completed!" -ForegroundColor Green
+Write-Host ""
+Write-Host "📝 Summary:" -ForegroundColor Cyan
+Write-Host "  - Application icon placeholders created" -ForegroundColor White
+if ($CreateWixGraphics) {
+    Write-Host "  - WiX installer graphics placeholders created" -ForegroundColor White
+}
+Write-Host ""
+Write-Host "🚀 Next Steps:" -ForegroundColor Cyan
+Write-Host "1. Replace placeholders with professional designs" -ForegroundColor White
+Write-Host "2. Use professional design tools (Adobe, Figma, etc.)" -ForegroundColor White
+Write-Host "3. Test icons in different contexts and sizes" -ForegroundColor White
+Write-Host "4. Ensure consistent branding across all graphics" -ForegroundColor White
+Write-Host ""
+Write-Host "💡 Professional Design Tips:" -ForegroundColor Cyan
+Write-Host "- Use vector graphics for scalability" -ForegroundColor White
+Write-Host "- Maintain consistent color scheme (#1976D2, #2E7D32)" -ForegroundColor White
+Write-Host "- Consider Arabic/RTL interface conventions" -ForegroundColor White
+Write-Host "- Test readability at 16x16 size" -ForegroundColor White
+Write-Host "- Use business-appropriate imagery (charts, graphs)" -ForegroundColor White
     pause
     exit /b 1
 )

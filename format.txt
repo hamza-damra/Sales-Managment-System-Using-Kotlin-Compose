@@ -1,0 +1,953 @@
+{
+    "success": true,
+    "message": "Report generated successfully",
+    "data": {
+        "taxAnalysis": {
+            "complianceMetrics": {
+                "totalTransactions": 8,
+                "taxComplianceRate": 0.0000,
+                "taxableTransactions": 0,
+                "averageTaxRate": 8.50
+            },
+            "taxByCategory": [
+                {
+                    "effectiveTaxRate": 0.0000,
+                    "taxCollected": 0.00,
+                    "totalRevenue": 6389.09,
+                    "transactionCount": 8,
+                    "categoryName": "Electronics"
+                }
+            ],
+            "taxSummary": {
+                "taxAsPercentageOfRevenue": 0.0000,
+                "effectiveTaxRate": 0.0000,
+                "totalTaxCollected": 0.00,
+                "totalRevenue": 6389.09,
+                "totalTaxableRevenue": 6389.09
+            },
+            "taxRateBreakdown": [
+                {
+                    "taxRate": 8.50,
+                    "taxCollected": 0.00,
+                    "taxPercentage": 0,
+                    "revenuePercentage": 100.0000,
+                    "transactionCount": 8,
+                    "totalRevenue": 6389.09
+                }
+            ],
+            "dailyTaxTrends": [
+                {
+                    "date": "2025-07-12",
+                    "revenue": 2185.12,
+                    "avgTaxPerTransaction": 0.00,
+                    "taxCollected": 0.00,
+                    "transactionCount": 2
+                },
+                {
+                    "date": "2025-07-14",
+                    "revenue": 607.56,
+                    "avgTaxPerTransaction": 0.00,
+                    "taxCollected": 0.00,
+                    "transactionCount": 2
+                },
+                {
+                    "date": "2025-07-16",
+                    "revenue": 178.73,
+                    "avgTaxPerTransaction": 0.00,
+                    "taxCollected": 0.00,
+                    "transactionCount": 1
+                },
+                {
+                    "date": "2025-07-17",
+                    "revenue": 3417.68,
+                    "avgTaxPerTransaction": 0.00,
+                    "taxCollected": 0.00,
+                    "transactionCount": 3
+                }
+            ]
+        },
+        "profitMarginAnalysis": {
+            "overallMargins": {
+                "totalTax": 0.00,
+                "totalDiscounts": 0.00,
+                "netMarginPercentage": 99.7500,
+                "totalRevenue": 6389.09,
+                "totalShipping": 15.99,
+                "totalCost": 0.00,
+                "grossProfit": 6389.09,
+                "netProfit": 6373.10,
+                "grossMarginPercentage": 100.0000
+            },
+            "marginVariance": {
+                "maxMargin": 100.0000,
+                "marginRange": 0.0000,
+                "minMargin": 100.0000,
+                "averageMargin": 100.00
+            },
+            "bottomPerformingProducts": [
+                {
+                    "totalQuantitySold": 2,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "PHO001",
+                    "salesCount": 1,
+                    "profitPerUnit": 645.57,
+                    "totalRevenue": 1291.13,
+                    "categoryName": "Electronics",
+                    "productName": "Smartphone",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 699.99,
+                    "grossProfit": 1291.13
+                },
+                {
+                    "totalQuantitySold": 1,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "LAP001",
+                    "salesCount": 1,
+                    "profitPerUnit": 1030.74,
+                    "totalRevenue": 1030.74,
+                    "categoryName": "Electronics",
+                    "productName": "Laptop",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 999.99,
+                    "grossProfit": 1030.74
+                },
+                {
+                    "totalQuantitySold": 1,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "TAB001",
+                    "salesCount": 1,
+                    "profitPerUnit": 368.89,
+                    "totalRevenue": 368.89,
+                    "categoryName": "Electronics",
+                    "productName": "Tablet",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 399.99,
+                    "grossProfit": 368.89
+                },
+                {
+                    "totalQuantitySold": 1,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "MON001",
+                    "salesCount": 1,
+                    "profitPerUnit": 216.99,
+                    "totalRevenue": 216.99,
+                    "categoryName": "Electronics",
+                    "productName": "Monitor",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 199.99,
+                    "grossProfit": 216.99
+                },
+                {
+                    "totalQuantitySold": 1,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "HEA001",
+                    "salesCount": 1,
+                    "profitPerUnit": 162.74,
+                    "totalRevenue": 162.74,
+                    "categoryName": "Electronics",
+                    "productName": "Headphones",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 149.99,
+                    "grossProfit": 162.74
+                },
+                {
+                    "totalQuantitySold": 1,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "SPE001",
+                    "salesCount": 1,
+                    "profitPerUnit": 97.64,
+                    "totalRevenue": 97.64,
+                    "categoryName": "Electronics",
+                    "productName": "Speaker",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 89.99,
+                    "grossProfit": 97.64
+                },
+                {
+                    "totalQuantitySold": 1,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "KEY001",
+                    "salesCount": 1,
+                    "profitPerUnit": 86.79,
+                    "totalRevenue": 86.79,
+                    "categoryName": "Electronics",
+                    "productName": "Keyboard",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 79.99,
+                    "grossProfit": 86.79
+                },
+                {
+                    "totalQuantitySold": 2,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "MOU001",
+                    "salesCount": 1,
+                    "profitPerUnit": 30.91,
+                    "totalRevenue": 61.82,
+                    "categoryName": "Electronics",
+                    "productName": "Mouse",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 29.99,
+                    "grossProfit": 61.82
+                }
+            ],
+            "topPerformingProducts": [
+                {
+                    "totalQuantitySold": 2,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "PHO001",
+                    "salesCount": 1,
+                    "profitPerUnit": 645.57,
+                    "totalRevenue": 1291.13,
+                    "categoryName": "Electronics",
+                    "productName": "Smartphone",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 699.99,
+                    "grossProfit": 1291.13
+                },
+                {
+                    "totalQuantitySold": 1,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "LAP001",
+                    "salesCount": 1,
+                    "profitPerUnit": 1030.74,
+                    "totalRevenue": 1030.74,
+                    "categoryName": "Electronics",
+                    "productName": "Laptop",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 999.99,
+                    "grossProfit": 1030.74
+                },
+                {
+                    "totalQuantitySold": 1,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "TAB001",
+                    "salesCount": 1,
+                    "profitPerUnit": 368.89,
+                    "totalRevenue": 368.89,
+                    "categoryName": "Electronics",
+                    "productName": "Tablet",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 399.99,
+                    "grossProfit": 368.89
+                },
+                {
+                    "totalQuantitySold": 1,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "MON001",
+                    "salesCount": 1,
+                    "profitPerUnit": 216.99,
+                    "totalRevenue": 216.99,
+                    "categoryName": "Electronics",
+                    "productName": "Monitor",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 199.99,
+                    "grossProfit": 216.99
+                },
+                {
+                    "totalQuantitySold": 1,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "HEA001",
+                    "salesCount": 1,
+                    "profitPerUnit": 162.74,
+                    "totalRevenue": 162.74,
+                    "categoryName": "Electronics",
+                    "productName": "Headphones",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 149.99,
+                    "grossProfit": 162.74
+                },
+                {
+                    "totalQuantitySold": 1,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "SPE001",
+                    "salesCount": 1,
+                    "profitPerUnit": 97.64,
+                    "totalRevenue": 97.64,
+                    "categoryName": "Electronics",
+                    "productName": "Speaker",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 89.99,
+                    "grossProfit": 97.64
+                },
+                {
+                    "totalQuantitySold": 1,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "KEY001",
+                    "salesCount": 1,
+                    "profitPerUnit": 86.79,
+                    "totalRevenue": 86.79,
+                    "categoryName": "Electronics",
+                    "productName": "Keyboard",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 79.99,
+                    "grossProfit": 86.79
+                },
+                {
+                    "totalQuantitySold": 2,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "MOU001",
+                    "salesCount": 1,
+                    "profitPerUnit": 30.91,
+                    "totalRevenue": 61.82,
+                    "categoryName": "Electronics",
+                    "productName": "Mouse",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 29.99,
+                    "grossProfit": 61.82
+                }
+            ],
+            "productMargins": [
+                {
+                    "totalQuantitySold": 2,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "PHO001",
+                    "salesCount": 1,
+                    "profitPerUnit": 645.57,
+                    "totalRevenue": 1291.13,
+                    "categoryName": "Electronics",
+                    "productName": "Smartphone",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 699.99,
+                    "grossProfit": 1291.13
+                },
+                {
+                    "totalQuantitySold": 1,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "LAP001",
+                    "salesCount": 1,
+                    "profitPerUnit": 1030.74,
+                    "totalRevenue": 1030.74,
+                    "categoryName": "Electronics",
+                    "productName": "Laptop",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 999.99,
+                    "grossProfit": 1030.74
+                },
+                {
+                    "totalQuantitySold": 1,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "TAB001",
+                    "salesCount": 1,
+                    "profitPerUnit": 368.89,
+                    "totalRevenue": 368.89,
+                    "categoryName": "Electronics",
+                    "productName": "Tablet",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 399.99,
+                    "grossProfit": 368.89
+                },
+                {
+                    "totalQuantitySold": 1,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "MON001",
+                    "salesCount": 1,
+                    "profitPerUnit": 216.99,
+                    "totalRevenue": 216.99,
+                    "categoryName": "Electronics",
+                    "productName": "Monitor",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 199.99,
+                    "grossProfit": 216.99
+                },
+                {
+                    "totalQuantitySold": 1,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "HEA001",
+                    "salesCount": 1,
+                    "profitPerUnit": 162.74,
+                    "totalRevenue": 162.74,
+                    "categoryName": "Electronics",
+                    "productName": "Headphones",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 149.99,
+                    "grossProfit": 162.74
+                },
+                {
+                    "totalQuantitySold": 1,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "SPE001",
+                    "salesCount": 1,
+                    "profitPerUnit": 97.64,
+                    "totalRevenue": 97.64,
+                    "categoryName": "Electronics",
+                    "productName": "Speaker",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 89.99,
+                    "grossProfit": 97.64
+                },
+                {
+                    "totalQuantitySold": 1,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "KEY001",
+                    "salesCount": 1,
+                    "profitPerUnit": 86.79,
+                    "totalRevenue": 86.79,
+                    "categoryName": "Electronics",
+                    "productName": "Keyboard",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 79.99,
+                    "grossProfit": 86.79
+                },
+                {
+                    "totalQuantitySold": 2,
+                    "profitMarginPercentage": 100.0000,
+                    "productSku": "MOU001",
+                    "salesCount": 1,
+                    "profitPerUnit": 30.91,
+                    "totalRevenue": 61.82,
+                    "categoryName": "Electronics",
+                    "productName": "Mouse",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 29.99,
+                    "grossProfit": 61.82
+                }
+            ],
+            "categoryMargins": [
+                {
+                    "profitMarginPercentage": 100.0000,
+                    "totalQuantitySold": 10,
+                    "salesCount": 5,
+                    "totalRevenue": 3316.74,
+                    "categoryName": "Electronics",
+                    "totalCost": 0.00,
+                    "grossProfit": 3316.74
+                }
+            ]
+        },
+        "revenueAnalysis": {
+            "summary": {
+                "totalTransactions": 0,
+                "netRevenue": 0,
+                "totalDiscounts": 0,
+                "averageOrderValue": 0,
+                "revenuePerCustomer": 0,
+                "grossRevenue": 0,
+                "netProfit": 0,
+                "totalTax": 0,
+                "totalRevenue": 0,
+                "totalShipping": 0,
+                "grossProfit": 0,
+                "totalCost": 0,
+                "uniqueCustomers": 0
+            },
+            "revenueByCategory": [
+                {
+                    "totalQuantitySold": 10,
+                    "salesCount": 5,
+                    "profitMargin": 100.0000,
+                    "revenuePercentage": 0,
+                    "totalRevenue": 3316.74,
+                    "categoryName": "Electronics",
+                    "totalCost": 0.00,
+                    "avgUnitPrice": 331.24,
+                    "grossProfit": 3316.74
+                }
+            ],
+            "growthMetrics": {
+                "revenueGrowthPercentage": 0,
+                "currentPeriodRevenue": 0,
+                "previousPeriodRevenue": 0
+            },
+            "dailyTrends": [
+                {
+                    "date": "2025-07-12",
+                    "salesCount": 1,
+                    "revenue": 1092.56,
+                    "cost": 0.00,
+                    "profit": 1092.56,
+                    "avgOrderValue": 1092.56
+                },
+                {
+                    "date": "2025-07-14",
+                    "salesCount": 1,
+                    "revenue": 303.78,
+                    "cost": 0.00,
+                    "profit": 303.78,
+                    "avgOrderValue": 303.78
+                },
+                {
+                    "date": "2025-07-16",
+                    "salesCount": 2,
+                    "revenue": 1838.75,
+                    "cost": 0.00,
+                    "profit": 1838.75,
+                    "avgOrderValue": 919.375
+                },
+                {
+                    "date": "2025-07-17",
+                    "salesCount": 1,
+                    "revenue": 97.64,
+                    "cost": 0.00,
+                    "profit": 97.64,
+                    "avgOrderValue": 97.64
+                }
+            ]
+        },
+        "executiveSummary": {
+            "periodInformation": {
+                "endDate": "2025-07-18",
+                "avgDailyRevenue": 0.00,
+                "periodDays": 18,
+                "startDate": "2025-07-01"
+            },
+            "insights": [
+                "Low gross margin of 0% requires immediate attention to pricing and cost structure.",
+                "Average order value of $0 suggests opportunities for cross-selling and upselling."
+            ],
+            "keyPerformanceIndicators": {
+                "totalTransactions": 0,
+                "totalRevenue": 0,
+                "grossMargin": 0,
+                "revenuePerCustomer": 0,
+                "grossProfit": 0,
+                "avgOrderValue": 0,
+                "uniqueCustomers": 0
+            },
+            "recommendations": [
+                "Review pricing strategy and negotiate better supplier terms to improve gross margins.",
+                "Implement cross-selling and upselling strategies to increase average order value.",
+                "Monitor daily revenue trends to identify peak performance periods and optimize operations.",
+                "Analyze top-performing products and categories to focus marketing and inventory investments."
+            ]
+        },
+        "advancedMetrics": {
+            "customerSegmentation": {
+                "avgRevenuePerCustomer": 666.55,
+                "totalCustomers": 5,
+                "top20PercentCustomers": 1,
+                "totalRevenue": 3332.73,
+                "paretoRatio": 49.8100,
+                "top20PercentRevenue": 1660.02
+            },
+            "topCustomersByRevenue": [
+                {
+                    "lastPurchaseDate": "2025-07-17T00:17:22.210187",
+                    "customerType": "REGULAR",
+                    "customerId": 4,
+                    "totalOrders": 1,
+                    "totalRevenue": 1660.02,
+                    "revenuePerOrder": 1660.02,
+                    "customerName": "Alice Brown",
+                    "avgOrderValue": 1660.02
+                },
+                {
+                    "lastPurchaseDate": "2025-07-12T06:17:19.027014",
+                    "customerType": "REGULAR",
+                    "customerId": 1,
+                    "totalOrders": 1,
+                    "totalRevenue": 1092.56,
+                    "revenuePerOrder": 1092.56,
+                    "customerName": "John Doe",
+                    "avgOrderValue": 1092.56
+                },
+                {
+                    "lastPurchaseDate": "2025-07-14T06:17:20.002012",
+                    "customerType": "REGULAR",
+                    "customerId": 2,
+                    "totalOrders": 1,
+                    "totalRevenue": 303.78,
+                    "revenuePerOrder": 303.78,
+                    "customerName": "Jane Smith",
+                    "avgOrderValue": 303.78
+                },
+                {
+                    "lastPurchaseDate": "2025-07-16T06:17:21.227013",
+                    "customerType": "REGULAR",
+                    "customerId": 3,
+                    "totalOrders": 1,
+                    "totalRevenue": 178.73,
+                    "revenuePerOrder": 178.73,
+                    "customerName": "Bob Johnson",
+                    "avgOrderValue": 178.73
+                },
+                {
+                    "lastPurchaseDate": "2025-07-17T05:47:23.359189",
+                    "customerType": "REGULAR",
+                    "customerId": 5,
+                    "totalOrders": 1,
+                    "totalRevenue": 97.64,
+                    "revenuePerOrder": 97.64,
+                    "customerName": "Charlie Wilson",
+                    "avgOrderValue": 97.64
+                }
+            ],
+            "conversionMetrics": {
+                "repeatCustomerRate": 60.0000,
+                "repeatCustomers": 3,
+                "totalSales": 8,
+                "uniqueCustomers": 5,
+                "salesPerCustomer": 1.60
+            },
+            "seasonalAnalysis": {
+                "dayOfWeekPatterns": [
+                    {
+                        "salesCount": 1,
+                        "revenue": 178.73,
+                        "dayOfWeek": "WEDNESDAY",
+                        "avgOrderValue": 178.73
+                    },
+                    {
+                        "salesCount": 2,
+                        "revenue": 607.56,
+                        "dayOfWeek": "MONDAY",
+                        "avgOrderValue": 303.78
+                    },
+                    {
+                        "salesCount": 3,
+                        "revenue": 3417.68,
+                        "dayOfWeek": "THURSDAY",
+                        "avgOrderValue": 1139.23
+                    },
+                    {
+                        "salesCount": 2,
+                        "revenue": 2185.12,
+                        "dayOfWeek": "SATURDAY",
+                        "avgOrderValue": 1092.56
+                    }
+                ],
+                "monthlyPatterns": [
+                    {
+                        "salesCount": 8,
+                        "revenue": 6389.09,
+                        "month": "2025-07",
+                        "avgOrderValue": 798.64
+                    }
+                ]
+            }
+        },
+        "paymentMethodAnalysis": {
+            "summary": {
+                "totalTransactions": 5,
+                "overallAvgTransactionValue": 666.55,
+                "uniquePaymentMethods": 5,
+                "totalRevenue": 3332.73
+            },
+            "preferences": {
+                "mostPopularByTransactions": {
+                    "paymentMethod": "CHECK",
+                    "revenuePercentage": 49.8100,
+                    "transactionCount": 1,
+                    "totalRevenue": 1660.02,
+                    "avgTransactionValue": 0,
+                    "transactionPercentage": 20.0000
+                },
+                "highestAvgTransactionValue": {
+                    "paymentMethod": "CHECK",
+                    "revenuePercentage": 49.8100,
+                    "transactionCount": 1,
+                    "totalRevenue": 1660.02,
+                    "avgTransactionValue": 0,
+                    "transactionPercentage": 20.0000
+                },
+                "highestRevenueMethod": {
+                    "paymentMethod": "CHECK",
+                    "revenuePercentage": 49.8100,
+                    "transactionCount": 1,
+                    "totalRevenue": 1660.02,
+                    "avgTransactionValue": 0,
+                    "transactionPercentage": 20.0000
+                }
+            },
+            "paymentMethodBreakdown": [
+                {
+                    "paymentMethod": "CHECK",
+                    "revenuePercentage": 49.8100,
+                    "transactionCount": 1,
+                    "totalRevenue": 1660.02,
+                    "avgTransactionValue": 0,
+                    "transactionPercentage": 20.0000
+                },
+                {
+                    "paymentMethod": "CREDIT_CARD",
+                    "revenuePercentage": 32.7800,
+                    "transactionCount": 1,
+                    "totalRevenue": 1092.56,
+                    "avgTransactionValue": 0,
+                    "transactionPercentage": 20.0000
+                },
+                {
+                    "paymentMethod": "BANK_TRANSFER",
+                    "revenuePercentage": 9.1200,
+                    "transactionCount": 1,
+                    "totalRevenue": 303.78,
+                    "avgTransactionValue": 0,
+                    "transactionPercentage": 20.0000
+                },
+                {
+                    "paymentMethod": "PAYPAL",
+                    "revenuePercentage": 5.3600,
+                    "transactionCount": 1,
+                    "totalRevenue": 178.73,
+                    "avgTransactionValue": 0,
+                    "transactionPercentage": 20.0000
+                },
+                {
+                    "paymentMethod": "CASH",
+                    "revenuePercentage": 2.9300,
+                    "transactionCount": 1,
+                    "totalRevenue": 97.64,
+                    "avgTransactionValue": 0,
+                    "transactionPercentage": 20.0000
+                }
+            ],
+            "trends": {
+                "paymentMethodGrowth": [
+                    {
+                        "previousRevenue": 0,
+                        "paymentMethod": "CHECK",
+                        "currentRevenue": 1660.02,
+                        "growthPercentage": 100
+                    },
+                    {
+                        "previousRevenue": 0,
+                        "paymentMethod": "CREDIT_CARD",
+                        "currentRevenue": 1092.56,
+                        "growthPercentage": 100
+                    },
+                    {
+                        "previousRevenue": 0,
+                        "paymentMethod": "BANK_TRANSFER",
+                        "currentRevenue": 303.78,
+                        "growthPercentage": 100
+                    },
+                    {
+                        "previousRevenue": 0,
+                        "paymentMethod": "PAYPAL",
+                        "currentRevenue": 178.73,
+                        "growthPercentage": 100
+                    },
+                    {
+                        "previousRevenue": 0,
+                        "paymentMethod": "CASH",
+                        "currentRevenue": 97.64,
+                        "growthPercentage": 100
+                    }
+                ]
+            }
+        },
+        "costAnalysis": {
+            "efficiencyMetrics": {
+                "averageProfitMargin": 100.00,
+                "dailyCostEfficiency": [
+                    {
+                        "date": "2025-07-12",
+                        "revenue": 1092.56,
+                        "cost": 0.00,
+                        "costRatio": 0.0000,
+                        "profitMargin": 100.0000,
+                        "profit": 1092.56
+                    },
+                    {
+                        "date": "2025-07-14",
+                        "revenue": 303.78,
+                        "cost": 0.00,
+                        "costRatio": 0.0000,
+                        "profitMargin": 100.0000,
+                        "profit": 303.78
+                    },
+                    {
+                        "date": "2025-07-16",
+                        "revenue": 1838.75,
+                        "cost": 0.00,
+                        "costRatio": 0.0000,
+                        "profitMargin": 100.0000,
+                        "profit": 1838.75
+                    },
+                    {
+                        "date": "2025-07-17",
+                        "revenue": 97.64,
+                        "cost": 0.00,
+                        "costRatio": 0.0000,
+                        "profitMargin": 100.0000,
+                        "profit": 97.64
+                    }
+                ],
+                "averageCostRatio": 0.00
+            },
+            "costByCategory": [
+                {
+                    "totalQuantitySold": 10,
+                    "salesCount": 5,
+                    "costRatio": 0.0000,
+                    "profitMargin": 100.0000,
+                    "totalRevenue": 3316.74,
+                    "categoryName": "Electronics",
+                    "totalCost": 0.00,
+                    "grossProfit": 3316.74
+                }
+            ],
+            "costSummary": {
+                "totalShippingCosts": 15.99,
+                "operationalCostPercentage": 0.2500,
+                "totalCOGS": 0.00,
+                "totalCosts": 15.99,
+                "totalDiscounts": 0.00,
+                "cogsPercentage": 0.0000,
+                "totalRevenue": 6389.09,
+                "totalOperationalCosts": 15.99,
+                "grossProfit": 6373.10
+            },
+            "leastCostEfficientProducts": [
+                {
+                    "productSku": "PHO001",
+                    "costRatio": 0.0000,
+                    "profitMargin": 100.0000,
+                    "totalRevenue": 1291.13,
+                    "productName": "Smartphone",
+                    "totalCost": 0.00
+                },
+                {
+                    "productSku": "LAP001",
+                    "costRatio": 0.0000,
+                    "profitMargin": 100.0000,
+                    "totalRevenue": 1030.74,
+                    "productName": "Laptop",
+                    "totalCost": 0.00
+                },
+                {
+                    "productSku": "TAB001",
+                    "costRatio": 0.0000,
+                    "profitMargin": 100.0000,
+                    "totalRevenue": 368.89,
+                    "productName": "Tablet",
+                    "totalCost": 0.00
+                },
+                {
+                    "productSku": "MON001",
+                    "costRatio": 0.0000,
+                    "profitMargin": 100.0000,
+                    "totalRevenue": 216.99,
+                    "productName": "Monitor",
+                    "totalCost": 0.00
+                },
+                {
+                    "productSku": "HEA001",
+                    "costRatio": 0.0000,
+                    "profitMargin": 100.0000,
+                    "totalRevenue": 162.74,
+                    "productName": "Headphones",
+                    "totalCost": 0.00
+                },
+                {
+                    "productSku": "SPE001",
+                    "costRatio": 0.0000,
+                    "profitMargin": 100.0000,
+                    "totalRevenue": 97.64,
+                    "productName": "Speaker",
+                    "totalCost": 0.00
+                },
+                {
+                    "productSku": "KEY001",
+                    "costRatio": 0.0000,
+                    "profitMargin": 100.0000,
+                    "totalRevenue": 86.79,
+                    "productName": "Keyboard",
+                    "totalCost": 0.00
+                },
+                {
+                    "productSku": "MOU001",
+                    "costRatio": 0.0000,
+                    "profitMargin": 100.0000,
+                    "totalRevenue": 61.82,
+                    "productName": "Mouse",
+                    "totalCost": 0.00
+                }
+            ],
+            "costPerSale": {
+                "avgRevenuePerSale": 798.64,
+                "avgCOGSPerSale": 0.00,
+                "avgShippingPerSale": 2.00,
+                "totalSales": 8,
+                "avgTotalCostPerSale": 2.00,
+                "avgProfitPerSale": 796.64
+            },
+            "mostCostEfficientProducts": [
+                {
+                    "productSku": "PHO001",
+                    "costRatio": 0.0000,
+                    "profitMargin": 100.0000,
+                    "totalRevenue": 1291.13,
+                    "productName": "Smartphone",
+                    "totalCost": 0.00
+                },
+                {
+                    "productSku": "LAP001",
+                    "costRatio": 0.0000,
+                    "profitMargin": 100.0000,
+                    "totalRevenue": 1030.74,
+                    "productName": "Laptop",
+                    "totalCost": 0.00
+                },
+                {
+                    "productSku": "TAB001",
+                    "costRatio": 0.0000,
+                    "profitMargin": 100.0000,
+                    "totalRevenue": 368.89,
+                    "productName": "Tablet",
+                    "totalCost": 0.00
+                },
+                {
+                    "productSku": "MON001",
+                    "costRatio": 0.0000,
+                    "profitMargin": 100.0000,
+                    "totalRevenue": 216.99,
+                    "productName": "Monitor",
+                    "totalCost": 0.00
+                },
+                {
+                    "productSku": "HEA001",
+                    "costRatio": 0.0000,
+                    "profitMargin": 100.0000,
+                    "totalRevenue": 162.74,
+                    "productName": "Headphones",
+                    "totalCost": 0.00
+                },
+                {
+                    "productSku": "SPE001",
+                    "costRatio": 0.0000,
+                    "profitMargin": 100.0000,
+                    "totalRevenue": 97.64,
+                    "productName": "Speaker",
+                    "totalCost": 0.00
+                },
+                {
+                    "productSku": "KEY001",
+                    "costRatio": 0.0000,
+                    "profitMargin": 100.0000,
+                    "totalRevenue": 86.79,
+                    "productName": "Keyboard",
+                    "totalCost": 0.00
+                },
+                {
+                    "productSku": "MOU001",
+                    "costRatio": 0.0000,
+                    "profitMargin": 100.0000,
+                    "totalRevenue": 61.82,
+                    "productName": "Mouse",
+                    "totalCost": 0.00
+                }
+            ]
+        }
+    },
+    "metadata": {
+        "reportType": "FINANCIAL_REVENUE",
+        "reportName": "Financial Revenue Report",
+        "generatedAt": "2025-07-18T23:34:00.1725357",
+        "generatedBy": null,
+        "period": {
+            "startDate": "2025-07-01T14:30:00",
+            "endDate": "2025-07-18T16:45:00",
+            "description": null,
+            "daysIncluded": null
+        },
+        "appliedFilters": null,
+        "pagination": null,
+        "totalRecords": null,
+        "executionTimeMs": 1304,
+        "version": null,
+        "fromCache": null,
+        "cacheExpiry": null
+    },
+    "errorCode": null,
+    "errorDetails": null
+}

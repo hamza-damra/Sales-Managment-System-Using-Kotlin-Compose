@@ -3315,6 +3315,9 @@ private fun EnhancedSaleDetailsDialog(
     onCompleteSale: ((Long) -> Unit)? = null,
     onCancelSale: ((Long) -> Unit)? = null
 ) {
+    // Loading states for immediate feedback
+    var isCompletingLoading by remember { mutableStateOf(false) }
+    var isCancellingLoading by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = {}, // Disabled click-outside-to-dismiss
         modifier = Modifier.fillMaxWidth(0.9f),
@@ -3454,24 +3457,60 @@ private fun EnhancedSaleDetailsDialog(
                 ) {
                     onCompleteSale?.let { completeCallback ->
                         Button(
-                            onClick = { sale.id?.let { completeCallback(it) } },
+                            onClick = {
+                                if (!isCompletingLoading) {
+                                    isCompletingLoading = true // Set loading state immediately
+                                    sale.id?.let { completeCallback(it) }
+                                }
+                            },
+                            enabled = !isCompletingLoading && !isCancellingLoading,
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = AppTheme.colors.success
+                                containerColor = AppTheme.colors.success,
+                                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant
                             )
                         ) {
-                            Text("إكمال", color = Color.White)
+                            if (isCompletingLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color.White
+                                )
+                            } else {
+                                Text("إكمال", color = Color.White)
+                            }
                         }
                     }
 
                     onCancelSale?.let { cancelCallback ->
                         OutlinedButton(
-                            onClick = { sale.id?.let { cancelCallback(it) } },
+                            onClick = {
+                                if (!isCancellingLoading) {
+                                    isCancellingLoading = true // Set loading state immediately
+                                    sale.id?.let { cancelCallback(it) }
+                                }
+                            },
+                            enabled = !isCompletingLoading && !isCancellingLoading,
                             colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error
+                                contentColor = MaterialTheme.colorScheme.error,
+                                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                             ),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                            border = BorderStroke(
+                                1.dp,
+                                if (!isCompletingLoading && !isCancellingLoading)
+                                    MaterialTheme.colorScheme.error
+                                else
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         ) {
-                            Text("إلغاء")
+                            if (isCancellingLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            } else {
+                                Text("إلغاء")
+                            }
                         }
                     }
                 }

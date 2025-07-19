@@ -266,4 +266,15 @@ class AuthService(
             UserRole.ADMIN -> currentRole == UserRole.ADMIN
         }
     }
+
+    /**
+     * Immediately set the loading state for immediate UI feedback
+     * Used to provide instant loading state activation on button click
+     */
+    fun setLoadingState(isLoading: Boolean) {
+        _authState.value = _authState.value.copy(
+            isLoading = isLoading,
+            error = if (isLoading) null else _authState.value.error
+        )
+    }
 }

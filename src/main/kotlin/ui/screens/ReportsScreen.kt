@@ -3780,13 +3780,1097 @@ private fun FinancialReportContent(
         return
     }
 
-    Text(
-        text = "التقرير المالي قيد التطوير",
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth()
-    )
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+        contentPadding = PaddingValues(20.dp)
+    ) {
+        // Executive Summary Section
+        financialReport.executiveSummary?.let { summary ->
+            item {
+                FinancialExecutiveSummarySection(summary, currencyFormatter)
+            }
+        }
+
+        // Revenue Analysis Section
+        financialReport.revenueAnalysis?.let { revenueAnalysis ->
+            item {
+                FinancialRevenueAnalysisSection(revenueAnalysis, currencyFormatter)
+            }
+        }
+
+        // Profit Margin Analysis Section
+        financialReport.profitMarginAnalysis?.let { profitAnalysis ->
+            item {
+                ProfitMarginAnalysisSection(profitAnalysis, currencyFormatter)
+            }
+        }
+
+        // Tax Analysis Section
+        financialReport.taxAnalysis?.let { taxAnalysis ->
+            item {
+                TaxAnalysisSection(taxAnalysis, currencyFormatter)
+            }
+        }
+
+        // Payment Method Analysis Section
+        financialReport.paymentMethodAnalysis?.let { paymentAnalysis ->
+            item {
+                PaymentMethodAnalysisSection(paymentAnalysis, currencyFormatter)
+            }
+        }
+
+        // Advanced Metrics Section
+        financialReport.advancedMetrics?.let { advancedMetrics ->
+            item {
+                AdvancedMetricsSection(advancedMetrics, currencyFormatter)
+            }
+        }
+
+        // Cost Analysis Section
+        financialReport.costAnalysis?.let { costAnalysis ->
+            item {
+                CostAnalysisSection(costAnalysis, currencyFormatter)
+            }
+        }
+    }
+}
+
+// Financial Report Section Components
+
+@Composable
+private fun FinancialExecutiveSummarySection(
+    summary: ExecutiveSummaryData,
+    currencyFormatter: NumberFormat
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "الملخص التنفيذي",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = AppTheme.colors.primary
+            )
+
+            // Period Information
+            summary.periodInformation?.let { period ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "فترة التقرير:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "${period.startDate} - ${period.endDate}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+
+                period.periodDays?.let { days ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "عدد الأيام:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "$days يوم",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+
+            // Key Performance Indicators
+            summary.keyPerformanceIndicators?.let { kpis ->
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item {
+                        MetricCard(
+                            title = "إجمالي الإيرادات",
+                            value = currencyFormatter.format(kpis.totalRevenue ?: 0.0),
+                            icon = Icons.Default.TrendingUp
+                        )
+                    }
+                    item {
+                        MetricCard(
+                            title = "إجمالي المعاملات",
+                            value = "${kpis.totalTransactions ?: 0}",
+                            icon = Icons.Default.Receipt
+                        )
+                    }
+                    item {
+                        MetricCard(
+                            title = "متوسط قيمة الطلب",
+                            value = currencyFormatter.format(kpis.avgOrderValue ?: 0.0),
+                            icon = Icons.Default.ShoppingCart
+                        )
+                    }
+                    item {
+                        MetricCard(
+                            title = "هامش الربح الإجمالي",
+                            value = "${String.format("%.1f", kpis.grossMargin ?: 0.0)}%",
+                            icon = Icons.Default.TrendingUp
+                        )
+                    }
+                }
+            }
+
+            // Insights
+            summary.insights?.let { insights ->
+                if (insights.isNotEmpty()) {
+                    Text(
+                        text = "الرؤى الرئيسية:",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    insights.forEach { insight ->
+                        Row(
+                            verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lightbulb,
+                                contentDescription = null,
+                                tint = AppTheme.colors.warning,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = insight,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Recommendations
+            summary.recommendations?.let { recommendations ->
+                if (recommendations.isNotEmpty()) {
+                    Text(
+                        text = "التوصيات:",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    recommendations.forEach { recommendation ->
+                        Row(
+                            verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Recommend,
+                                contentDescription = null,
+                                tint = AppTheme.colors.success,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = recommendation,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FinancialRevenueAnalysisSection(
+    revenueAnalysis: FinancialRevenueAnalysisData,
+    currencyFormatter: NumberFormat
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "تحليل الإيرادات",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = AppTheme.colors.primary
+            )
+
+            // Revenue Summary
+            revenueAnalysis.summary?.let { summary ->
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item {
+                        MetricCard(
+                            title = "إجمالي الإيرادات",
+                            value = currencyFormatter.format(summary.totalRevenue ?: 0.0),
+                            icon = Icons.Default.TrendingUp
+                        )
+                    }
+                    item {
+                        MetricCard(
+                            title = "صافي الإيرادات",
+                            value = currencyFormatter.format(summary.netRevenue ?: 0.0),
+                            icon = Icons.Default.AccountBalance
+                        )
+                    }
+                    item {
+                        MetricCard(
+                            title = "إجمالي الربح",
+                            value = currencyFormatter.format(summary.grossProfit ?: 0.0),
+                            icon = Icons.Default.TrendingUp
+                        )
+                    }
+                    item {
+                        MetricCard(
+                            title = "صافي الربح",
+                            value = currencyFormatter.format(summary.netProfit ?: 0.0),
+                            icon = Icons.Default.AccountBalance
+                        )
+                    }
+                }
+            }
+
+            // Growth Metrics
+            revenueAnalysis.growthMetrics?.let { growth ->
+                Text(
+                    text = "مقاييس النمو:",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    MetricCard(
+                        title = "نمو الإيرادات",
+                        value = "${String.format("%.1f", growth.revenueGrowthPercentage ?: 0.0)}%",
+                        icon = Icons.Default.TrendingUp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    MetricCard(
+                        title = "الفترة الحالية",
+                        value = currencyFormatter.format(growth.currentPeriodRevenue ?: 0.0),
+                        icon = Icons.Default.CalendarToday,
+                        modifier = Modifier.weight(1f)
+                    )
+                    MetricCard(
+                        title = "الفترة السابقة",
+                        value = currencyFormatter.format(growth.previousPeriodRevenue ?: 0.0),
+                        icon = Icons.Default.History,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            // Revenue by Category
+            revenueAnalysis.revenueByCategory?.let { categories ->
+                if (categories.isNotEmpty()) {
+                    Text(
+                        text = "الإيرادات حسب الفئة:",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    categories.take(5).forEach { category ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = category.categoryName ?: "غير محدد",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "${category.salesCount ?: 0} عملية بيع",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        text = currencyFormatter.format(category.totalRevenue ?: 0.0),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AppTheme.colors.success
+                                    )
+                                    Text(
+                                        text = "${String.format("%.1f", category.revenuePercentage ?: 0.0)}%",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Daily Trends
+            revenueAnalysis.dailyTrends?.let { trends ->
+                if (trends.isNotEmpty()) {
+                    Text(
+                        text = "الاتجاهات اليومية:",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    trends.takeLast(7).forEach { trend ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = trend.date ?: "",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "${trend.salesCount ?: 0} عملية بيع",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        text = currencyFormatter.format(trend.revenue ?: 0.0),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AppTheme.colors.success
+                                    )
+                                    Text(
+                                        text = "متوسط: ${currencyFormatter.format(trend.avgOrderValue ?: 0.0)}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfitMarginAnalysisSection(
+    profitAnalysis: ProfitMarginAnalysisData,
+    currencyFormatter: NumberFormat
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "تحليل هوامش الربح",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = AppTheme.colors.primary
+            )
+
+            // Overall Margins
+            profitAnalysis.overallMargins?.let { margins ->
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item {
+                        MetricCard(
+                            title = "إجمالي الربح",
+                            value = currencyFormatter.format(margins.grossProfit ?: 0.0),
+                            icon = Icons.Default.TrendingUp
+                        )
+                    }
+                    item {
+                        MetricCard(
+                            title = "صافي الربح",
+                            value = currencyFormatter.format(margins.netProfit ?: 0.0),
+                            icon = Icons.Default.AccountBalance
+                        )
+                    }
+                    item {
+                        MetricCard(
+                            title = "هامش الربح الإجمالي",
+                            value = "${String.format("%.1f", margins.grossMarginPercentage ?: 0.0)}%",
+                            icon = Icons.Default.Percent
+                        )
+                    }
+                    item {
+                        MetricCard(
+                            title = "هامش الربح الصافي",
+                            value = "${String.format("%.1f", margins.netMarginPercentage ?: 0.0)}%",
+                            icon = Icons.Default.Percent
+                        )
+                    }
+                }
+            }
+
+            // Margin Variance
+            profitAnalysis.marginVariance?.let { variance ->
+                Text(
+                    text = "تباين الهوامش:",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    MetricCard(
+                        title = "أعلى هامش",
+                        value = "${String.format("%.1f", variance.maxMargin ?: 0.0)}%",
+                        icon = Icons.Default.TrendingUp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    MetricCard(
+                        title = "أقل هامش",
+                        value = "${String.format("%.1f", variance.minMargin ?: 0.0)}%",
+                        icon = Icons.Default.TrendingDown,
+                        modifier = Modifier.weight(1f)
+                    )
+                    MetricCard(
+                        title = "متوسط الهامش",
+                        value = "${String.format("%.1f", variance.averageMargin ?: 0.0)}%",
+                        icon = Icons.Default.BarChart,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            // Top Performing Products
+            profitAnalysis.topPerformingProducts?.let { topProducts ->
+                if (topProducts.isNotEmpty()) {
+                    Text(
+                        text = "أفضل المنتجات أداءً:",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    topProducts.take(5).forEach { product ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = product.productName ?: "غير محدد",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = product.productSku ?: "",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "${product.totalQuantitySold ?: 0} وحدة مباعة",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        text = currencyFormatter.format(product.totalRevenue ?: 0.0),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AppTheme.colors.success
+                                    )
+                                    Text(
+                                        text = "${String.format("%.1f", product.profitMarginPercentage ?: 0.0)}% هامش",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = AppTheme.colors.info
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Category Margins
+            profitAnalysis.categoryMargins?.let { categories ->
+                if (categories.isNotEmpty()) {
+                    Text(
+                        text = "هوامش الربح حسب الفئة:",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    categories.forEach { category ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = category.categoryName ?: "غير محدد",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "${category.salesCount ?: 0} عملية بيع",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        text = currencyFormatter.format(category.totalRevenue ?: 0.0),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AppTheme.colors.success
+                                    )
+                                    Text(
+                                        text = "${String.format("%.1f", category.profitMarginPercentage ?: 0.0)}% هامش",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = AppTheme.colors.info
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TaxAnalysisSection(
+    taxAnalysis: TaxAnalysisData,
+    currencyFormatter: NumberFormat
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "تحليل الضرائب",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = AppTheme.colors.primary
+            )
+
+            // Tax Summary
+            taxAnalysis.taxSummary?.let { summary ->
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item {
+                        MetricCard(
+                            title = "إجمالي الضرائب المحصلة",
+                            value = currencyFormatter.format(summary.totalTaxCollected ?: 0.0),
+                            icon = Icons.Default.Receipt
+                        )
+                    }
+                    item {
+                        MetricCard(
+                            title = "معدل الضريبة الفعلي",
+                            value = "${String.format("%.2f", summary.effectiveTaxRate ?: 0.0)}%",
+                            icon = Icons.Default.Percent
+                        )
+                    }
+                    item {
+                        MetricCard(
+                            title = "الضريبة كنسبة من الإيرادات",
+                            value = "${String.format("%.2f", summary.taxAsPercentageOfRevenue ?: 0.0)}%",
+                            icon = Icons.Default.PieChart
+                        )
+                    }
+                }
+            }
+
+            // Compliance Metrics
+            taxAnalysis.complianceMetrics?.let { compliance ->
+                Text(
+                    text = "مقاييس الامتثال:",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    MetricCard(
+                        title = "إجمالي المعاملات",
+                        value = "${compliance.totalTransactions ?: 0}",
+                        icon = Icons.Default.Receipt,
+                        modifier = Modifier.weight(1f)
+                    )
+                    MetricCard(
+                        title = "المعاملات الخاضعة للضريبة",
+                        value = "${compliance.taxableTransactions ?: 0}",
+                        icon = Icons.Default.CheckCircle,
+                        modifier = Modifier.weight(1f)
+                    )
+                    MetricCard(
+                        title = "معدل الامتثال الضريبي",
+                        value = "${String.format("%.1f", compliance.taxComplianceRate ?: 0.0)}%",
+                        icon = Icons.Default.Verified,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PaymentMethodAnalysisSection(
+    paymentAnalysis: PaymentMethodAnalysisData,
+    currencyFormatter: NumberFormat
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "تحليل طرق الدفع",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = AppTheme.colors.primary
+            )
+
+            // Summary
+            paymentAnalysis.summary?.let { summary ->
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item {
+                        MetricCard(
+                            title = "إجمالي المعاملات",
+                            value = "${summary.totalTransactions ?: 0}",
+                            icon = Icons.Default.Receipt
+                        )
+                    }
+                    item {
+                        MetricCard(
+                            title = "إجمالي الإيرادات",
+                            value = currencyFormatter.format(summary.totalRevenue ?: 0.0),
+                            icon = Icons.Default.TrendingUp
+                        )
+                    }
+                    item {
+                        MetricCard(
+                            title = "متوسط قيمة المعاملة",
+                            value = currencyFormatter.format(summary.overallAvgTransactionValue ?: 0.0),
+                            icon = Icons.Default.BarChart
+                        )
+                    }
+                }
+            }
+
+            // Payment Method Breakdown
+            paymentAnalysis.paymentMethodBreakdown?.let { breakdown ->
+                if (breakdown.isNotEmpty()) {
+                    Text(
+                        text = "توزيع طرق الدفع:",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    breakdown.forEach { method ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = method.paymentMethod ?: "غير محدد",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "${method.transactionCount ?: 0} معاملة",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        text = currencyFormatter.format(method.totalRevenue ?: 0.0),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AppTheme.colors.success
+                                    )
+                                    Text(
+                                        text = "${String.format("%.1f", method.revenuePercentage ?: 0.0)}%",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AdvancedMetricsSection(
+    advancedMetrics: AdvancedMetricsData,
+    currencyFormatter: NumberFormat
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "المقاييس المتقدمة",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = AppTheme.colors.primary
+            )
+
+            // Customer Segmentation
+            advancedMetrics.customerSegmentation?.let { segmentation ->
+                Text(
+                    text = "تقسيم العملاء:",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item {
+                        MetricCard(
+                            title = "إجمالي العملاء",
+                            value = "${segmentation.totalCustomers ?: 0}",
+                            icon = Icons.Default.People
+                        )
+                    }
+                    item {
+                        MetricCard(
+                            title = "متوسط الإيرادات لكل عميل",
+                            value = currencyFormatter.format(segmentation.avgRevenuePerCustomer ?: 0.0),
+                            icon = Icons.Default.Person
+                        )
+                    }
+                    item {
+                        MetricCard(
+                            title = "نسبة باريتو",
+                            value = "${String.format("%.1f", segmentation.paretoRatio ?: 0.0)}%",
+                            icon = Icons.Default.PieChart
+                        )
+                    }
+                }
+            }
+
+            // Top Customers
+            advancedMetrics.topCustomersByRevenue?.let { topCustomers ->
+                if (topCustomers.isNotEmpty()) {
+                    Text(
+                        text = "أفضل العملاء حسب الإيرادات:",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    topCustomers.take(5).forEach { customer ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = customer.customerName ?: "غير محدد",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "${customer.totalOrders ?: 0} طلب",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        text = currencyFormatter.format(customer.totalRevenue ?: 0.0),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AppTheme.colors.success
+                                    )
+                                    Text(
+                                        text = "متوسط: ${currencyFormatter.format(customer.avgOrderValue ?: 0.0)}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Conversion Metrics
+            advancedMetrics.conversionMetrics?.let { conversion ->
+                Text(
+                    text = "مقاييس التحويل:",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    MetricCard(
+                        title = "معدل العملاء المتكررين",
+                        value = "${String.format("%.1f", conversion.repeatCustomerRate ?: 0.0)}%",
+                        icon = Icons.Default.Repeat,
+                        modifier = Modifier.weight(1f)
+                    )
+                    MetricCard(
+                        title = "المبيعات لكل عميل",
+                        value = String.format("%.1f", conversion.salesPerCustomer ?: 0.0),
+                        icon = Icons.Default.ShoppingCart,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CostAnalysisSection(
+    costAnalysis: CostAnalysisFinancialData,
+    currencyFormatter: NumberFormat
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "تحليل التكاليف",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = AppTheme.colors.primary
+            )
+
+            // Cost Summary
+            costAnalysis.costSummary?.let { summary ->
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item {
+                        MetricCard(
+                            title = "إجمالي التكاليف",
+                            value = currencyFormatter.format(summary.totalCosts ?: 0.0),
+                            icon = Icons.Default.MonetizationOn
+                        )
+                    }
+                    item {
+                        MetricCard(
+                            title = "تكلفة البضائع المباعة",
+                            value = currencyFormatter.format(summary.totalCOGS ?: 0.0),
+                            icon = Icons.Default.Inventory
+                        )
+                    }
+                    item {
+                        MetricCard(
+                            title = "تكاليف الشحن",
+                            value = currencyFormatter.format(summary.totalShippingCosts ?: 0.0),
+                            icon = Icons.Default.LocalShipping
+                        )
+                    }
+                    item {
+                        MetricCard(
+                            title = "إجمالي الربح",
+                            value = currencyFormatter.format(summary.grossProfit ?: 0.0),
+                            icon = Icons.Default.TrendingUp
+                        )
+                    }
+                }
+            }
+
+            // Efficiency Metrics
+            costAnalysis.efficiencyMetrics?.let { efficiency ->
+                Text(
+                    text = "مقاييس الكفاءة:",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    MetricCard(
+                        title = "متوسط هامش الربح",
+                        value = "${String.format("%.1f", efficiency.averageProfitMargin ?: 0.0)}%",
+                        icon = Icons.Default.Percent,
+                        modifier = Modifier.weight(1f)
+                    )
+                    MetricCard(
+                        title = "متوسط نسبة التكلفة",
+                        value = "${String.format("%.2f", efficiency.averageCostRatio ?: 0.0)}",
+                        icon = Icons.Default.BarChart,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            // Cost Per Sale
+            costAnalysis.costPerSale?.let { costPerSale ->
+                Text(
+                    text = "التكلفة لكل عملية بيع:",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    MetricCard(
+                        title = "متوسط الإيرادات",
+                        value = currencyFormatter.format(costPerSale.avgRevenuePerSale ?: 0.0),
+                        icon = Icons.Default.TrendingUp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    MetricCard(
+                        title = "متوسط التكلفة",
+                        value = currencyFormatter.format(costPerSale.avgTotalCostPerSale ?: 0.0),
+                        icon = Icons.Default.MonetizationOn,
+                        modifier = Modifier.weight(1f)
+                    )
+                    MetricCard(
+                        title = "متوسط الربح",
+                        value = currencyFormatter.format(costPerSale.avgProfitPerSale ?: 0.0),
+                        icon = Icons.Default.AccountBalance,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable

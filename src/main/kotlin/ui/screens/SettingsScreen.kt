@@ -1255,6 +1255,9 @@ private fun EnhancedTaxSettingsDialog(
     onDismiss: () -> Unit,
     onSave: () -> Unit
 ) {
+    // Loading state for immediate feedback
+    var isLoading by remember { mutableStateOf(false) }
+
     // Import tax preferences manager
     val taxPreferencesManager = remember { data.preferences.TaxPreferencesManager() }
     val currentSettings = remember { taxPreferencesManager.loadTaxSettings() }
@@ -1577,7 +1580,8 @@ private fun EnhancedTaxSettingsDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    if (validateTaxPercentage(taxPercentage)) {
+                    if (validateTaxPercentage(taxPercentage) && !isLoading) {
+                        isLoading = true // Set loading state immediately
                         // Save settings
                         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                             val newSettings = data.preferences.TaxSettings(
@@ -1588,14 +1592,23 @@ private fun EnhancedTaxSettingsDialog(
                                 calculateTaxOnDiscountedAmount = calculateOnDiscounted
                             )
                             taxPreferencesManager.saveTaxSettings(newSettings)
+                            isLoading = false
                         }
                         onSave()
                     }
                 },
-                enabled = taxPercentageError == null,
+                enabled = taxPercentageError == null && !isLoading,
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("حفظ الإعدادات")
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text("حفظ الإعدادات")
+                }
             }
         },
         dismissButton = {
@@ -2473,6 +2486,9 @@ private fun EnhancedCurrencySettingsDialog(
     onDismiss: () -> Unit,
     onSave: () -> Unit
 ) {
+    // Loading state for immediate feedback
+    var isLoading by remember { mutableStateOf(false) }
+
     val currencyPreferencesManager = remember { CurrencyPreferencesManager() }
     val currentSettings = currencyPreferencesManager.loadCurrencySettings()
 
@@ -2708,27 +2724,40 @@ private fun EnhancedCurrencySettingsDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val currencyInfo = availableCurrencies[selectedCurrency]
-                    if (currencyInfo != null) {
-                        val newSettings = CurrencySettings(
-                            currencyCode = selectedCurrency,
-                            currencySymbol = currencyInfo.symbol,
-                            displayName = currencyInfo.displayName,
-                            locale = currencyInfo.locale,
-                            showSymbolBeforeAmount = showSymbolBefore,
-                            decimalPlaces = decimalPlaces,
-                            useGroupingSeparator = useGroupingSeparator
-                        )
+                    if (!isLoading) {
+                        isLoading = true // Set loading state immediately
+                        val currencyInfo = availableCurrencies[selectedCurrency]
+                        if (currencyInfo != null) {
+                            val newSettings = CurrencySettings(
+                                currencyCode = selectedCurrency,
+                                currencySymbol = currencyInfo.symbol,
+                                displayName = currencyInfo.displayName,
+                                locale = currencyInfo.locale,
+                                showSymbolBeforeAmount = showSymbolBefore,
+                                decimalPlaces = decimalPlaces,
+                                useGroupingSeparator = useGroupingSeparator
+                            )
 
-                        kotlinx.coroutines.GlobalScope.launch {
-                            currencyPreferencesManager.saveCurrencySettings(newSettings)
+                            kotlinx.coroutines.GlobalScope.launch {
+                                currencyPreferencesManager.saveCurrencySettings(newSettings)
+                                isLoading = false
+                            }
                         }
+                        onSave()
                     }
-                    onSave()
                 },
+                enabled = !isLoading,
                 shape = RoundedCornerShape(8.dp)
             ) {
-                Text("حفظ الإعدادات")
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text("حفظ الإعدادات")
+                }
             }
         },
         dismissButton = {
